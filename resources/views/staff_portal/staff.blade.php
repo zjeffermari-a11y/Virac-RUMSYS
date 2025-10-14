@@ -1,0 +1,624 @@
+@extends('layouts.app')
+
+@section('title', 'Virac Public Market - Admin Aide Dashboard')
+
+@vite('resources/js/staff.js')
+
+@section('profile_summary')
+    <div class="bg-gradient-to-r from-[#ffa600] to-[#ff8800] rounded-xl p-2 w-full text-center shadow-lg">
+        <div class="font-bold text-yellow-900">Market Staff</div>
+    </div>
+@endsection
+
+@section('navigation')
+    <div class="flex-grow">
+        <a href="#homeSection" data-section="homeSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="#vendorManagementSection" data-section="vendorManagementSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-users-cog "></i>
+            <span>Vendor Management</span>
+        </a>
+        <a href="#stallAssignmentSection" data-section="stallAssignmentSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-store-alt"></i>
+            <span>Stall Assignment</span>
+        </a>
+        <a href="#dashboardSection" data-section="dashboardSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="#reportsSection" data-section="reportsSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-chart-line"></i>
+            <span>Reports</span>
+        </a>
+    </div>
+@endsection
+
+@section('content')
+    <style>
+        @media print {
+
+            /* Hide Reports header and filter box when printing */
+            #reportsSection>div:first-child,
+            #reportsSection .bg-gray-50 {
+                display: none !important;
+            }
+
+            /* Hide navigation sidebar */
+            nav,
+            .nav-link {
+                display: none !important;
+            }
+
+            /* Hide any buttons or controls */
+            button:not(.print-button) {
+                display: none !important;
+            }
+        }
+    </style>
+    <script>
+        window.STAFF_PORTAL_STATE = @json($initialState ?? null);
+        window.DASHBOARD_STATE = @json($dashboardState ?? null);
+        window.BILLING_SETTINGS = @json($billingSettings ?? null);
+    </script>
+
+    {{-- Home Section --}}
+    <div id="homeSection" class="dashboard-section">
+        <div
+            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
+            </div>
+            <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
+            </div>
+            <h2 id="homeHeader" class="text-2xl md:text-3xl font-semibold relative z-10">Hello, Market Staff!</h2>
+        </div>
+
+        <div class="bg-white p-4 md:p-8 rounded-2xl shadow-soft">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                <h3 class="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-list-ul"></i>
+                    Pending Tasks
+                </h3>
+                <div class="status-badge status-pending text-xs md:text-sm mt-2 md:mt-0">
+                    Today's Assignments
+                </div>
+            </div>
+
+            <p class="text-gray-600 mb-6">Please refer to the table below for current billing and receipt printing.</p>
+
+            <div class="card-gradient p-4 md:p-6 rounded-2xl shadow-inner">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                    <h4 class="font-bold text-gray-800 flex items-center gap-2 text-base md:text-lg">
+                        <i class="fas fa-file-invoice-dollar text-yellow-500"></i> Bill Management
+                    </h4>
+                    <button id="bulkPrintBtn"
+                        class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg transition-smooth flex items-center gap-2 shadow mt-2 md:mt-0">
+                        <i class="fas fa-print"></i>
+                        <span>Print Selected</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full rounded-xl overflow-hidden text-sm responsive-table bill-management-table">
+                        <thead>
+                            <tr class="table-header">
+                                <th scope="col" class="p-4 text-right lg:text-center">
+                                    <input type="checkbox" id="selectAllCheckbox"
+                                        class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                                </th>
+                                <th scope="col"
+                                    class="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider">
+                                    Stall/Table Number
+                                </th>
+                                <th scope="col"
+                                    class="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider">
+                                    Vendor Name
+                                </th>
+                                <th scope="col"
+                                    class="px-6 py-3 text-center text-sm font-semibold uppercase tracking-wider">
+                                    Print Receipt
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="dailyCollectionsTableBody">
+                            {{-- Rows will be populated dynamically from the backend. --}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Vendor Management Section Wrapper --}}
+    <div id="vendorManagementSection" class="dashboard-section">
+
+        {{-- List View (This should be here) --}}
+        <div id="vendorListView">
+            <div
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                <div
+                    class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
+                </div>
+                <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
+                </div>
+                <h2 id="vendorManagementHeader" class="text-3xl font-semibold relative z-10">Vendor Management</h2>
+            </div>
+            <div class="card-table p-6 rounded-2xl shadow-soft h-auto max-w-6xl mx-auto">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+                    <h3 id="vendorManagementTableHeader"
+                        class="text-2xl font-semibold text-gray-800 text-center sm:text-left">Wet Section</h3>
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+                    <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                        <div class="w-full md:w-72">
+                            <div class="relative">
+                                <div id="searchIcon"
+                                    class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-search text-gray-400"></i>
+                                </div>
+                                <input type="search" id="vendorSearchInput" placeholder="Search..."
+                                    class="block w-full pl-10 pr-10 py-2 border-gray-200 border rounded-lg leading-5 bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-200">
+                            </div>
+                        </div>
+                        <div class="w-full md:w-auto ml-auto">
+                            <div id="vendorSectionNav" class="flex justify-center space-x-1 bg-gray-100 p-1 rounded-xl">
+                                {{-- Section navigation buttons will be populated by JavaScript --}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto space-x-8">
+                    <table class="table-auto w-full responsive-table">
+                        <thead>
+                            <tr class="table-header">
+                                <th class="px-8 py-4 text-left text-sm font-medium uppercase tracking-wider cursor-pointer sortable-header"
+                                    data-sort-key="stallNumber">Stall/Table Number</th>
+                                <th class="px-8 py-4 text-left text-sm font-medium uppercase tracking-wider cursor-pointer sortable-header"
+                                    data-sort-key="vendorName">Vendor Name</th>
+                                <th class="px-8 py-4 text-center text-sm font-medium uppercase tracking-wider">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vendorTableBody">
+                            {{-- Rows are dynamically inserted by staff.js --}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {{-- Detail View (This should be here) --}}
+        <div id="vendorDetailSection" class="hidden">
+            <div
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                <div
+                    class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
+                </div>
+                <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
+                </div>
+                <div class="flex justify-between items-center relative z-10">
+                    <h2 class="text-3xl font-semibold relative z-10">Vendor Information</h2>
+                    <button id="backToVendorList"
+                        class="bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-white/30 transition-smooth flex items-center gap-2">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to List
+                    </button>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-8 rounded-2xl shadow-soft">
+                <div class="flex flex-col lg:flex-row gap-8">
+                    {{-- Profile Picture Section --}}
+                    <div class="w-full lg:w-auto flex flex-col items-center lg:items-start">
+                        <div class="relative group">
+                            <div
+                                class="relative w-96 h-72 bg-gray-200 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                <img id="profilePicturePreview" src="" alt="Vendor's Profile Picture"
+                                    class="w-full h-full object-cover hidden">
+                                <i id="profilePictureIcon" class="fas fa-user text-6xl text-gray-400"></i>
+                            </div>
+                            <label for="profilePictureInput"
+                                class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer rounded-2xl">
+                                <i class="fas fa-camera mr-2"></i>
+                                Change Picture
+                            </label>
+                            <input type="file" id="profilePictureInput" class="hidden" accept="image/*">
+                        </div>
+                        <div class="mt-6 text-left">
+                            <a href="#" id="outstandingBalanceLink" data-section="homeSection"
+                                class="text-2xl font-bold text-indigo-600 hover:underline">Outstanding
+                                Balance</a>
+                            <br>
+                            <a href="#" id="paymentHistoryLink" data-section="paymentHistorySection"
+                                class="text-2xl font-bold text-indigo-600 hover:underline mt-2 inline-block">Payment
+                                History</a>
+                        </div>
+                    </div>
+                    {{-- Profile Info Section --}}
+                    <div class="w-full lg:flex-1">
+                        <div class="flex justify-between items-start mb-6">
+                            <h3 class="text-xl font-bold text-gray-800">Profile Information</h3>
+                            <div class="flex items-center gap-2">
+                                <button id="editVendorBtn"
+                                    class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold px-6 py-2 rounded-lg transition-smooth flex items-center gap-2 shadow">
+                                    <i class="fas fa-pencil-alt text-sm"></i>
+                                    <span>Edit</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="profileInfoContainer" class="space-y-4">
+                            @php
+                                $fields = [
+                                    'vendorName' => ['icon' => 'fa-user', 'label' => 'Name'],
+                                    'section' => ['icon' => 'fa-store', 'label' => 'Market Section'],
+                                    'stallNumber' => ['icon' => 'fa-tag', 'label' => 'Stall Number'],
+                                    'contact' => ['icon' => 'fa-phone', 'label' => 'Contact Number'],
+                                    'appDate' => ['icon' => 'fa-calendar-alt', 'label' => 'Application Date'],
+                                ];
+                            @endphp
+
+                            @foreach ($fields as $field => $details)
+                                <div class="flex items-center p-2">
+                                    <i class="fas {{ $details['icon'] }} text-indigo-500 w-6"></i>
+                                    <span class="font-medium text-lg text-gray-600 w-48">{{ $details['label'] }}:</span>
+                                    <span data-field="{{ $field }}"
+                                        class="font-semibold text-gray-800 info-span"></span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="vendorSubSectionContainer" class="hidden">
+            {{-- AJAX content will be loaded here --}}
+        </div>
+    </div>
+
+    <div id="stallAssignmentSection" class="dashboard-section">
+        <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg">
+            <h2 class="text-3xl font-semibold">Stall Assignment</h2>
+            <p class="text-lg">Assign available stalls to unassigned vendors.</p>
+        </div>
+
+        <div class="card-table p-4 md:p-8 rounded-2xl shadow-soft max-w-4xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
+
+                {{-- Vendor Selection --}}
+                <div>
+                    <label for="unassignedVendorSelect" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-user-plus mr-2"></i>Select an Unassigned Vendor
+                    </label>
+                    <select id="unassignedVendorSelect" class="w-full p-3 border border-gray-300 rounded-md bg-white">
+                        <option value="">Loading vendors...</option>
+                    </select>
+                </div>
+
+                {{-- Stall Selection --}}
+                <div>
+                    <label for="availableStallSelect" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-store mr-2"></i>Select an Available Stall
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <select id="stallSectionFilter" class="p-3 border border-gray-300 rounded-md bg-white">
+                            {{-- Section options will be populated by JS --}}
+                        </select>
+                        <select id="availableStallSelect"
+                            class="flex-grow p-3 border border-gray-300 rounded-md bg-white">
+                            <option value="">Select a section first...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <button id="assignStallBtn" class="action-button w-full md:w-1/2">
+                    <i class="fas fa-link"></i>
+                    Assign Stall to Vendor
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{-- Dashboard Section --}}
+    <div id="dashboardSection" class="dashboard-section">
+        {{-- Header --}}
+        <div
+            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+            <div
+                class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
+            </div>
+            <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16"></div>
+            <h2 class="text-2xl md:text-3xl font-semibold relative z-10">Dashboard</h2>
+        </div>
+
+        {{-- Sub-header with Title and Year Filter --}}
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
+            <div>
+                <h2 class="text-3xl font-bold text-gray-800">Market Insights</h2>
+                <p class="text-gray-500">Overview of market operations for the year <span id="selectedYearDisplay"
+                        class="font-semibold">2025</span>.</p>
+            </div>
+            <div class="mt-4 sm:mt-0">
+                <select id="dashboardYearFilter"
+                    class="bg-white border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-market-primary">
+                    {{-- Options will be populated by JS --}}
+                </select>
+            </div>
+        </div>
+
+        {{-- KPIs --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" id="kpiContainer">
+            {{-- KPI Cards will be populated by JS --}}
+        </div>
+
+        {{-- Charts --}}
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-soft">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Vendor Distribution by Section</h3>
+                <div class="h-80 flex items-center justify-center">
+                    <canvas id="vendorDistributionChart"></canvas>
+                </div>
+            </div>
+            <div class="lg:col-span-3 bg-white p-6 rounded-2xl shadow-soft">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Monthly Collection Trends</h3>
+                    <select id="collectionTypeFilter"
+                        class="text-sm bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 focus:outline-none">
+                        <option value="Rent">Rent</option>
+                        <option value="Electricity">Electricity</option>
+                        <option value="Water">Water</option>
+                    </select>
+                </div>
+                <div class="h-80">
+                    <canvas id="collectionTrendsChart"></canvas>
+                </div>
+            </div>
+            <div class="lg:col-span-5 bg-white p-6 rounded-2xl shadow-soft">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Monthly Electricity Consumption</h3>
+                <div class="h-80">
+                    <canvas id="utilityConsumptionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        {{-- Top Vendors & Vendors Needing Support --}}
+        <div class="mt-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-soft">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-gray-700 flex items-center">
+                            <i class="fas fa-trophy text-yellow-500 mr-3"></i> Top Vendors (On-Time Payments)
+                        </h4>
+                        <select id="topVendorsSectionFilter"
+                            class="text-sm bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 focus:outline-none">
+                            <option value="All">All Sections</option>
+                        </select>
+                    </div>
+                    <div id="topPerformersContainer" class="space-y-3">
+                        {{-- Content will be populated by JS --}}
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-soft">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-gray-700 flex items-center">
+                            <i class="fas fa-hands-helping text-blue-500 mr-3"></i> Vendors Needing Support
+                        </h4>
+                        <select id="needsSupportSectionFilter"
+                            class="text-sm bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 focus:outline-none">
+                            <option value="All">All Sections</option>
+                        </select>
+                    </div>
+                    <div id="vendorsNeedingSupportContainer" class="space-y-3">
+                        {{-- Content will be populated by JS --}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Reports Section --}}
+    <div id="reportsSection" class="dashboard-section">
+        {{-- Header remains the same --}}
+        <div
+            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+            <div
+                class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
+            </div>
+            <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
+            </div>
+            <h2 id="reportsHeader" class="text-3xl font-semibold relative z-10">Reports</h2>
+        </div>
+
+        <div class="bg-white p-4 md:p-8 rounded-2xl shadow-soft">
+            {{-- Filters --}}
+            <div class="flex flex-wrap items-end gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
+                <div>
+                    <label for="reportMonth" class="block text-sm font-medium text-gray-700">Select Month</label>
+                    <input type="month" id="reportMonth" value="{{ now()->format('Y-m') }}"
+                        class="mt-1 block w-full border-gray-300 shadow-sm sm:text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button id="generateReportBtn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2">
+                    <i class="fas fa-search"></i>
+                    <span>Generate Report</span>
+                </button>
+            </div>
+
+            <div id="reportLoader" class="hidden text-center py-12">
+                <i class="fas fa-spinner fa-spin text-3xl text-indigo-500"></i>
+                <p class="mt-2 text-gray-600">Generating Report...</p>
+            </div>
+
+            {{-- Report Results --}}
+            <div id="reportResultContainer" class="hidden print-area space-y-8">
+                <div class="flex justify-between items-start pb-4 border-b">
+                    <div>
+                        <h3 id="reportTitle" class="text-2xl font-bold text-gray-800"></h3>
+                        <p id="reportPeriod" class="text-md text-gray-500"></p>
+                    </div>
+                    <div class="flex gap-2 print-hide">
+                        <button id="downloadReportBtn"
+                            class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2">
+                            <i class="fas fa-download"></i>
+                            <span>Download</span>
+                        </button>
+                        <button id="printReportBtn"
+                            class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2">
+                            <i class="fas fa-print"></i>
+                            <span>Print</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-700 mb-3">Summary Overview</h4>
+                    <div id="reportKpis" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-700 mb-3">Collections Breakdown by Section</h4>
+                    <div id="collectionsBreakdownContainer" class="overflow-x-auto rounded-lg border">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-700 mb-3">Monthly Collection Trends</h4>
+                        <div class="space-y-4">
+                            <div class="h-40 bg-gray-50 p-4 rounded-lg border"><canvas id="rentChart"></canvas></div>
+                            <div class="h-40 bg-gray-50 p-4 rounded-lg border"><canvas id="electricityChart"></canvas>
+                            </div>
+                            <div class="h-40 bg-gray-50 p-4 rounded-lg border"><canvas id="waterChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="overflow-auto">
+                        <h4 class="text-lg font-semibold text-gray-700 mb-3">Delinquent Vendors</h4>
+                        <div class="rounded-lg border">
+                            <table class="min-w-full ">
+                                <thead>
+                                    <tr class="table-header">
+                                        <th class="px-4 py-2 text-left">Vendor</th>
+                                        <th class="px-4 py-2 text-right">Amount Due</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="delinquentVendorsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-700 mb-3">Notes/Comments</h4>
+                    <textarea
+                        class="w-full border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 transition"
+                        rows="4" placeholder="Add any notes for this month's report..."></textarea>
+                </div>
+            </div>
+
+            <div id="noReportDataMessage" class="hidden text-center py-12 text-gray-500">
+                <i class="fas fa-info-circle text-4xl mb-4"></i>
+                <p>No collection data found for the selected month.</p>
+            </div>
+        </div>
+    </div>
+
+    {{-- Edit Vendor Modal --}}
+    <div id="editVendorModal"
+        class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 hidden flex items-center justify-center transition-opacity duration-300">
+        <div id="editVendorModalContent"
+            class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8 transform scale-95 opacity-0 transition-transform transition-opacity duration-300">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">Edit Vendor Details</h3>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-800 transition-colors">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <form id="editVendorForm" class="space-y-4">
+                @php
+                    $modalFields = [
+                        'vendorName' => ['icon' => 'fa-user', 'label' => 'Name', 'type' => 'text'],
+                        'section' => ['icon' => 'fa-store', 'label' => 'Market Section', 'type' => 'text'],
+                        'stallNumber' => ['icon' => 'fa-tag', 'label' => 'Stall Number', 'type' => 'text'],
+                        'contact' => ['icon' => 'fa-phone', 'label' => 'Contact Number', 'type' => 'text'],
+                        'appDate' => ['icon' => 'fa-calendar-alt', 'label' => 'Application Date', 'type' => 'date'],
+                    ];
+                @endphp
+
+                @foreach ($modalFields as $field => $details)
+                    <div>
+                        <label for="modal_{{ $field }}"
+                            class="block text-sm font-medium text-gray-700 mb-1">{{ $details['label'] }}</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas {{ $details['icon'] }} text-gray-400"></i>
+                            </div>
+                            @if ($field === 'section')
+                                <select id="modal_{{ $field }}" data-field="{{ $field }}"
+                                    class="info-input w-full pl-10 bg-slate-100 border-slate-300 border-2 rounded-md px-3 py-2 text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200">
+                                    {{-- Options will be populated by JavaScript --}}
+                                </select>
+                            @else
+                                <input type="{{ $details['type'] }}" id="modal_{{ $field }}"
+                                    data-field="{{ $field }}"
+                                    class="info-input w-full pl-10 bg-slate-100 border-slate-300 border-2 rounded-md px-3 py-2 text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200">
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+
+                <div class="flex justify-end gap-4 pt-6">
+                    <button type="button" id="cancelEditBtn"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-6 py-2 rounded-lg transition-smooth shadow">
+                        Cancel
+                    </button>
+                    <button type="button" id="saveVendorBtn"
+                        class="bg-green-500 hover:bg-green-600 text-white font-bold px-6 py-2 rounded-lg transition-smooth flex items-center gap-2 shadow">
+                        <i class="fas fa-save text-sm"></i>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="outstandingDetailsModal"
+        class="modal-container hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto relative responsive-modal">
+            <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 cursor-pointer close-modal-btn">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <div class="p-8 w-full">
+                <h3 class="text-3xl font-bold text-gray-800 mb-6 flex items-center justify-center gap-2">
+                    <i class="fas fa-file-invoice-dollar text-market-primary"></i>
+                    Bill Breakdown
+                </h3>
+                <div class="rounded-xl border border-[#30232d] overflow-hidden mb-6 w-full">
+                    <table class="w-full bill-table responsive-table">
+                        <thead>
+                            <tr>
+                                <th class="text-2xl">Category</th>
+                                <th class="text-2xl">Original Payment</th>
+                                <th class="text-2xl">Discount</th>
+                                <th class="text-2xl">Surcharge/Penalty</th>
+                                <th class="text-2xl">Total Amount to be Paid</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outstandingBreakdownDetails">
+                            {{-- This will be populated by JavaScript --}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Toast Notification --}}
+    <div id="toastContainer" class="fixed top-4 right-4 z-[100] space-y-2"></div>
+@endsection

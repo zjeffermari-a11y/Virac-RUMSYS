@@ -1,0 +1,12 @@
+{
+  "bill_statement": {
+    "wet_section": "Your bill statement: Rent - ₱{{rent_amount}}, Water - ₱{{water_amount}}, Electricity - ₱{{electricity_amount}}. Total due: ₱{{total_due}} on {{due_date}}.",
+    "dry_section": "Your bill statement: Rent - ₱{{rent_amount}}, Water - ₱{{water_amount}}. Total due: ₱{{total_due}} on {{due_date}}."
+  },
+  "payment_reminder": {
+    "template": "Reminder: The following payments are due today: {{unpaid_items}}. Thank you."
+  },
+  "overdue_alert": {
+    "template": "OVERDUE: Your payment for {{overdue_items}} is past due. Your new total with penalties is ₱{{new_total_due}}. Disconnection is on {{disconnection_date}}."
+  }
+}

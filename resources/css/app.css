@@ -1,0 +1,1219 @@
+@import "tailwindcss";
+
+@layer utilities {
+    /* Hide the number input arrows */
+    .no-spinner::-webkit-outer-spin-button,
+    .no-spinner::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .no-spinner {
+        -moz-appearance: textfield;
+    }
+}
+
+
+@theme {
+    --color-market-primary: #4f46e5;
+    --color-market-secondary: #7c3aed;
+    --color-market-tertiary: #f1c095;
+    --color-market-background: #fae9d7;
+    --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+}
+
+@source '../views/**/*.blade.php';
+@source '../js/**/*.js';
+@source '../views';
+
+.header-container {
+    padding: 0;
+    margin: 0;
+    background-color: white;
+    border-bottom: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes modalFadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+}
+
+.history-log-container {
+    max-height: 400px; /* Adjust height as needed */
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+.history-log-loader {
+    display: none;
+    text-align: center;
+    padding: 1rem;
+    color: #6b7280;
+}
+
+.section-nav-btn.active,
+.date-range-btn.active {
+    background-color: #4f46e5; /* A primary color, you can adjust this */
+    color: white;
+}
+/* Base Layout: Desktop */
+
+/* Hide content initially */
+.content-hidden {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+/* Show content smoothly */
+.content-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.skeleton-preloader {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    z-index: 9999;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    /* Sidebar + Main */
+    height: 100%;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.skeleton-preloader.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Sidebar Skeleton */
+.skeleton-sidebar {
+    background: #f9f9f9;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    border-right: 1px solid #eee;
+}
+
+.skeleton-profile-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin: 0 auto;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+    animation: skeleton-loading 1.5s infinite linear;
+}
+
+.skeleton-sidebar-item {
+    height: 20px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+    animation: skeleton-loading 1.5s infinite linear;
+}
+
+/* Main Section */
+.skeleton-main {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Top Navigation */
+.skeleton-nav {
+    display: flex;
+    gap: 1rem;
+}
+
+.skeleton-nav-item {
+    flex: 1;
+    height: 20px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+    animation: skeleton-loading 1.5s infinite linear;
+}
+
+/* Dashboard Cards */
+.skeleton-cards {
+    display: flex;
+    gap: 1rem;
+}
+
+.skeleton-card {
+    flex: 1;
+    height: 100px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+    animation: skeleton-loading 1.5s infinite linear;
+}
+
+/* Table Skeleton */
+.skeleton-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.skeleton-table-header {
+    height: 20px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+    animation: skeleton-loading 1.5s infinite linear;
+}
+
+.skeleton-row {
+    height: 16px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+    animation: skeleton-loading 1.5s infinite linear;
+}
+
+/* Skeleton Animation */
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* 🔥 RESPONSIVE DESIGN */
+@media (max-width: 768px) {
+    .skeleton-preloader {
+        grid-template-columns: 1fr;
+        /* Sidebar stacks on top */
+    }
+
+    .skeleton-sidebar {
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        border-right: none;
+        border-bottom: 1px solid #eee;
+    }
+
+    .skeleton-profile-img {
+        width: 50px;
+        height: 50px;
+        margin: 0;
+    }
+
+    .skeleton-main {
+        padding: 1rem;
+    }
+
+    .skeleton-nav {
+        flex-wrap: wrap;
+    }
+
+    .skeleton-nav-item {
+        flex: 1 1 30%;
+    }
+
+    .skeleton-cards {
+        flex-direction: column;
+    }
+
+    .skeleton-card {
+        height: 80px;
+    }
+}
+
+/* Full-page preloader */
+.preloader {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.7);
+    /* Slight dim effect */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    /* Always on top */
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.preloader.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Spinner animation */
+.spinner-circle {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #4f46e5;
+    /* Change to your brand color */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.body-bg {
+    background: rgb(245, 245, 245);
+}
+
+.sidebar-bg {
+    background: white;
+    backdrop-filter: blur(10px);
+}
+
+.card-table {
+    background: white;
+    backdrop-filter: blur(8px);
+}
+
+.shadow-soft {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05),
+        0 10px 10px -5px rgba(0, 0, 0, 0.02);
+}
+
+.rounded-button {
+    border-radius: 12px;
+}
+
+.table-header {
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+    border: 1px solid grey;
+}
+
+.table-row:nth-child(even) {
+    border: 1px solid grey;
+    background-color: rgb(245, 245, 245);
+}
+
+.table-row:nth-child(odd) {
+    border: 1px solid grey;
+    background-color: white;
+}
+
+.table-row:hover {
+    background-color: #f3f4f6;
+}
+
+.status-badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-unpaid {
+    background-color: #FEE2E2; /* bg-red-100 */
+    color: #B91C1C;           /* text-red-800 */
+}
+
+.status-pending {
+    background-color: #d55053;
+    color: #fae9d7;
+}
+
+.status-paid {
+    background-color: #30232d;
+    color: #fae9d7;
+}
+
+.status-overdue {
+    background-color: #fee2e2;
+    color: #b91c1c;
+}
+
+.dashboard-section {
+    display: none;
+}
+
+.dashboard-section.active {
+    display: block;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.nav-link.active {
+    background: linear-gradient(
+        to right,
+        rgba(79, 70, 229, 0.3),
+        rgba(124, 58, 237, 0.3)
+    );
+    color: #7c3aed;
+    font-weight: 600;
+}
+
+.highlight-nav {
+    animation: highlightPulse 2s ease;
+}
+
+@keyframes highlightPulse {
+    0% {
+        background: linear-gradient(to right, #e0e7ff, #ede9fe);
+    }
+
+    50% {
+        background: linear-gradient(to right, #d0d7ff, #d0c5ff);
+    }
+
+    100% {
+        background: linear-gradient(to right, #e0e7ff, #ede9fe);
+    }
+}
+
+/* Profile image styling */
+.profile-image-container {
+    position: relative;
+    cursor: pointer;
+}
+
+/* Cropper modal styling */
+#cropModal {
+    z-index: 100;
+}
+
+.cropper-container {
+    max-width: 100%;
+}
+
+#cropPreview {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin: 10px auto;
+    border: 2px solid #ddd;
+}
+
+.cropper-view-box,
+.cropper-face {
+    border-radius: 50%;
+}
+
+.cropper-modal {
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.crop-controls {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.bill-table th {
+    background-color: #d1d1d1;
+    font-weight: 600;
+    padding: 12px 16px;
+    text-align: center;
+}
+
+.bill-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid black;
+    text-align: center;
+}
+
+.bill-table tr:last-child td {
+    border-bottom: none;
+}
+
+.bill-total {
+    font-weight: 700;
+    color: #1f2937;
+    background-color: #fae9d7;
+}
+
+/* Centering for modals */
+.centered-modal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.centered-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.centered-list {
+    text-align: left;
+    display: inline-block;
+}
+
+/* Payment History Filter Styles */
+.filter-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 12px 0;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    padding: 8px 16px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.filter-group label {
+    font-weight: 500;
+    color: #4b5563;
+}
+
+.filter-select {
+    background: transparent;
+    border: none;
+    padding: 6px 12px;
+    font-size: 16px;
+    color: #111827;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    min-width: 120px;
+}
+
+
+
+.action-button {
+    background: #4f46e5;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.action-button:hover {
+    background-color: #4036f3;
+    box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);
+}
+
+.no-results {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.no-results i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #d1d5db;
+}
+
+.status-approved {
+    background-color: #d1fae5;
+    /* green-100 */
+    color: #065f46;
+    /* green-800 */
+}
+
+.status-rejected {
+    background-color: #ff0000;
+    /* gray-200 */
+    color: #ffffff;
+    /* gray-700 */
+}
+
+.highlight-row {
+    animation: highlight 1.5s ease;
+}
+
+@keyframes highlight {
+    0% {
+        background-color: rgba(124, 58, 237, 0.3);
+    }
+
+    100% {
+        background-color: transparent;
+    }
+}
+
+/* You can replace the existing responsive-table block in app.css with this */
+
+@media (max-width: 768px) {
+    /* Keep the header visible but style it differently for mobile - BILL MANAGEMENT ONLY */
+    .bill-management-table thead {
+        display: block;
+        margin-bottom: 1rem;
+    }
+
+    .bill-management-table thead tr {
+        display: flex;
+        background: linear-gradient(to right, #4f46e5, #7c3aed);
+        border-radius: 0.75rem;
+        padding: 1rem;
+        border: none;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    }
+
+    .bill-management-table thead th {
+        color: white;
+        font-weight: 600;
+        text-align: center;
+        padding: 0;
+    }
+
+    /* Hide all header columns except the checkbox column */
+    .bill-management-table thead th:not(:first-child) {
+        display: none;
+    }
+
+    /* Style the "Select All" checkbox header */
+    .bill-management-table thead th:first-child {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .bill-management-table thead th:first-child::after {
+        content: "Select All";
+        margin-right: auto;
+        padding-left: 0.5rem;
+    }
+
+    .bill-management-table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        background-color: white;
+        border: 1px solid #e5e7eb;
+        position: relative;
+    }
+    
+    .bill-management-table td {
+        display: block;
+        padding: 0.75rem 1rem;
+        text-align: right;
+        border-bottom: 1px solid #f3f4f6;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .bill-management-table td:last-child {
+        border-bottom: none;
+    }
+    
+    .bill-management-table td::before {
+        content: attr(data-label);
+        float: left;
+        font-weight: 600;
+        color: #374151;
+        margin-right: 1rem;
+    }
+
+    .bill-management-table td::after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+
+    /* Position checkbox absolutely in top-right corner */
+    .bill-management-table tbody tr > td:first-child {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        width: auto;
+        padding: 0;
+        border: none;
+        background: transparent;
+        z-index: 10;
+    }
+
+    /* Hide the label for checkbox */
+    .bill-management-table tbody tr > td:first-child::before {
+        display: none;
+    }
+
+    /* Adjust padding for first data cell to make room for checkbox */
+    .bill-management-table tbody tr > td:nth-child(2) {
+        padding-top: 2.5rem;
+    }
+
+    /* Checkbox should not follow the input styling */
+    .bill-management-table tbody tr > td:first-child input[type="checkbox"] {
+        width: auto;
+        float: none;
+        margin: 0;
+    }
+
+    .bill-management-table .action-cell {
+       text-align: center;
+    }
+    
+    .bill-management-table .action-cell::before {
+       display: none;
+    }
+    
+    .bill-management-table .action-cell > * {
+       float: none;
+       display: inline-block;
+    }
+
+    /* Keep existing responsive-table styles for other tables unchanged */
+    .responsive-table:not(.bill-management-table) thead {
+        border: none;
+        clip: rect(0 0 0 0);
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        padding: 0;
+        position: absolute;
+        width: 1px;
+    }
+    
+    .responsive-table:not(.bill-management-table) tr {
+        display: block;
+        margin-bottom: 1rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        background-color: white;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+    }
+    
+    /* This is the core change: each cell is a block, not a flex row */
+    .responsive-table:not(.bill-management-table) td {
+        display: block;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f3f4f6;
+        text-align: left; /* Align text to the left now */
+    }
+    
+    .responsive-table:not(.bill-management-table) td:last-child {
+        border-bottom: none;
+    }
+    
+    /* Style the data-label as a proper form label on top */
+    .responsive-table:not(.bill-management-table) td::before {
+        content: attr(data-label);
+        display: block;
+        font-weight: 600;
+        color: #4b5563;
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+    }
+    
+    /* No longer need the float clearing element */
+    .responsive-table:not(.bill-management-table) td::after {
+        display: none;
+    }
+    
+    /* Style inputs to take full width for easy tapping */
+    .responsive-table:not(.bill-management-table) td input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        box-sizing: border-box; /* Ensures padding is included in width */
+    }
+    
+    /* Special styling for the actions cell to center its content */
+    .responsive-table:not(.bill-management-table) .action-cell,
+    .responsive-table:not(.bill-management-table) td[data-label="Actions"] {
+        text-align: center;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+    
+    .responsive-table:not(.bill-management-table) .action-cell::before,
+    .responsive-table:not(.bill-management-table) td[data-label="Actions"]::before {
+        display: none; /* Hide the "Actions" label to save space */
+    }
+    
+    .responsive-table:not(.bill-management-table) .action-cell > * {
+        display: inline-block;
+    }
+    #electricitySection .overflow-x-auto {
+        overflow-x: visible;
+    }
+}
+
+/* Table Responsive */
+@media (max-width: 1024px) {
+    .overflow-x-auto {
+        overflow-x: auto;
+    }
+
+    .rental-rates-table {
+        min-width: 800px;
+    }
+}
+
+@media (min-width: 768px) {
+    .responsive-table th,
+    .responsive-table td {
+        padding: 0.75rem 1rem; /* Increased padding */
+    }
+
+    .responsive-table td::before {
+        display: none; /* Hide mobile-only labels */
+    }
+}
+
+/* Mobile: Transform tables into a card-like list */
+
+@media (max-width: 767px) {
+    #addUserBtn {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 0.5rem; /* Adds space between stacked buttons */
+        margin-top: 1rem;
+    }
+
+    /* Make the buttons themselves full-width on mobile */
+    #addUserBtn {
+        width: 100%;
+        justify-content: center; /* Center button text and icon */
+    }
+}
+/* Billing Management Submenu Styles */
+.submenu {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.submenu.open {
+    max-height: 500px;
+}
+
+/* Navigation Link Active States */
+.nav-link.active {
+    background: linear-gradient(to right, #9466ff, #4f46e5);
+    color: white !important;
+}
+
+.nav-link:hover {
+    color: white !important;
+}
+
+/* Transition Utilities */
+.transition-smooth {
+    transition: all 0.3s ease;
+}
+
+/* Rotate Animation for Dropdown Arrow */
+.rotate-180 {
+    transform: rotate(180deg);
+}
+
+/* Rental Rates Table Styles */
+.rental-rates-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.rental-rates-table th,
+.rental-rates-table td {
+    border: 1px solid #e5e7eb;
+    padding: 12px 16px;
+    text-align: left;
+}
+
+.rental-rates-table th {
+    background: linear-gradient(to right, #f9fafb, #f3f4f6);
+    font-weight: 600;
+    color: #374151;
+}
+
+.rental-rates-table tr:hover {
+    background-color: #f9fafb;
+    transition: background-color 0.2s ease;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 28rem;
+    margin: 0 1rem;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+    padding: 24px;
+    border-radius: 16px 16px 0 0;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+/* Form Styles */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    color: #374151;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.form-input,
+.form-select {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Button Styles */
+.btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+/* Toast Notification Styles */
+.toast {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 400px;
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast-success {
+    background: #10b981;
+}
+
+.toast-error {
+    background: #ef4444;
+}
+
+.toast-warning {
+    background: #f59e0b;
+}
+
+.toast-info {
+    background: #3b82f6;
+}
+
+/* Filter Styles */
+.filter-section {
+    margin-bottom: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-label {
+    color: #374151;
+    font-weight: 500;
+}
+
+.filter-select {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: white;
+    transition: border-color 0.2s ease;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Action Button Styles */
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.action-btn.edit {
+    background: #3b82f6;
+    color: white;
+}
+
+.action-btn.edit:hover {
+    background: #2563eb;
+}
+
+.action-btn.delete {
+    background: #ef4444;
+    color: white;
+}
+
+.action-btn.delete:hover {
+    background: #dc2626;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .modal-content {
+        margin: 0 16px;
+        max-width: calc(100% - 32px);
+    }
+
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-label {
+        text-align: center;
+    }
+}
+
+/* Section Navigation Styles */
+.section-nav-btn {
+    background: transparent;
+    color: #6b7280;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.section-nav-btn:hover {
+    color: #4f46e5;
+    background: rgba(79, 70, 229, 0.1);
+}
+
+.section-nav-btn.active {
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.section-nav-btn.active:hover {
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+}
+
+/* Inline Edit Styles */
+.edit-section,
+.edit-type,
+.edit-number,
+.edit-daily-rate,
+.edit-monthly-rate {
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+/* Read-only section field styling */
+.edit-section[readonly] {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+    border-color: #d1d5db;
+}
+
+.edit-section[readonly]:focus {
+    outline: none;
+    border-color: #d1d5db;
+    box-shadow: none;
+    transform: none;
+}
+
+.edit-section[readonly]:hover {
+    background-color: #f3f4f6;
+}
+
+/* Focus styles for editable fields */
+.edit-type:focus,
+.edit-number:focus,
+.edit-daily-rate:focus,
+.edit-monthly-rate:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    transform: scale(1.02);
+}
+
+/* Save and Cancel Button Styles */
+.save-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.save-btn:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.cancel-edit-btn {
+    background: #6b7280;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cancel-edit-btn:hover {
+    background: #4b5563;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
