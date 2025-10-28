@@ -1,4 +1,4 @@
-# 1. Start with the official PHP 8.2 FPM image  <-- CHANGE THIS LINE
+# 1. Start with the official PHP 8.2 FPM image
 FROM php:8.2-fpm
 
 # 2. Switch to the root user to install packages
@@ -8,10 +8,13 @@ USER root
 RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# --- ADD NGINX INSTALLATION HERE ---
-RUN apt-get update && apt-get install -y nginx curl gnupg libpq-dev \
+# 3a. Install Nginx and other basic dependencies
+RUN apt-get update && apt-get install -y nginx curl gnupg \
     && rm -rf /var/lib/apt/lists/*
-# --- END ADD NGINX ---
+
+# 3b. Install PostgreSQL development libraries (REQUIRED for pdo_pgsql)
+RUN apt-get update && apt-get install -y libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # 4. Install PHP extensions for PostgreSQL and general Laravel use
 RUN docker-php-ext-install pdo_pgsql bcmath
@@ -49,10 +52,10 @@ RUN npm install && npm run build
 RUN php artisan config:cache
 RUN php artisan route:cache
 
-# --- ADD NGINX CONFIG COPY HERE ---
+# 12. Copy Nginx configuration and expose port
+USER root
 COPY nginx.conf /etc/nginx/sites-available/default
 EXPOSE 80
-# --- END ADD NGINX CONFIG ---
 
-# 12. Switch back to root user for the start script
-USER root
+# 13. Set the start script as the entry point
+CMD ["/var/www/html/start-render.sh"]
