@@ -80,6 +80,8 @@ RUN chown -R www-data:www-data /var/www/html
 RUN mkdir -p /var/www/html/database && \
     touch /var/www/html/database/database.sqlite
 
+RUN chown -R www-data:www-data /var/www/html/database
+
 # 9. Install Composer dependencies
 USER www-data
 # Set APP_ENV to prevent database operations during build
@@ -87,7 +89,6 @@ ENV APP_ENV=production
 ENV DB_CONNECTION=sqlite
 # Skip discovery to avoid database queries during composer install
 RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
-
 # 9a. Run migrations on the build-time SQLite DB
 RUN php artisan migrate --force
 # Run package discovery separately with proper environment
