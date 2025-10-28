@@ -72,13 +72,13 @@ COPY . .
 # 7a. Make our new start script executable
 RUN chmod +x /var/www/html/start-render.sh
 
-# 8. Set the correct file permissions for Laravel
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# 8. Set the correct file permissions for the entire application
+RUN chown -R www-data:www-data /var/www/html
 
 # 8a. Create database directory and empty SQLite file for build process
+# Ownership is already set, so we just need to create the files
 RUN mkdir -p /var/www/html/database && \
-    touch /var/www/html/database/database.sqlite && \
-    chown -R www-data:www-data /var/www/html/database
+    touch /var/www/html/database/database.sqlite
 
 # 9. Install Composer dependencies
 USER www-data
