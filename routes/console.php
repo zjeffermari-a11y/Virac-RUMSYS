@@ -32,15 +32,15 @@ $overdueAlertTime = '09:00';
 if (!app()->runningInConsole() && Schema::hasTable('schedules')) {
     try {
         // Fetch schedules from the database
-        $smsSchedulesFromDb = DB::table('schedules')
+        $smsSchedules = DB::table('schedules')
             ->where('schedule_type', 'like', 'SMS - %')
             ->get()
             ->keyBy('schedule_type');
 
         // Override default times with values from DB if they exist
-        $billingStatementTime = $smsSchedulesFromDb->get('SMS - Billing Statements')?->description ?? $billingStatementTime;
-        $paymentReminderTime = $smsSchedulesFromDb->get('SMS - Payment Reminders')?->description ?? $paymentReminderTime;
-        $overdueAlertTime = $smsSchedulesFromDb->get('SMS - Overdue Alerts')?->description ?? $overdueAlertTime;
+        $billingStatementTime = $smsSchedules->get('SMS - Billing Statements')?->description ?? $billingStatementTime;
+        $paymentReminderTime = $smsSchedules->get('SMS - Payment Reminders')?->description ?? $paymentReminderTime;
+        $overdueAlertTime = $smsSchedules->get('SMS - Overdue Alerts')?->description ?? $overdueAlertTime;
 
     } catch (\Exception $e) {
         // Log an error if fetching fails, but continue using default times
@@ -49,11 +49,14 @@ if (!app()->runningInConsole() && Schema::hasTable('schedules')) {
 }
 
 // 🚀 SEND BILLING STATEMENTS: Use dynamic time, default to 08:00 if not set
+$billingStatementTime = $smsSchedules->get('SMS - Billing Statements')?->description ?? '08:00';
 Schedule::command('sms:send-billing-statements')->monthlyOn(1, $billingStatementTime);
 
 // ⏰ SEND PAYMENT REMINDERS: Use dynamic time, default to 08:00 if not set
+$paymentReminderTime = $smsSchedules->get('SMS - Payment Reminders')?->description ?? '08:00';
 Schedule::command('sms:send-payment-reminders')
     ->dailyAt($paymentReminderTime);
 
 // ⚠️ SEND OVERDUE ALERTS: Use dynamic time, default to 09:00 if not set
+$overdueAlertTime = $smsSchedules->get('SMS - Overdue Alerts')?->description ?? '09:00';
 Schedule::command('sms:send-overdue-alerts')->dailyAt($overdueAlertTime);
