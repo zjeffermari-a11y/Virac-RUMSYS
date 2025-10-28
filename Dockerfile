@@ -4,34 +4,62 @@ FROM php:8.2-fpm
 # 2. Switch to the root user to install packages
 USER root
 
-# 3. Install Node.js (Using Node 20 LTS)
-RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
-
-# 3a. Install Nginx and other basic dependencies
-RUN apt-get update && apt-get install -y nginx curl gnupg \
-    && rm -rf /var/lib/apt/lists/*
-
-# 3b. Install PostgreSQL development libraries (REQUIRED for pdo_pgsql)
-RUN apt-get update && apt-get install -y libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# 4. Install PHP extensions for PostgreSQL and general Laravel use
-RUN docker-php-ext-install pdo_pgsql bcmath
-
-# 5. Install Google Chrome and its dependencies (for Browsershot)
-RUN apt-get update && apt-get install -y wget gnupg ca-certificates \
+# 3, 4, 5. Install OS dependencies, PHP extensions, and Google Chrome in a single layer
+RUN apt-get update && apt-get install -y \
+    # Packages from 3a & 3b
+    nginx \
+    curl \
+    gnupg \
+    libpq-dev \
+    # Packages for Chrome install (5)
+    wget \
+    ca-certificates \
+    # Add git and unzip for Composer
+    git \
+    unzip \
+    # Clean up apt cache *before* installing PHP extensions
+    && rm -rf /var/lib/apt/lists/* \
+    \
+    # 4. Install PHP extensions
+    # Add 'zip' for Composer
+    && docker-php-ext-install pdo_pgsql bcmath zip \
+    \
+    # 5. Set up Google Chrome repo
     && mkdir -p -m 755 /etc/apt/keyrings \
     && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    \
+    # Install Chrome and its dependencies
     && apt-get update \
-    && apt-get install -y google-chrome-stable libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 libatspi2.0-0 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxtst6 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
+    && apt-get install -y google-chrome-stable \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrandr2 \
+    libxtst6 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    # Final cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# NEW STEP: Install Composer
+# --- THIS IS THE MISSING STEP ---
+# Install Composer globally
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-# 6. Set the working directory
+# ---------------------------------
 
+# 6. Set the working directory
 WORKDIR /var/www/html
 
 # 7. Copy your application code into the server
