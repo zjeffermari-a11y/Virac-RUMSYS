@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Collection;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -27,6 +28,8 @@ Schedule::command('billing:generate')->monthlyOn(1, '07:00');
 $billingStatementTime = '08:00';
 $paymentReminderTime = '08:00';
 $overdueAlertTime = '09:00';
+
+$smsSchedules = collect();
 
 // Get SMS schedules from database
 if (!app()->runningInConsole() && Schema::hasTable('schedules')) {
