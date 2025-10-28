@@ -19,8 +19,6 @@ RUN apt-get update && apt-get install -y \
     # Add git and unzip for Composer
     git \
     unzip \
-    # Clean up apt cache *before* installing PHP extensions
-    && rm -rf /var/lib/apt/lists/* \
     \
     # 4. Install PHP extensions
     # Add 'zip' for Composer
@@ -68,12 +66,11 @@ WORKDIR /var/www/html
 
 # 7. Copy your application code into the server
 COPY . .
-
 # 7a. Make our new start script executable
-RUN chmod +x /var/www/html/start-render.sh
+RUN chmod +x /var/www/html/start-render.sh 
 
 # 8. Set the correct file permissions for Laravel
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache 
 
 # 8a. Create database directory and empty SQLite file for build process
 RUN mkdir -p /var/www/html/database && \
@@ -83,28 +80,26 @@ RUN mkdir -p /var/www/html/database && \
 # 9. Install Composer dependencies
 USER www-data
 # Set APP_ENV to prevent database operations during build
-ENV APP_ENV=production
-ENV DB_CONNECTION=sqlite
+ENV APP_ENV=production 
+ENV DB_CONNECTION=sqlite 
 # Skip discovery to avoid database queries during composer install
-RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
+RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts 
 # Run package discovery separately with proper environment
-RUN php artisan package:discover --ansi || true
+RUN php artisan package:discover --ansi || true 
 
 # 10. Install NPM dependencies and build your assets
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-# Set npm cache to a directory www-data can write to
-ENV npm_config_cache=/tmp/.npm
-RUN npm install && npm run build
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true 
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable 
+RUN npm install && npm run build 
 
 # 11. Cache Laravel's config and routes
-RUN php artisan config:cache
-RUN php artisan route:cache
+RUN php artisan config:cache 
+RUN php artisan route:cache 
 
 # 12. Copy Nginx configuration and expose port
-USER root
-COPY nginx.conf /etc/nginx/sites-available/default
-EXPOSE 80
+USER root 
+COPY nginx.conf /etc/nginx/sites-available/default 
+EXPOSE 80 
 
 # 13. Set the start script as the entry point
-CMD ["/var/www/html/start-render.sh"]
+CMD ["/var/www/html/start-render.sh"] 
