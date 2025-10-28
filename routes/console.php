@@ -49,14 +49,11 @@ if (!app()->runningInConsole() && Schema::hasTable('schedules')) {
 }
 
 // 🚀 SEND BILLING STATEMENTS: Use dynamic time, default to 08:00 if not set
-$billingStatementTime = $smsSchedules->get('SMS - Billing Statements')?->description ?? '08:00';
 Schedule::command('sms:send-billing-statements')->monthlyOn(1, $billingStatementTime);
 
 // ⏰ SEND PAYMENT REMINDERS: Use dynamic time, default to 08:00 if not set
-$paymentReminderTime = $smsSchedules->get('SMS - Payment Reminders')?->description ?? '08:00';
 Schedule::command('sms:send-payment-reminders')
     ->dailyAt($paymentReminderTime);
 
 // ⚠️ SEND OVERDUE ALERTS: Use dynamic time, default to 09:00 if not set
-$overdueAlertTime = $smsSchedules->get('SMS - Overdue Alerts')?->description ?? '09:00';
 Schedule::command('sms:send-overdue-alerts')->dailyAt($overdueAlertTime);
