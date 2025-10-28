@@ -9,7 +9,7 @@ RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
 # --- ADD NGINX INSTALLATION HERE ---
-RUN apt-get update && apt-get install -y nginx curl gnupg \
+RUN apt-get update && apt-get install -y nginx curl gnupg libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 # --- END ADD NGINX ---
 
