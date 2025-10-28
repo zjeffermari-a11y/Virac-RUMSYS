@@ -93,6 +93,8 @@ RUN php artisan package:discover --ansi || true
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+# Set npm cache to a directory www-data can write to
+ENV npm_config_cache=/tmp/.npm
 RUN npm install && npm run build
 
 # 11. Cache Laravel's config and routes
