@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e # Exit immediately if a command exits with a non-zero status.
+set -e
 
 echo "Running Laravel migrations..."
 php artisan migrate --force
@@ -7,6 +7,10 @@ php artisan migrate --force
 echo "Linking storage..."
 php artisan storage:link
 
-# Execute the original start script from the base Docker image
-echo "Starting Nginx and PHP-FPM..."
-/usr/bin/start.shs
+# Start PHP-FPM in the background
+echo "Starting PHP-FPM..."
+php-fpm -D
+
+# Start Nginx in the foreground (this keeps the container running)
+echo "Starting Nginx..."
+nginx -g 'daemon off;'
