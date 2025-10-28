@@ -1,0 +1,15 @@
+# Git
+.git
+.gitignore
+
+# Node
+node_modules
+
+# Composer
+vendor
+
+# Laravel
+.env
+storage/framework/sessions/*
+storage/framework/cache/data/*
+storage/logs/*.log
