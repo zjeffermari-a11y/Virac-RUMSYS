@@ -11,14 +11,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     libpq-dev \
+    # Add libzip-dev for zip PHP extension
+    libzip-dev \
     # Packages for Chrome install (5)
     wget \
     ca-certificates \
     # Add git and unzip for Composer
     git \
     unzip \
-    # Add libzip-dev for the 'zip' PHP extension
-    libzip-dev \
     # Clean up apt cache *before* installing PHP extensions
     && rm -rf /var/lib/apt/lists/* \
     \
@@ -56,10 +56,8 @@ RUN apt-get update && apt-get install -y \
     # Final cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# --- THIS IS THE MISSING STEP ---
 # Install Composer globally
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-# ---------------------------------
 
 # 6. Set the working directory
 WORKDIR /var/www/html
@@ -73,9 +71,20 @@ RUN chmod +x /var/www/html/start-render.sh
 # 8. Set the correct file permissions for Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
+# 8a. Create database directory and empty SQLite file for build process
+RUN mkdir -p /var/www/html/database && \
+    touch /var/www/html/database/database.sqlite && \
+    chown -R www-data:www-data /var/www/html/database
+
 # 9. Install Composer dependencies
 USER www-data
-RUN composer install --no-interaction --no-dev --optimize-autoloader
+# Set APP_ENV to prevent database operations during build
+ENV APP_ENV=production
+ENV DB_CONNECTION=sqlite
+# Skip discovery to avoid database queries during composer install
+RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
+# Run package discovery separately with proper environment
+RUN php artisan package:discover --ansi || true
 
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
