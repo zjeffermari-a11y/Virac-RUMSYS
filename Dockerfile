@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     # Add git and unzip for Composer
     git \
     unzip \
+    # Add libzip-dev for the 'zip' PHP extension
+    libzip-dev \
     # Clean up apt cache *before* installing PHP extensions
     && rm -rf /var/lib/apt/lists/* \
     \
