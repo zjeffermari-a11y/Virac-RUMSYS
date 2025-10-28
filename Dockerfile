@@ -4,7 +4,7 @@ FROM php:8.2-fpm
 # 2. Switch to the root user to install packages
 USER root
 
-# 3, 4, 5. Install OS dependencies, PHP extensions, and Google Chrome in a single layer
+# 3, 4, 5. Install OS dependencies, PHP extensions, Node.js, and Google Chrome
 RUN apt-get update && apt-get install -y \
     # Packages from 3a & 3b
     nginx \
@@ -25,6 +25,10 @@ RUN apt-get update && apt-get install -y \
     # 4. Install PHP extensions
     # Add 'zip' for Composer
     && docker-php-ext-install pdo_pgsql bcmath zip \
+    \
+    # Install Node.js 20.x (LTS)
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     \
     # 5. Set up Google Chrome repo
     && mkdir -p -m 755 /etc/apt/keyrings \
