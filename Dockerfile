@@ -77,6 +77,9 @@ RUN mkdir -p /var/www/html/database && \
     touch /var/www/html/database/database.sqlite && \
     chown -R www-data:www-data /var/www/html/database
 
+# NEW: Change ownership of the entire app directory to www-data (so npm can write files)
+RUN chown -R www-data:www-data /var/www/html
+
 # 9. Install Composer dependencies
 USER www-data
 # Set APP_ENV to prevent database operations during build
