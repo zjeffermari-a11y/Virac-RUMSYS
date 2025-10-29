@@ -94,9 +94,12 @@ RUN composer require doctrine/dbal
 # Skip discovery to avoid database queries during composer install
 RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts --no-plugins
 
-RUN php artisan config:clear
+# IMPORTANT: Delete any cached config files that might reference debugbar
+RUN rm -rf bootstrap/cache/*.php
+
 # 9a. Run migrations on the build-time SQLite DB
 RUN php artisan migrate --force
+
 # Run package discovery separately with proper environment
 RUN php artisan package:discover --ansi || true
 
@@ -107,7 +110,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 ENV npm_config_cache=/tmp/.npm
 RUN npm install && npm run build
 
-# 11. Cache Laravel's config and routes
+# 11. Cache Laravel's config and routes (NOW it's safe to cache)
 RUN php artisan config:cache
 RUN php artisan route:cache
 
@@ -117,4 +120,4 @@ COPY nginx.conf /etc/nginx/sites-available/default
 EXPOSE 80
 
 # 13. Set the start script as the entry point
-CMD ["/var/www/html/start-render.sh"]a
+CMD ["/var/www/html/start-render.sh"]
