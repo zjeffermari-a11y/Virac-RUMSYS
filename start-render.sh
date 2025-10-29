@@ -32,7 +32,9 @@ fi
 
 # 4. Run migrations (fresh to fix schema)
 echo "Running migrations..."
-php artisan migrate:fresh --force
+# Change this line back:
+php artisan migrate --force
+
 
 # 5. Storage link
 echo "Linking storage..."
