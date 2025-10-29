@@ -8,8 +8,11 @@ node_modules
 # Composer
 vendor
 
-# Laravel
+# Laravel - DO NOT copy .env into Docker image!
 .env
+.env.*
+!.env.example
+
 storage/framework/sessions/*
 storage/framework/cache/data/*
 storage/logs/*.log

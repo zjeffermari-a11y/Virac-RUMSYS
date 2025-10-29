@@ -10,9 +10,14 @@ php artisan cache:clear
 php artisan view:clear
 
 # 2. Verify environment variables are loaded
+echo "=== Environment Variables Check ==="
+echo "DB_CONNECTION env var: ${DB_CONNECTION:-NOT SET}"
+echo "DB_HOST env var: ${DB_HOST:-NOT SET}"
+echo "DB_DATABASE env var: ${DB_DATABASE:-NOT SET}"
+echo "DB_USERNAME env var: ${DB_USERNAME:-NOT SET}"
+echo ""
+echo "Laravel config (after cache clear):"
 echo "Current DB Connection: $(php artisan tinker --execute='echo config("database.default");')"
-echo "DB Host: ${DB_HOST}"
-echo "DB Database: ${DB_DATABASE:-NOT SET}"
 
 # 3. Test database connection
 echo "Testing PostgreSQL connection..."

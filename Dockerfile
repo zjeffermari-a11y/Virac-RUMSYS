@@ -43,8 +43,10 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 # 6. Set the working directory
 WORKDIR /var/www/html
 
-# 7. Copy your application code into the server
-COPY . .
+# 7. Copy your application code into the server (exclude .env)
+COPY --chown=www-data:www-data . .
+# Remove any .env file from the image - we'll use Render's environment variables
+RUN rm -f .env
 
 # 7a. Make our new start script executable
 RUN chmod +x /var/www/html/start-render.sh
