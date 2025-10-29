@@ -87,6 +87,10 @@ USER www-data
 # Set APP_ENV to prevent database operations during build
 ENV APP_ENV=production
 ENV DB_CONNECTION=sqlite
+
+# ADD THIS LINE TO FIX SQLITE MIGRATIONS
+RUN composer require doctrine/dbal
+
 # Skip discovery to avoid database queries during composer install
 RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
 # 9a. Run migrations on the build-time SQLite DB
