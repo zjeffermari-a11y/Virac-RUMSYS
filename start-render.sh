@@ -1,22 +1,37 @@
 #!/bin/sh
 set -e
 
-echo "Running Laravel migrations..."
+echo "=== Starting Virac RUMSYS ==="
+
+# Clear cached config to use Render env vars
+php artisan config:clear
+php artisan cache:clear
+
+# Run migrations with PostgreSQL
+echo "Running migrations..."
 php artisan migrate --force
 
+# Storage link
 echo "Linking storage..."
 php artisan storage:link
 
-# Output any errors to console
-tail -f storage/logs/laravel.log &
+# Create logs directory
+mkdir -p storage/logs
+touch storage/logs/laravel.log
+chown www-data:www-data storage/logs/laravel.log
 
-echo "Testing database connection..."
-php artisan db:show || echo "Database connection failed!"
+# Test DB connection
+echo "Testing PostgreSQL connection..."
+if php artisan db:show; then
+    echo "✅ PostgreSQL connected!"
+else
+    echo "❌ Database connection FAILED!"
+    exit 1
+fi
 
-# Start PHP-FPM in the background
+# Start services
 echo "Starting PHP-FPM..."
 php-fpm -D
 
-# Start Nginx in the foreground (this keeps the container running)
 echo "Starting Nginx..."
-nginx -g 'daemon off;'
+exec nginx -g 'daemon off;'

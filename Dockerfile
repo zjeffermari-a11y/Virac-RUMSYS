@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
     \
     # 4. Install PHP extensions
     # Add 'zip' for Composer
-    && docker-php-ext-install pdo_pgsql bcmath zip \
+    && docker-php-ext-install pdo_pgsql bcmath zip intl\
     \
     # Install Node.js 20.x (LTS)
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -75,17 +75,10 @@ RUN chmod +x /var/www/html/start-render.sh
 # 8. Set the correct file permissions for the entire application
 RUN chown -R www-data:www-data /var/www/html
 
-# 8a. Create database directory and empty SQLite file for build process
-RUN mkdir -p /var/www/html/database && \
-    touch /var/www/html/database/database.sqlite
-
-RUN chown -R www-data:www-data /var/www/html/database
-
 # 9. Install Composer dependencies
 USER www-data
 # Set APP_ENV to prevent database operations during build
 ENV APP_ENV=production
-ENV DB_CONNECTION=sqlite
 
 # ADD THIS LINE TO FIX SQLITE MIGRATIONS
 RUN composer require doctrine/dbal
