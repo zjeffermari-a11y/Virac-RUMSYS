@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->timestamp('last_login')->nullable()->after('remember_token');
-        });
+        // Check if the column already exists before adding it
+        if (!Schema::hasColumn('users', 'last_login')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->timestamp('last_login')->nullable()->after('remember_token');
+            });
+        }
     }
 
     /**
@@ -21,8 +24,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            //
-        });
+        if (Schema::hasColumn('users', 'last_login')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('last_login');
+            });
+        }
     }
 };
