@@ -20,7 +20,7 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/all-data', [DashboardController::class, 'getAllDashboardData']);
 });
 
-Route::prefix('staff')->group(function () {
+Route::middleware(['auth:sanctum', 'role:Staff'])->prefix('staff')->group(function () {
     Route::get('/vendors', [StaffController::class, 'getVendors']);
     Route::get('/sections', [StaffController::class, 'getSections']);
     Route::put('/vendors/{id}', [StaffController::class, 'updateVendor']);
@@ -37,6 +37,7 @@ Route::prefix('staff')->group(function () {
     Route::get('/available-stalls', [StaffController::class, 'getAvailableStalls']);
     Route::post('/assign-stall', [StaffController::class, 'assignStall']);
 });
+
 
 use App\Http\Controllers\Api\RentalRateController;
 

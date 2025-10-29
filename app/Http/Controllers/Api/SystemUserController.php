@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class SystemUserController extends Controller
 {
@@ -95,6 +96,15 @@ class SystemUserController extends Controller
                 'updated_at' => now(),
             ]);
 
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Created new user: ' . $validated['name'],
+                'module' => 'System User Management',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+
             DB::commit(); // All good, commit the transaction
 
             return response()->json(['message' => 'User created successfully.', 'user_id' => $userId], 201);
@@ -143,6 +153,15 @@ class SystemUserController extends Controller
 
             DB::table('users')->where('id', $id)->update($updateData);
 
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Updated user: ' . $validated['name'],
+                'module' => 'System User Management',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+
             DB::commit();
             return response()->json(['message' => 'User updated successfully.']);
         } catch (\Exception $e) {
@@ -160,9 +179,22 @@ class SystemUserController extends Controller
         if ($id == 1 || $id == auth()->id()) {
             return response()->json(['message' => 'This user cannot be deleted.'], 403);
         }
+        
+        $user = DB::table('users')->where('id', $id)->first();
 
-        DB::table('users')->where('id', $id)->delete();
+        if ($user) {
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Deleted user: ' . $user->name,
+                'module' => 'System User Management',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+            DB::table('users')->where('id', $id)->delete();
+            return response()->json(['message' => 'User deleted successfully.'], 200);
+        }
 
-        return response()->json(['message' => 'User deleted successfully.'], 200);
+        return response()->json(['message' => 'User not found.'], 404);
     }
 }

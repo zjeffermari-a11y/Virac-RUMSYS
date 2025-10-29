@@ -52,7 +52,7 @@ class AuditTrailController extends Controller
         // MODIFIED: Transform the date to an ISO-8601 string that JavaScript understands.
         $logs->getCollection()->transform(function ($item) {
             // Assume the DB stores in UTC, format it to a string with timezone info.
-            $item->date_time = (new \DateTime($item->date_time, new \DateTimeZone('UTC')))->format(\DateTime::ATOM);
+            $item->date_time = (new \DateTime($item->date_time, new \DateTimeZone('Asia/Manila')))->format(\DateTime::ATOM);
             return $item;
         });
 

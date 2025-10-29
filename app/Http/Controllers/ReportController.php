@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Models\Billing;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class ReportController extends Controller
 {
@@ -55,6 +56,15 @@ class ReportController extends Controller
 
         // Create a filename based on the report period
         $filename = 'Monthly_Report_' . str_replace(' ', '_', $data['report_period']) . '.pdf';
+
+        DB::table('audit_trails')->insert([
+            'user_id' => Auth::id(),
+            'role_id' => Auth::user()->role_id,
+            'action' => 'Downloaded Monthly Report for ' . $data['report_period'],
+            'module' => 'Reports',
+            'result' => 'Success',
+            'created_at' => now(),
+        ]);
 
         // Return the generated PDF as a download
         return response($pdf)
@@ -129,6 +139,15 @@ class ReportController extends Controller
             ->groupBy('utility_type')
             ->get()
             ->keyBy('utility_type');
+
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Generated Monthly Report for ' . $targetDate->format('F Y'),
+                'module' => 'Reports',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
 
         return [
             'report_period' => $targetDate->format('F Y'),

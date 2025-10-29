@@ -54,6 +54,15 @@ class ForgotPasswordController extends Controller
         
         // Note: Using a generic send method. Adjust if your SmsService requires a template.
         $this->smsService->send($vendor->getSemaphoreReadyContactNumber(), $message);
+
+        DB::table('audit_trails')->insert([
+            'user_id' => $vendor->id,
+            'role_id' => $vendor->role_id,
+            'action' => 'Requested a password reset via SMS',
+            'module' => 'Authentication',
+            'result' => 'Success',
+            'created_at' => now(),
+        ]);
         
         // Notify Admins
         $admins = User::where('role_id', 1)->get();

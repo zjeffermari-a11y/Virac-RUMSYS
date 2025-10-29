@@ -16,6 +16,7 @@ use App\Models\BillingSetting;
 use App\Models\Rate;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth; // <-- Import the Auth facade
 
 class StaffController extends Controller
 {
@@ -105,12 +106,36 @@ class StaffController extends Controller
                     ]);
             }
 
+            // <-- START: Audit Trail for Vendor Update -->
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Updated vendor details for ' . $vendor->name,
+                'module' => 'Vendor Management',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+            // <-- END: Audit Trail for Vendor Update -->
+
             DB::commit();
 
             return response()->json(['success' => true]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Vendor update failed for ID ' . $id . ': ' . $e->getMessage());
+
+            // <-- START: Audit Trail for Failed Update -->
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Attempted to update vendor with ID ' . $id,
+                'module' => 'Vendor Management',
+                'result' => 'Failure',
+                'created_at' => now(),
+            ]);
+            // <-- END: Audit Trail for Failed Update -->
+
             return response()->json(['message' => 'Failed to update vendor: ' . $e->getMessage()], 500);
         }
     }
@@ -201,7 +226,7 @@ class StaffController extends Controller
     {
         Log::info('markAsPaid started for billing ID: ' . $billingId);
         
-        $billing = Billing::find($billingId);
+        $billing = Billing::with('stall.vendor')->find($billingId);
 
         if (!$billing) {
             return response()->json(['message' => 'Billing record not found.'], 404);
@@ -210,22 +235,39 @@ class StaffController extends Controller
         if ($billing->status !== 'unpaid') {
             return response()->json(['message' => 'This bill has already been paid.'], 409);
         }
-
-        // Simple update without complex calculations
-        $billing->status = 'paid';
-        $billing->save();
-
-        Payment::create([
-            'billing_id' => $billing->id,
-            'amount_paid' => $billing->amount,
-            'payment_date' => now(),
-            'penalty' => 0, 
-            'discount' => 0, 
-        ]);
-
-        Log::info('markAsPaid completed for billing ID: ' . $billingId);
         
-        return response()->json(['message' => 'Payment recorded successfully.']);
+        DB::beginTransaction();
+        try {
+            $billing->status = 'paid';
+            $billing->save();
+
+            Payment::create([
+                'billing_id' => $billing->id,
+                'amount_paid' => $billing->amount,
+                'payment_date' => now(),
+                'penalty' => 0, 
+                'discount' => 0, 
+            ]);
+            
+            // <-- START: Audit Trail for Marking Bill as Paid -->
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Recorded payment of ₱' . number_format($billing->amount, 2) . ' for bill #' . $billing->id . ' (Vendor: ' . optional($billing->stall->vendor)->name . ')',
+                'module' => 'Billing',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+            // <-- END: Audit Trail -->
+            
+            DB::commit();
+            Log::info('markAsPaid completed for billing ID: ' . $billingId);
+            return response()->json(['message' => 'Payment recorded successfully.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('markAsPaid failed for billing ID: ' . $billingId . ' - ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to record payment.'], 500);
+        }
     }
 
     public function getMonthlyReport(Request $request)
@@ -292,6 +334,14 @@ class StaffController extends Controller
             ->get()
             ->keyBy('utility_type');
 
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Generated Monthly Report for ' . $targetDate->format('F Y'),
+                'module' => 'Reports',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
 
         return response()->json([
             'report_period' => $targetDate->format('F Y'),
@@ -396,6 +446,7 @@ class StaffController extends Controller
             DB::beginTransaction();
 
             $stall = Stall::find($request->stall_id);
+            $vendor = User::find($request->vendor_id);
             
             if ($stall->vendor_id) {
                 return response()->json(['message' => 'This stall is already assigned.'], 409);
@@ -403,6 +454,17 @@ class StaffController extends Controller
 
             $stall->vendor_id = $request->vendor_id;
             $stall->save();
+
+            // <-- START: Audit Trail for Stall Assignment -->
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Assigned stall ' . $stall->table_number . ' to vendor ' . $vendor->name,
+                'module' => 'Stall Assignment',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+            // <-- END: Audit Trail -->
 
             Artisan::call('billing:generate-new-vendor', [
                 'stall_id' => $stall->id
@@ -415,6 +477,18 @@ class StaffController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Stall assignment failed: ' . $e->getMessage());
+
+             // <-- START: Audit Trail for Failed Assignment -->
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Failed to assign stall to vendor ID ' . $request->vendor_id,
+                'module' => 'Stall Assignment',
+                'result' => 'Failure',
+                'created_at' => now(),
+            ]);
+            // <-- END: Audit Trail -->
+            
             return response()->json(['message' => 'An error occurred during stall assignment.'], 500);
         }
     }

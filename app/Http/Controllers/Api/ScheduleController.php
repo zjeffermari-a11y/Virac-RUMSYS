@@ -185,35 +185,32 @@ class ScheduleController extends Controller
      */
     public function getBillingDatesHistory(Request $request)
     {
-        $page = $request->input('page', 1);
-        $cacheKey = 'billing_dates_history_page_' . $page;
+        $page = $request->input('page', 1); // Still need page for pagination
 
-        $history = Cache::remember($cacheKey, 3600, function () {
-            $historyData = DB::table('schedule_histories as sh')
-                ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
-                ->join('users as u', 'sh.changed_by', '=', 'u.id')
-                ->where(function ($query) {
-                    $query->where('s.schedule_type', 'like', 'Due Date - %')
-                          ->orWhere('s.schedule_type', 'like', 'Disconnection - %');
-                })
-                ->select(
-                    'sh.old_value',
-                    'sh.new_value',
-                    'sh.changed_at',
-                    'sh.field_changed as item_changed'
-                )
-                ->orderBy('sh.changed_at', 'desc')
-                ->paginate(10);
-                 
-            $historyData->getCollection()->transform(function ($item) {
-                $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
-                return $item;
-            });
+        $historyData = DB::table('schedule_histories as sh')
+            ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
+            ->join('users as u', 'sh.changed_by', '=', 'u.id')
+            ->where(function ($query) {
+                $query->where('s.schedule_type', 'like', 'Due Date - %')
+                      ->orWhere('s.schedule_type', 'like', 'Disconnection - %');
+            })
+            ->select(
+                'sh.old_value',
+                'sh.new_value',
+                'sh.changed_at',
+                'sh.field_changed as item_changed' // Keep the alias for frontend consistency
+            )
+            ->orderBy('sh.changed_at', 'desc')
+            ->paginate(10); // Still paginate
 
-            return $historyData;
+        // Format date after fetching
+        $historyData->getCollection()->transform(function ($item) {
+            $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
+            return $item;
         });
 
-        return response()->json($history);
+        // ✅ END OF FIX: Return fetched data directly
+        return response()->json($historyData);
     }
 
     public function getSmsSchedules()

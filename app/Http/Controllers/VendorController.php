@@ -338,6 +338,15 @@ class VendorController extends Controller
         $user->password_changed_at = Carbon::now();
         $user->save();
 
+        DB::table('audit_trails')->insert([
+            'user_id' => $user->id,
+            'role_id' => $user->role_id,
+            'action' => 'Completed initial password and username change',
+            'module' => 'Authentication',
+            'result' => 'Success',
+            'created_at' => now(),
+        ]);
+
         $message = 'Account updated successfully!';
         if ($usernameChanged) {
             $message = 'Username and password updated successfully! Please use your new username for future logins.';

@@ -12,10 +12,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // This is the crucial addition. It tells Laravel to use Sanctum's
+        // middleware for API routes, which enables cookie-based authentication.
+        $middleware->api(prepend: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
+        // Your existing middleware aliases are preserved here.
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'prevent.back.access' => \App\Http\Middleware\PreventBackAccess::class,
-            'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class, 
+            'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

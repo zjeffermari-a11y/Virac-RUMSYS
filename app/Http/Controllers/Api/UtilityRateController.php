@@ -157,27 +157,25 @@ class UtilityRateController extends Controller
 
     public function history(Request $request)
     {
-        $page = $request->input('page', 1);
-        $cacheKey = 'utility_rate_history_page_' . $page;
+        // ✅ START OF FIX: Removed Cache::remember wrapper
+        $page = $request->input('page', 1); // Still need page for pagination
 
-        // 4. Cache the history for 60 minutes
-        $history = Cache::remember($cacheKey, 3600, function () {
-            $historyData = DB::table('rate_histories as rh')
-                ->join('rates as r', 'rh.rate_id', '=', 'r.id')
-                ->join('users as u', 'rh.changed_by', '=', 'u.id')
-                ->whereIn('r.utility_type', ['Electricity', 'Water'])
-                ->select('rh.old_rate', 'rh.new_rate', 'rh.changed_at', 'r.utility_type')
-                ->orderBy('rh.changed_at', 'desc')
-                ->paginate(10);
-            
-            $historyData->getCollection()->transform(function ($item) {
-                $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
-                return $item;
-            });
-            
-            return $historyData;
+        $historyData = DB::table('rate_histories as rh')
+            ->join('rates as r', 'rh.rate_id', '=', 'r.id')
+            ->join('users as u', 'rh.changed_by', '=', 'u.id')
+            ->whereIn('r.utility_type', ['Electricity', 'Water'])
+            ->select('rh.old_rate', 'rh.new_rate', 'rh.changed_at', 'r.utility_type')
+            ->orderBy('rh.changed_at', 'desc')
+            ->paginate(10); // Still paginate the results
+
+        // Format the date after fetching
+        $historyData->getCollection()->transform(function ($item) {
+            // Ensure changed_at is treated as DateTime object for consistent formatting
+            $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
+            return $item;
         });
 
-        return response()->json($history);
+        // ✅ END OF FIX: Return the fetched data directly
+        return response()->json($historyData);
     }
 }

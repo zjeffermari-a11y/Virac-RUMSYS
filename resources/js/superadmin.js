@@ -95,16 +95,18 @@ class SuperAdminDashboard {
         this.roleContacts = window.INITIAL_STATE?.smsSettings || [];
         this.userFilters = { search: "", role: "", page: 1 };
         this.roles = []; // Fetched dynamically
-        this.auditTrails = []; // Fetched dynamically
+        //-Audit Trails--//
+        this.auditTrails = [];
         this.auditTrailsPage = 1;
         this.auditTrailsHasMore = true;
-        this.isFetchingAuditRequests = false;
+        this.isFetchingAuditTrails = false;
         this.auditTrailFilters = {
             search: "",
             role: "",
             start_date: "",
             end_date: "",
         };
+        //------------//
         this.billingSettingsHistoryPage = 2;
         this.billingSettingsHistoryHasMore =
             !!window.INITIAL_STATE?.billingSettingsHistory?.next_page_url;
@@ -1178,6 +1180,9 @@ class SuperAdminDashboard {
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 body: JSON.stringify(updatedTemplates),
             });
@@ -1368,6 +1373,9 @@ class SuperAdminDashboard {
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 body: JSON.stringify({ schedules: updatedSchedulesPayload }),
             });
@@ -1778,25 +1786,33 @@ class SuperAdminDashboard {
     setupAuditTrailEventListeners() {
         if (!this.elements.mainContent) return;
 
+        // Infinite scroll listener
         this.elements.mainContent.addEventListener("scroll", () => {
-            if (
-                this.elements.mainContent.scrollTop +
-                    this.elements.mainContent.clientHeight >=
-                    this.elements.mainContent.scrollHeight - 200 &&
-                this.auditTrailsHasMore &&
-                !this.isFetchingAuditTrails
-            ) {
-                this.fetchAuditTrails();
+            if (this.state.activeSection === "auditTrailsSection") {
+                const isNearBottom =
+                    this.elements.mainContent.scrollTop +
+                        this.elements.mainContent.clientHeight >=
+                    this.elements.mainContent.scrollHeight - 200;
+                if (isNearBottom) {
+                    this.fetchAuditTrails();
+                }
             }
         });
 
-        this.elements.auditTrailSearchInput.addEventListener("input", (e) =>
-            this.handleAuditFilterChange("search", e.target.value)
-        );
-        this.elements.auditTrailRoleFilter.addEventListener("change", (e) =>
-            this.handleAuditFilterChange("role", e.target.value)
-        );
+        // Search input listener
+        this.elements.auditTrailSearchInput.addEventListener("input", (e) => {
+            clearTimeout(this.searchDebounce);
+            this.searchDebounce = setTimeout(() => {
+                this.handleAuditFilterChange("search", e.target.value);
+            }, 500); // Debounce for 500ms
+        });
 
+        // Role filter listener
+        this.elements.auditTrailRoleFilter.addEventListener("change", (e) => {
+            this.handleAuditFilterChange("role", e.target.value);
+        });
+
+        // Date range buttons listener
         this.elements.auditTrailDateFilter.addEventListener("click", (e) => {
             const button = e.target.closest(".date-range-btn");
             if (button) {
@@ -1835,6 +1851,7 @@ class SuperAdminDashboard {
                 break;
             case "all":
             default:
+                // No date filter needed for 'all'
                 break;
         }
 
@@ -1844,20 +1861,49 @@ class SuperAdminDashboard {
 
     handleAuditFilterChange(key, value) {
         this.auditTrailFilters[key] = value;
+        // Reset state for a new filtered search
         this.auditTrails = [];
         this.auditTrailsPage = 1;
         this.auditTrailsHasMore = true;
+        this.elements.auditTrailsTableBody.innerHTML = ""; // Clear table immediately
+        this.fetchAuditTrails();
+    }
 
-        clearTimeout(this.searchDebounce);
-        this.searchDebounce = setTimeout(() => {
-            this.fetchAuditTrails();
-        }, 100);
+    async fetchAuditTrails() {
+        if (this.isFetchingAuditTrails || !this.auditTrailsHasMore) return;
+
+        this.isFetchingAuditTrails = true;
+        this.elements.auditTrailsLoader.classList.remove("hidden");
+
+        const params = new URLSearchParams(this.auditTrailFilters);
+        params.append("page", this.auditTrailsPage);
+
+        try {
+            const response = await fetch(
+                `/api/audit-trails?${params.toString()}`
+            );
+            if (!response.ok) throw new Error("Could not fetch audit trails.");
+
+            const data = await response.json();
+
+            this.auditTrails.push(...data.data);
+            this.auditTrailsHasMore = data.next_page_url !== null;
+            this.auditTrailsPage++;
+            this.renderAuditTrails();
+        } catch (error) {
+            console.error("Failed to fetch audit trails:", error);
+            this.showToast("Failed to load audit trail data.", "error");
+        } finally {
+            this.isFetchingAuditTrails = false;
+            this.elements.auditTrailsLoader.classList.add("hidden");
+        }
     }
 
     renderAuditTrails() {
         const tableBody = this.elements.auditTrailsTableBody;
-        if (this.auditTrails.length === 0 && this.auditTrailsPage === 1) {
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">No audit trail records found.</td></tr>`;
+
+        if (this.auditTrails.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500">No audit trail records found for the selected filters.</td></tr>`;
             return;
         }
 
@@ -1867,7 +1913,9 @@ class SuperAdminDashboard {
             Error: "text-orange-600",
         };
 
-        tableBody.innerHTML = this.auditTrails
+        // Append new rows instead of replacing innerHTML for infinite scroll
+        const newRowsHtml = this.auditTrails
+            .slice((this.auditTrailsPage - 2) * 25) // Only render the newly fetched items
             .map((log) => {
                 const formattedDate = new Date(log.date_time).toLocaleString(
                     "en-US",
@@ -1885,16 +1933,18 @@ class SuperAdminDashboard {
                     resultClasses[log.result] || "text-gray-600";
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="border border-gray-200 px-4 py-3">${formattedDate}</td>
-                    <td class="border border-gray-200 px-4 py-3">${log.user_name}</td>
-                    <td class="border border-gray-200 px-4 py-3">${log.user_role}</td>
-                    <td class="border border-gray-200 px-4 py-3">${log.action}</td>
-                    <td class="border border-gray-200 px-4 py-3">${log.module}</td>
-                    <td class="border border-gray-200 px-4 py-3 font-medium ${resultClass}">${log.result}</td>
+                    <td data-label="Date & Time" class="border border-gray-200 px-4 py-3">${formattedDate}</td>
+                    <td data-label="User" class="border border-gray-200 px-4 py-3">${log.user_name}</td>
+                    <td data-label="Role" class="border border-gray-200 px-4 py-3">${log.user_role}</td>
+                    <td data-label="Action" class="border border-gray-200 px-4 py-3">${log.action}</td>
+                    <td data-label="Module" class="border border-gray-200 px-4 py-3">${log.module}</td>
+                    <td data-label="Result" class="border border-gray-200 px-4 py-3 font-medium ${resultClass}">${log.result}</td>
                 </tr>
             `;
             })
             .join("");
+
+        tableBody.insertAdjacentHTML("beforeend", newRowsHtml);
     }
 
     setupNotificationSectionEventListeners() {
@@ -2159,6 +2209,9 @@ class SuperAdminDashboard {
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 body: JSON.stringify({ contacts: updatedContacts }),
             });
@@ -2702,6 +2755,9 @@ class SuperAdminDashboard {
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 body: JSON.stringify({ schedules: updatedSchedulesPayload }),
             });
@@ -2848,6 +2904,9 @@ class SuperAdminDashboard {
                     headers: {
                         "Content-Type": "application/json",
                         Accept: "application/json",
+                        "X-CSRF-TOKEN": document
+                            .querySelector('meta[name="csrf-token"]')
+                            .getAttribute("content"),
                     },
                     body: JSON.stringify({ day: newDay }),
                 }
@@ -3147,6 +3206,9 @@ class SuperAdminDashboard {
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 body: JSON.stringify({ stalls: updatedStallsPayload }),
             });
@@ -3481,6 +3543,9 @@ class SuperAdminDashboard {
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 body: JSON.stringify(newRate),
             });
@@ -3512,7 +3577,12 @@ class SuperAdminDashboard {
         try {
             const response = await fetch(`/api/rental-rates/${id}`, {
                 method: "DELETE",
-                headers: { Accept: "application/json" },
+                headers: {
+                    Accept: "application/json", // ✅ Added comma here
+                    "X-CSRF-TOKEN": document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
+                },
             });
             if (!response.ok) throw new Error("Failed to delete the rate.");
             this.showToast("Rental rate deleted successfully!", "success");

@@ -8,7 +8,8 @@ use App\Models\BillingSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Cache; 
+use Illuminate\Support\Facades\Cache;
+use App\Models\AuditTrail;
 
 class BillingSettingsController extends Controller
 {
@@ -42,7 +43,9 @@ class BillingSettingsController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request) {
+            $user = Auth::user();
+
+            DB::transaction(function () use ($request, $user) {
                 foreach ($request->settings as $settingData) {
                     $setting = BillingSetting::find($settingData['id']);
                     if (!$setting) continue;

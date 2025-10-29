@@ -43,7 +43,9 @@ const MarketApp = {
     database: {
         async fetchDailyCollections() {
             try {
-                const response = await fetch("/api/staff/bill-management");
+                const response = await fetch("/api/staff/bill-management", {
+                    credentials: "include",
+                });
                 if (!response.ok)
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 return await response.json();
@@ -54,7 +56,9 @@ const MarketApp = {
         },
         async fetchVendors() {
             try {
-                const response = await fetch("/api/staff/vendors");
+                const response = await fetch("/api/staff/vendors", {
+                    credentials: "include",
+                });
                 if (!response.ok)
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 return await response.json();
@@ -65,7 +69,9 @@ const MarketApp = {
         },
         async fetchSections() {
             try {
-                const response = await fetch("/api/staff/sections");
+                const response = await fetch("/api/staff/sections", {
+                    credentials: "include",
+                });
                 if (!response.ok)
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 return await response.json();
@@ -88,6 +94,7 @@ const MarketApp = {
                                 .getAttribute("content"),
                         },
                         body: JSON.stringify(updatedVendor),
+                        credentials: "include", // <-- Add this line
                     }
                 );
                 if (!response.ok) {
@@ -116,6 +123,7 @@ const MarketApp = {
                                 .getAttribute("content"),
                         },
                         body: JSON.stringify(billData),
+                        credentials: "include", // <-- Add this line
                     }
                 );
                 const result = await response.json();
@@ -131,7 +139,9 @@ const MarketApp = {
         //--Vendor Stall Assignment--//
         async fetchUnassignedVendors() {
             try {
-                const response = await fetch("/api/staff/unassigned-vendors");
+                const response = await fetch("/api/staff/unassigned-vendors", {
+                    credentials: "include",
+                });
                 if (!response.ok) throw new Error("Failed to fetch");
                 return await response.json();
             } catch (error) {
@@ -144,7 +154,7 @@ const MarketApp = {
                 const url = `/api/staff/available-stalls?section=${encodeURIComponent(
                     section
                 )}`;
-                const response = await fetch(url);
+                const response = await fetch(url, { credentials: "include" });
                 if (!response.ok) throw new Error("Failed to fetch");
                 return await response.json();
             } catch (error) {
@@ -167,6 +177,7 @@ const MarketApp = {
                         vendor_id: vendorId,
                         stall_id: stallId,
                     }),
+                    credentials: "include", // <-- Add this line
                 });
                 const result = await response.json();
                 if (!response.ok)
