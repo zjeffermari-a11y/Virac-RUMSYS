@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         // This is the crucial addition. It tells Laravel to use Sanctum's
         // middleware for API routes, which enables cookie-based authentication.
+        $middleware->trustProxies(at: '*');
+        
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
