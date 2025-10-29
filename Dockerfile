@@ -93,15 +93,14 @@ RUN composer require doctrine/dbal
 # Skip discovery to avoid database queries during composer install
 RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
 
-# Remove any cached config that might reference dev packages
-RUN php artisan config:clear || true
-RUN php artisan cache:clear || true
+# CRITICAL: Delete cached service providers before running ANY artisan commands
+RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php
+
+# Now run package discovery to rebuild the cache without dev packages
+RUN php artisan package:discover --ansi
 
 # 9a. Run migrations on the build-time SQLite DB
 RUN php artisan migrate --force
-
-# Run package discovery separately with proper environment
-RUN php artisan package:discover --ansi || true
 
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
