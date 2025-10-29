@@ -12,72 +12,67 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // For SQLite, we need to disable foreign key checks
-        // and handle the migration differently
+        // For SQLite, we need a different approach
         if (DB::getDriverName() === 'sqlite') {
             // Disable foreign key constraints
             DB::statement('PRAGMA foreign_keys = OFF');
             
-            // Get current table structure
-            $stalls = DB::select("SELECT * FROM stalls LIMIT 1");
-            
-            // Drop and recreate the table with the new computed column
-            Schema::dropIfExists('stalls_backup');
-            
-            // Create temporary backup table
-            DB::statement('CREATE TABLE stalls_backup AS SELECT * FROM stalls');
-            
-            // Drop original table
-            Schema::dropIfExists('stalls');
-            
-            // Recreate table with the new structure
-            Schema::create('stalls', function (Blueprint $table) {
-                $table->id();
-                $table->string('stall_no')->unique();
-                $table->unsignedBigInteger('section_id');
-                $table->decimal('daily_rate', 10, 2)->default(0.00);
-                $table->decimal('area', 10, 2)->nullable();
-                // Add monthly_rate as a regular column for SQLite
-                // We'll calculate it in the application layer or use database triggers
-                $table->decimal('monthly_rate', 10, 2)
-                      ->nullable()
-                      ->comment('Calculated: (daily_rate * area * 30) or (daily_rate * 30)');
-                $table->unsignedBigInteger('vendor_id')->nullable();
-                $table->unsignedBigInteger('user_id')->nullable();
-                $table->enum('status', ['Occupied', 'Available', 'Reserved', 'Under Maintenance'])->default('Available');
-                $table->timestamps();
+            try {
+                // Get all column names from the current stalls table
+                $columns = DB::select("PRAGMA table_info(stalls)");
+                $columnNames = collect($columns)->pluck('name')->filter(function($name) {
+                    return $name !== 'monthly_rate'; // Exclude monthly_rate from copy
+                })->toArray();
                 
-                $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
-                $table->foreign('vendor_id')->references('id')->on('users')->onDelete('set null');
-                $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
-            });
-            
-            // Copy data back and calculate monthly_rate
-            DB::statement('
-                INSERT INTO stalls (id, stall_no, section_id, daily_rate, area, monthly_rate, vendor_id, user_id, status, created_at, updated_at)
-                SELECT 
-                    id, 
-                    stall_no, 
-                    section_id, 
-                    daily_rate, 
-                    area,
-                    CASE 
-                        WHEN area IS NOT NULL AND area > 0 THEN daily_rate * area * 30 
-                        ELSE daily_rate * 30 
-                    END as monthly_rate,
-                    vendor_id,
-                    user_id,
-                    status,
-                    created_at,
-                    updated_at
-                FROM stalls_backup
-            ');
-            
-            // Drop backup table
-            Schema::dropIfExists('stalls_backup');
-            
-            // Re-enable foreign key constraints
-            DB::statement('PRAGMA foreign_keys = ON');
+                // Create backup
+                DB::statement("CREATE TABLE stalls_backup AS SELECT * FROM stalls");
+                
+                // Drop original table
+                Schema::dropIfExists('stalls');
+                
+                // Recreate table with the new structure
+                Schema::create('stalls', function (Blueprint $table) {
+                    $table->id();
+                    $table->string('stall_no')->unique();
+                    $table->unsignedBigInteger('section_id');
+                    $table->decimal('daily_rate', 10, 2)->default(0.00);
+                    $table->decimal('area', 10, 2)->nullable();
+                    $table->decimal('monthly_rate', 10, 2)->nullable();
+                    $table->unsignedBigInteger('vendor_id')->nullable();
+                    $table->unsignedBigInteger('user_id')->nullable();
+                    $table->enum('status', ['Occupied', 'Available', 'Reserved', 'Under Maintenance'])->default('Available');
+                    $table->timestamps();
+                    
+                    $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
+                    $table->foreign('vendor_id')->references('id')->on('users')->onDelete('set null');
+                    $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
+                });
+                
+                // Build column list for INSERT (excluding monthly_rate from source)
+                $insertColumns = implode(', ', $columnNames);
+                
+                // Build SELECT with calculated monthly_rate
+                $selectParts = [];
+                foreach ($columnNames as $col) {
+                    $selectParts[] = $col;
+                }
+                $selectParts[] = "CASE WHEN area IS NOT NULL AND area > 0 THEN daily_rate * area * 30 ELSE daily_rate * 30 END as monthly_rate";
+                $selectStatement = implode(', ', $selectParts);
+                
+                // Copy data back with calculated monthly_rate
+                DB::statement("
+                    INSERT INTO stalls ({$insertColumns}, monthly_rate)
+                    SELECT {$selectStatement}
+                    FROM stalls_backup
+                ");
+                
+                // Drop backup table
+                Schema::dropIfExists('stalls_backup');
+                
+            } finally {
+                // Re-enable foreign key constraints
+                DB::statement('PRAGMA foreign_keys = ON');
+            }
         } else {
             // For MySQL/PostgreSQL, use generated columns
             Schema::table('stalls', function (Blueprint $table) {
