@@ -25,5 +25,3 @@ php artisan view:cache
 
 # Run database migrations
 php artisan migrate --force
-
-php artisan db:seed --force
