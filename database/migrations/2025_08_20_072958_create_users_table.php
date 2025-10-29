@@ -10,6 +10,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('role_id')->constrained('roles')->onDelete('cascade');
             $table->string('name');
+            $table->string('username')->unique(); // ADDED THIS
             $table->string('email')->unique();
             $table->string('password');
             $table->string('contact_number')->nullable();  

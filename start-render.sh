@@ -30,9 +30,9 @@ else
     exit 1
 fi
 
-# 4. Run migrations
+# 4. Run migrations (fresh to fix schema)
 echo "Running migrations..."
-php artisan migrate --force
+php artisan migrate:fresh --force
 
 # 5. Storage link
 echo "Linking storage..."
