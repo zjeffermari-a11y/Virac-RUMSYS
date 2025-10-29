@@ -20,9 +20,7 @@ return new class extends Migration
             try {
                 // Get all column names from the current stalls table
                 $columns = DB::select("PRAGMA table_info(stalls)");
-                $columnNames = collect($columns)->pluck('name')->filter(function($name) {
-                    return $name !== 'monthly_rate'; // Exclude monthly_rate from copy
-                })->toArray();
+                $existingColumnNames = collect($columns)->pluck('name')->toArray();
                 
                 // Create backup
                 DB::statement("CREATE TABLE stalls_backup AS SELECT * FROM stalls");
@@ -30,32 +28,58 @@ return new class extends Migration
                 // Drop original table
                 Schema::dropIfExists('stalls');
                 
-                // Recreate table with the new structure
-                Schema::create('stalls', function (Blueprint $table) {
+                // Recreate table with the current structure (keep the column names as they are)
+                Schema::create('stalls', function (Blueprint $table) use ($existingColumnNames) {
                     $table->id();
-                    $table->string('stall_no')->unique();
+                    
+                    // Use the actual column name from the existing table
+                    if (in_array('stall_no', $existingColumnNames)) {
+                        $table->string('stall_no')->unique();
+                    } elseif (in_array('stall_number', $existingColumnNames)) {
+                        $table->string('stall_number')->unique();
+                    }
+                    
+                    // Check for table_number column
+                    if (in_array('table_number', $existingColumnNames)) {
+                        $table->string('table_number')->nullable();
+                    }
+                    
                     $table->unsignedBigInteger('section_id');
                     $table->decimal('daily_rate', 10, 2)->default(0.00);
                     $table->decimal('area', 10, 2)->nullable();
                     $table->decimal('monthly_rate', 10, 2)->nullable();
                     $table->unsignedBigInteger('vendor_id')->nullable();
-                    $table->unsignedBigInteger('user_id')->nullable();
-                    $table->enum('status', ['Occupied', 'Available', 'Reserved', 'Under Maintenance'])->default('Available');
+                    
+                    // Check for user_id column
+                    if (in_array('user_id', $existingColumnNames)) {
+                        $table->unsignedBigInteger('user_id')->nullable();
+                    }
+                    
+                    // Check for status column
+                    if (in_array('status', $existingColumnNames)) {
+                        $table->enum('status', ['Occupied', 'Available', 'Reserved', 'Under Maintenance'])->default('Available');
+                    }
+                    
                     $table->timestamps();
                     
                     $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
                     $table->foreign('vendor_id')->references('id')->on('users')->onDelete('set null');
-                    $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
+                    
+                    if (in_array('user_id', $existingColumnNames)) {
+                        $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
+                    }
                 });
                 
-                // Build column list for INSERT (excluding monthly_rate from source)
+                // Get columns excluding monthly_rate
+                $columnNames = array_filter($existingColumnNames, function($name) {
+                    return $name !== 'monthly_rate';
+                });
+                
+                // Build column list for INSERT
                 $insertColumns = implode(', ', $columnNames);
                 
                 // Build SELECT with calculated monthly_rate
-                $selectParts = [];
-                foreach ($columnNames as $col) {
-                    $selectParts[] = $col;
-                }
+                $selectParts = array_values($columnNames);
                 $selectParts[] = "CASE WHEN area IS NOT NULL AND area > 0 THEN daily_rate * area * 30 ELSE daily_rate * 30 END as monthly_rate";
                 $selectStatement = implode(', ', $selectParts);
                 
