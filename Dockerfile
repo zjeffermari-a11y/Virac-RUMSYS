@@ -76,7 +76,6 @@ RUN chmod +x /var/www/html/start-render.sh
 RUN chown -R www-data:www-data /var/www/html
 
 # 8a. Create database directory and empty SQLite file for build process
-# Ownership is already set, so we just need to create the files
 RUN mkdir -p /var/www/html/database && \
     touch /var/www/html/database/database.sqlite
 
@@ -94,9 +93,13 @@ RUN composer require doctrine/dbal
 # Skip discovery to avoid database queries during composer install
 RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
 
-RUN php artisan optimize:clear
+# Remove any cached config that might reference dev packages
+RUN php artisan config:clear || true
+RUN php artisan cache:clear || true
+
 # 9a. Run migrations on the build-time SQLite DB
 RUN php artisan migrate --force
+
 # Run package discovery separately with proper environment
 RUN php artisan package:discover --ansi || true
 
@@ -117,4 +120,4 @@ COPY nginx.conf /etc/nginx/sites-available/default
 EXPOSE 80
 
 # 13. Set the start script as the entry point
-CMD ["/var/www/html/start-render.sh"]a
+CMD ["/var/www/html/start-render.sh"]
