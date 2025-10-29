@@ -6,58 +6,35 @@ USER root
 
 # 3, 4, 5. Install OS dependencies, PHP extensions, Node.js, and Google Chrome
 RUN apt-get update && apt-get install -y \
-    # Packages from 3a & 3b
     nginx \
     curl \
     gnupg \
     libpq-dev \
-    # Add libzip-dev for zip PHP extension
     libzip-dev \
-    # Packages for Chrome install (5)
+    libicu-dev \
     wget \
     ca-certificates \
-    # Add git and unzip for Composer
     git \
     unzip \
-    # Clean up apt cache *before* installing PHP extensions
     && rm -rf /var/lib/apt/lists/* \
     \
-    # 4. Install PHP extensions
-    # Add 'zip' for Composer
-    && docker-php-ext-install pdo_pgsql bcmath zip intl\
+    # Install PHP extensions
+    && docker-php-ext-install pdo_pgsql bcmath zip intl \
     \
-    # Install Node.js 20.x (LTS)
+    # Install Node.js
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     \
-    # 5. Set up Google Chrome repo
+    # Install Chrome
     && mkdir -p -m 755 /etc/apt/keyrings \
     && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    \
-    # Install Chrome and its dependencies
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libdbus-1-3 \
-    libatspi2.0-0 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxtst6 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    # Final cleanup
+        libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+        libdbus-1-3 libatspi2.0-0 libxcomposite1 libxcursor1 \
+        libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 \
+        libxtst6 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Composer globally
