@@ -3,33 +3,34 @@ set -e
 
 echo "=== Starting Virac RUMSYS ==="
 
-# Clear cached config to use Render env vars
+# 1. CLEAR CACHED CONFIG (CRITICAL!)
 php artisan config:clear
 php artisan cache:clear
 
-# Run migrations with PostgreSQL
+# 2. Run migrations
 echo "Running migrations..."
 php artisan migrate --force
 
-# Storage link
+# 3. Storage link
 echo "Linking storage..."
 php artisan storage:link
 
-# Create logs directory
+# 4. Create logs
 mkdir -p storage/logs
 touch storage/logs/laravel.log
 chown www-data:www-data storage/logs/laravel.log
 
-# Test DB connection
+# 5. TEST DB WITH FRESH CONFIG
 echo "Testing PostgreSQL connection..."
-if php artisan db:show; then
-    echo "✅ PostgreSQL connected!"
+php artisan config:clear  # ENSURE FRESH ENV
+if php artisan db:show --verbose; then
+    echo "PostgreSQL connected!"
 else
-    echo "❌ Database connection FAILED!"
+    echo "Database connection FAILED!"
     exit 1
 fi
 
-# Start services
+# 6. Start services
 echo "Starting PHP-FPM..."
 php-fpm -D
 

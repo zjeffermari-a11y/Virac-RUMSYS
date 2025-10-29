@@ -77,7 +77,6 @@ ENV npm_config_cache=/tmp/.npm
 RUN npm install && npm run build
 
 # 11. Cache Laravel's config and routes
-RUN php artisan config:cache
 RUN php artisan route:cache
 
 # 12. Copy Nginx configuration and expose port
