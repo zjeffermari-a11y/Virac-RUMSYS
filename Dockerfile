@@ -92,7 +92,9 @@ ENV DB_CONNECTION=sqlite
 RUN composer require doctrine/dbal
 
 # Skip discovery to avoid database queries during composer install
-RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
+RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts --no-plugins
+
+RUN php artisan config:clear
 # 9a. Run migrations on the build-time SQLite DB
 RUN php artisan migrate --force
 # Run package discovery separately with proper environment
