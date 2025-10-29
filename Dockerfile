@@ -99,9 +99,6 @@ RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/ca
 # Now run package discovery to rebuild the cache without dev packages
 RUN php artisan package:discover --ansi
 
-# 9a. Run migrations on the build-time SQLite DB
-RUN php artisan migrate --force
-
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
