@@ -52,33 +52,33 @@ RUN chmod +x /var/www/html/start-render.sh
 # 8. Set the correct file permissions for the entire application
 RUN chown -R www-data:www-data /var/www/html
 
+# 8a. Create necessary directories with proper permissions
+RUN mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views \
+    && chown -R www-data:www-data storage bootstrap/cache
+
 # 9. Install Composer dependencies
 USER www-data
-# Set APP_ENV to prevent database operations during build
-ENV APP_ENV=production
 
-# ADD THIS LINE TO FIX SQLITE MIGRATIONS
-RUN composer require doctrine/dbal
+# Install doctrine/dbal for migrations
+RUN composer require doctrine/dbal --no-interaction
 
-# Skip discovery to avoid database queries during composer install
+# Install all dependencies (no scripts to avoid DB queries)
 RUN composer install --no-interaction --no-dev --optimize-autoloader --no-scripts
 
-# CRITICAL: Delete cached service providers before running ANY artisan commands
+# CRITICAL: Delete any cached config from build time
 RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php
 
-# Now run package discovery to rebuild the cache without dev packages
+# Run package discovery
 RUN php artisan package:discover --ansi
 
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-# Set npm cache to a directory www-data can write to
 ENV npm_config_cache=/tmp/.npm
 RUN npm install && npm run build
 
-# 11. Cache Laravel's config and routes
-RUN php artisan config:cache
-RUN php artisan route:cache
+# REMOVED: Do NOT cache config/routes during build!
+# The config will be loaded fresh at runtime with actual environment variables
 
 # 12. Copy Nginx configuration and expose port
 USER root
