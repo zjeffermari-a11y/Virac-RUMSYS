@@ -3,10 +3,9 @@ set -e
 
 echo "=== Starting Virac RUMSYS ==="
 
-# 1. Clear all caches
+# 1. CLEAR CACHED CONFIG (CRITICAL!)
 php artisan config:clear
 php artisan cache:clear
-php artisan route:clear
 
 # 2. Run migrations
 echo "Running migrations..."
@@ -21,13 +20,13 @@ mkdir -p storage/logs
 touch storage/logs/laravel.log
 chown www-data:www-data storage/logs/laravel.log
 
-# 5. Test DB
+# 5. TEST DB WITH FRESH CONFIG
 echo "Testing PostgreSQL connection..."
-if php artisan db:show --verbose | grep -q "pgsql"; then
+php artisan config:clear  # ENSURE FRESH ENV
+if php artisan db:show --verbose; then
     echo "PostgreSQL connected!"
 else
-    echo "Database connection FAILED! Still using SQLite."
-    php artisan db:show --verbose
+    echo "Database connection FAILED!"
     exit 1
 fi
 

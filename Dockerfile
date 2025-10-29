@@ -76,10 +76,14 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 ENV npm_config_cache=/tmp/.npm
 RUN npm install && npm run build
 
-# 11. Copy Nginx configuration and expose port
+# 11. Cache Laravel's config and routes
+RUN php artisan config:cache
+RUN php artisan route:cache
+
+# 12. Copy Nginx configuration and expose port
 USER root
 COPY nginx.conf /etc/nginx/sites-available/default
 EXPOSE 80
 
-# 12. Set the start script as the entry point
+# 13. Set the start script as the entry point
 CMD ["/var/www/html/start-render.sh"]
