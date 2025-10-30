@@ -33,9 +33,7 @@ echo "Checking migration status..."
 php artisan migrate:status
 
 # 5. SEED DATABASE IF EMPTY
-echo "=== Seeding database ==="
-php artisan db:seed --force --verbose
-echo "✓ Seeding completed!"
+echo "=== Checking if database needs seeding ==="
 
 # Get user count, strip all whitespace and non-numeric chars
 USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>&1 | tr -d '\n\r\t ' | grep -o '[0-9]*' | head -1)
