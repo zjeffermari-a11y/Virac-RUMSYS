@@ -35,6 +35,16 @@ echo "Running migrations..."
 # Change this line back:
 php artisan migrate --force
 
+echo "Checking if database needs seeding..."
+USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();")
+
+if [ "$USER_COUNT" -eq "0" ]; then
+    echo "Database is empty. Seeding data..."
+    php artisan db:seed --force
+    echo "✓ Data seeded successfully!"
+else
+    echo "Database has $USER_COUNT users. Skipping seed."
+fi
 
 # 5. Storage link
 echo "Linking storage..."

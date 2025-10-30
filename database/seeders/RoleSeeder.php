@@ -3,15 +3,37 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Role; // Make sure you have a Role model
+use Illuminate\Support\Facades\DB;
 
-class RoleSeeder extends Seeder
+class RolesSeeder extends Seeder
 {
-    public function run(): void
+    public function run()
     {
-        Role::firstOrCreate(['name' => 'Admin']);
-        Role::firstOrCreate(['name' => 'Vendor']);
-        Role::firstOrCreate(['name' => 'Staff']);
-        Role::firstOrCreate(['name' => 'Meter Reader Clerk']);
+        DB::table('roles')->insert([
+            [
+                'id' => 1,
+                'name' => 'Admin',
+                'created_at' => '2025-08-22 18:32:27',
+                'updated_at' => '2025-08-22 18:32:27',
+            ],
+            [
+                'id' => 2,
+                'name' => 'Vendor',
+                'created_at' => '2025-08-22 18:32:27',
+                'updated_at' => '2025-08-22 18:32:27',
+            ],
+            [
+                'id' => 3,
+                'name' => 'Staff',
+                'created_at' => '2025-08-22 18:32:27',
+                'updated_at' => '2025-08-22 18:32:27',
+            ],
+            [
+                'id' => 4,
+                'name' => 'Meter Reader Clerk',
+                'created_at' => '2025-08-22 18:32:27',
+                'updated_at' => '2025-08-22 18:32:27',
+            ],
+        ]);
     }
-}   
+}
