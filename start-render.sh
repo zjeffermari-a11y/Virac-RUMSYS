@@ -36,25 +36,25 @@ php artisan migrate:status
 echo "=== Checking if database needs seeding ==="
 
 # Get user count, strip all whitespace and non-numeric chars
-USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>&1 | tr -d '\n\r\t ' | grep -o '[0-9]*' | head -1)
+ROLE_COUNT=$(php artisan tinker --execute="echo DB::table('roles')->count();" 2>&1 | tr -d '\n\r\t ' | grep -o '[0-9]*' | head -1)
 
 # Default to 0 if extraction failed
-if [ -z "$USER_COUNT" ]; then
-    USER_COUNT=0
+if [ -z "$ROLE_COUNT" ]; then
+    ROLE_COUNT=0
 fi
 
-echo "User count detected: $USER_COUNT"
+echo "Role count detected: $ROLE_COUNT"
 
 # Numeric comparison (safer than string comparison)
-if [ "$USER_COUNT" -eq 0 ] 2>/dev/null; then
-    echo "⚠️  Database has 0 users! Starting seed..."
+if [ "$ROLE_COUNT" -eq 0 ] 2>/dev/null; then
+    echo "⚠️  Database has 0 roles! Starting seed..."
     php artisan db:seed --force --verbose
     
     # Verify
     NEW_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>&1 | tr -d '\n\r\t ' | grep -o '[0-9]*' | head -1)
     echo "✓ Seeding complete! Database now has $NEW_COUNT users."
 else
-    echo "✓ Database has $USER_COUNT users. Skipping seed."
+    echo "✓ Database has $ROLE_COUNT roles. Skipping seed."
 fi
 
 # 6. Storage link
