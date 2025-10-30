@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Section; // Make sure you have a Section model
 
-class SectionSeeder extends Seeder
+class SectionsSeeder extends Seeder
 {
     public function run(): void
     {
