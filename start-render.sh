@@ -16,8 +16,6 @@ echo "DB_HOST env var: ${DB_HOST:-NOT SET}"
 echo "DB_DATABASE env var: ${DB_DATABASE:-NOT SET}"
 echo "DB_USERNAME env var: ${DB_USERNAME:-NOT SET}"
 echo ""
-echo "Laravel config (after cache clear):"
-echo "Current DB Connection: $(php artisan tinker --execute='echo config("database.default");')"
 
 # 3. Test database connection
 echo "Testing PostgreSQL connection..."
@@ -30,13 +28,26 @@ else
     exit 1
 fi
 
-# 4. Run migrations (fresh to fix schema)
+# 4. Run migrations
 echo "Running migrations..."
-# Change this line back:
-#php artisan migrate --force
+php artisan migrate --force
 
+echo "Checking migration status..."
+php artisan migrate:status
+
+# 5. **SEED DATABASE IF EMPTY**
 echo "Checking if database needs seeding..."
-USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();")
+# Check if users table exists first
+TABLE_EXISTS=$(php artisan tinker --execute="try { DB::table('users')->count(); echo 'EXISTS'; } catch (\Exception \$e) { echo 'NOT_EXISTS'; }" 2>/dev/null || echo "NOT_EXISTS")
+
+if [ "$TABLE_EXISTS" = "NOT_EXISTS" ]; then
+    echo "⚠️  Users table doesn't exist. Running migrations again..."
+    php artisan migrate:fresh --force
+    echo "✓ Migrations completed!"
+fi
+
+# Now check user count safely
+USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>/dev/null || echo "0")
 
 if [ "$USER_COUNT" = "0" ]; then
     echo "⚠️  Database is empty! Seeding data..."
@@ -49,24 +60,24 @@ else
     echo "✓ Database already has $USER_COUNT users. Skipping seed."
 fi
 
-# 5. Storage link
+# 6. Storage link
 echo "Linking storage..."
 php artisan storage:link || echo "Storage already linked"
 
-# 6. Cache config for better performance (with actual runtime env vars)
+# 7. Cache config for better performance (with actual runtime env vars)
 echo "Caching configuration..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# 7. Set proper permissions
+# 8. Set proper permissions
 chown -R www-data:www-data storage bootstrap/cache
 
-# 8. Start PHP-FPM
+# 9. Start PHP-FPM
 echo "Starting PHP-FPM..."
 php-fpm -D
 
-# 9. Start Nginx (foreground to keep container running)
+# 10. Start Nginx (foreground to keep container running)
 echo "Starting Nginx..."
 echo "=== Application ready at port 80 ==="
 exec nginx -g 'daemon off;'
