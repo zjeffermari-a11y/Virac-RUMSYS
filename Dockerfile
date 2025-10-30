@@ -73,6 +73,10 @@ RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/ca
 # Run package discovery
 RUN php artisan package:discover --ansi
 
+# 6. Storage link
+echo "Linking storage..."
+php artisan storage:link || true
+
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
