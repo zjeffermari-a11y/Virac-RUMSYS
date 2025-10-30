@@ -9,12 +9,11 @@ php artisan config:clear
 php artisan cache:clear
 php artisan view:clear
 
-# 2. Verify environment variables are loaded
+# 2. Verify environment variables
 echo "=== Environment Variables Check ==="
 echo "DB_CONNECTION env var: ${DB_CONNECTION:-NOT SET}"
 echo "DB_HOST env var: ${DB_HOST:-NOT SET}"
 echo "DB_DATABASE env var: ${DB_DATABASE:-NOT SET}"
-echo "DB_USERNAME env var: ${DB_USERNAME:-NOT SET}"
 echo ""
 
 # 3. Test database connection
@@ -23,47 +22,61 @@ if php artisan db:show; then
     echo "✓ PostgreSQL connected successfully!"
 else
     echo "✗ Database connection FAILED!"
-    echo "Showing environment for debugging:"
-    php artisan config:show database
     exit 1
 fi
 
 # 4. Run migrations
-echo "Running migrations and seeders..."
-php artisan migrate:fresh --seed --force
+echo "=== Running Migrations ==="
+php artisan migrate --force
 
 echo "Checking migration status..."
 php artisan migrate:status
 
-# 5. **SEED DATABASE IF EMPTY**
-echo "Checking if database needs seeding..."
-# Check if users table exists first
-TABLE_EXISTS=$(php artisan tinker --execute="try { DB::table('users')->count(); echo 'EXISTS'; } catch (\Exception \$e) { echo 'NOT_EXISTS'; }" 2>/dev/null || echo "NOT_EXISTS")
+# 5. SEED DATABASE IF EMPTY
+echo "=== Seeding database ==="
+php artisan db:seed --force --verbose
+echo "✓ Seeding completed!"
 
-if [ "$TABLE_EXISTS" = "NOT_EXISTS" ]; then
-    echo "⚠️  Users table doesn't exist. Running migrations again..."
-    php artisan migrate:fresh --force
-    echo "✓ Migrations completed!"
+# Get user count, strip all whitespace and non-numeric chars
+USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>&1 | tr -d '\n\r\t ' | grep -o '[0-9]*' | head -1)
+
+# Default to 0 if extraction failed
+if [ -z "$USER_COUNT" ]; then
+    USER_COUNT=0
+fi
+
+echo "User count detected: $USER_COUNT"
+
+# Numeric comparison (safer than string comparison)
+if [ "$USER_COUNT" -eq 0 ] 2>/dev/null; then
+    echo "⚠️  Database has 0 users! Starting seed..."
+    php artisan db:seed --force --verbose
+    
+    # Verify
+    NEW_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>&1 | tr -d '\n\r\t ' | grep -o '[0-9]*' | head -1)
+    echo "✓ Seeding complete! Database now has $NEW_COUNT users."
+else
+    echo "✓ Database has $USER_COUNT users. Skipping seed."
 fi
 
 # 6. Storage link
 echo "Linking storage..."
-php artisan storage:link || echo "Storage already linked"
+php artisan storage:link || true
 
-# 7. Cache config for better performance (with actual runtime env vars)
+# 7. Cache config
 echo "Caching configuration..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# 8. Set proper permissions
+# 8. Set permissions
 chown -R www-data:www-data storage bootstrap/cache
 
 # 9. Start PHP-FPM
 echo "Starting PHP-FPM..."
 php-fpm -D
 
-# 10. Start Nginx (foreground to keep container running)
+# 10. Start Nginx
 echo "Starting Nginx..."
 echo "=== Application ready at port 80 ==="
 exec nginx -g 'daemon off;'
