@@ -13,7 +13,6 @@ class RatesSeeder extends Seeder
             [
                 'id' => 1,
                 'utility_type' => 'Electricity',
-                'section_id' => null,
                 'rate' => 25.00,
                 'created_at' => '2025-08-26 03:38:31',
                 'updated_at' => '2025-10-26 23:50:25'
@@ -21,7 +20,6 @@ class RatesSeeder extends Seeder
             [
                 'id' => 2,
                 'utility_type' => 'Water',
-                'section_id' => null,
                 'rate' => 5.00,
                 'created_at' => '2025-08-26 03:38:31',
                 'updated_at' => '2025-09-29 15:48:55'
