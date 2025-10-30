@@ -29,8 +29,8 @@ else
 fi
 
 # 4. Run migrations
-echo "Running migrations..."
-php artisan migrate --force
+echo "Running migrations and seeders..."
+php artisan migrate:fresh --seed --force
 
 echo "Checking migration status..."
 php artisan migrate:status
@@ -44,20 +44,6 @@ if [ "$TABLE_EXISTS" = "NOT_EXISTS" ]; then
     echo "⚠️  Users table doesn't exist. Running migrations again..."
     php artisan migrate:fresh --force
     echo "✓ Migrations completed!"
-fi
-
-# Now check user count safely
-USER_COUNT=$(php artisan tinker --execute="echo DB::table('users')->count();" 2>/dev/null || echo "0")
-
-if [ "$USER_COUNT" = "0" ]; then
-    echo "⚠️  Database is empty! Seeding data..."
-    php artisan db:seed --force
-    echo "✓ Database seeded successfully!"
-    echo "   - Users seeded"
-    echo "   - Stalls seeded"
-    echo "   - Billing data seeded"
-else
-    echo "✓ Database already has $USER_COUNT users. Skipping seed."
 fi
 
 # 6. Storage link
