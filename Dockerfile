@@ -73,8 +73,7 @@ RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/ca
 # Run package discovery
 RUN php artisan package:discover --ansi
 
-# 6. Storage link
-echo "Linking storage..."
+# 6. Storage links
 php artisan storage:link || true
 
 # 10. Install NPM dependencies and build your assets
