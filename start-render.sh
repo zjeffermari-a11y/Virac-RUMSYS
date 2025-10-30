@@ -45,5 +45,5 @@ php-fpm -D
 
 # 10. Start Nginx
 echo "Starting Nginx..."
-echo "=== Application ready at port 80 ==="
+echo "=== Application ready at port ${PORT} ==="
 exec nginx -g 'daemon off;'
