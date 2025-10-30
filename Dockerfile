@@ -74,7 +74,7 @@ RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/ca
 RUN php artisan package:discover --ansi
 
 # 6. Storage links
-php artisan storage:link || true
+RUN php artisan storage:link || true
 
 # 10. Install NPM dependencies and build your assets
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
