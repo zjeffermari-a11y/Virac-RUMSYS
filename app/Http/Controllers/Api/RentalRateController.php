@@ -58,7 +58,7 @@ class RentalRateController extends Controller
 
         $maxTableNumber = DB::table('stalls')
             ->where('section_id', $section->id)
-            ->max(DB::raw('CAST(table_number AS UNSIGNED)'));
+            ->max(DB::raw("CAST(SUBSTRING(table_number FROM '[0-9]+$') AS INTEGER)"));
 
         return response()->json(['next_table_number' => ((int)$maxTableNumber) + 1]);
     }
