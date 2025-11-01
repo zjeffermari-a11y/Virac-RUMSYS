@@ -239,6 +239,11 @@ public function getCollectionTrends(Request $request)
     $year = $request->input('year', Carbon::now()->year);
 
     $query = User::whereHas('role', fn ($q) => $q->where('name', 'Vendor'))
+        ->whereHas('billings', function ($query) use ($year) {
+            $query->whereYear('period_start', $year)
+                ->where('status', 'unpaid')
+                ->where('due_date', '<', now());
+        })
         ->with(['stall:id,vendor_id,table_number', 'billings' => function ($query) use ($year) {
             // Apply year filter
             $query->whereYear('period_start', $year)
@@ -256,9 +261,9 @@ public function getCollectionTrends(Request $request)
         $query->whereHas('stall.section', fn($q) => $q->where('name', $sectionName));
     }
 
-    $paginatedVendors = $query->having('overdue_bills_count', '>', 0)
-        ->orderByDesc('overdue_bills_count')
-        ->paginate(15);
+    $paginatedVendors = $query // <-- REMOVED .having() FROM HERE
+            ->orderByDesc('overdue_bills_count')
+            ->paginate(15);
 
     $paginatedVendors->getCollection()->transform(function ($vendor) {
         $overdueDetails = $vendor->billings->map(function ($bill) {
