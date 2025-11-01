@@ -314,10 +314,10 @@ class StaffController extends Controller
         $utilityPeriod = $targetDate->copy()->subMonthNoOverflow();
 
         $collectionByUtility = Billing::select(
-                'utility_type',
-                DB::raw('SUM(CASE WHEN status = "paid" THEN amount ELSE 0 END) as paid'),
-                DB::raw('SUM(CASE WHEN status = "unpaid" THEN amount ELSE 0 END) as unpaid')
-            )
+            'utility_type',
+            DB::raw('SUM(CASE WHEN status = "paid" THEN amount ELSE 0 END) as paid'),
+            DB::raw('SUM(CASE WHEN status = "unpaid" THEN amount ELSE 0 END) as unpaid')
+        )
             ->where(function ($query) use ($year, $month) {
                 // Rent bills belong to their own consumption month
                 $query->where('utility_type', 'Rent')
