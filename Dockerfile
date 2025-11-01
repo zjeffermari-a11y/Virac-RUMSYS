@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     git \
     unzip \
+    gettext-base \
     && rm -rf /var/lib/apt/lists/* \
     \
     # Install PHP extensions
@@ -87,7 +88,7 @@ RUN npm install && npm run build
 
 # 12. Copy Nginx configuration and expose port
 USER root
-COPY nginx.conf /etc/nginx/sites-available/default
+COPY nginx.conf /etc/nginx/sites-enabled/default
 EXPOSE 80
 
 # 13. Set the start script as the entry point

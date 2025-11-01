@@ -42,6 +42,8 @@ chown -R www-data:www-data storage bootstrap/cache
 # 9. Start PHP-FPM
 echo "Starting PHP-FPM..."
 php-fpm -D
+echo "Substituting environment variables in Nginx config..."
+envsubst '${PORT}' < /etc/nginx/sites-enabled/default > /tmp/default.conf && mv /tmp/default.conf /etc/nginx/sites-enabled/default
 
 # 10. Start Nginx
 echo "Starting Nginx..."
