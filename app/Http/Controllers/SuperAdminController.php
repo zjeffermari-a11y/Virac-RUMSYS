@@ -54,7 +54,7 @@ class SuperAdminController extends Controller
         $topPerformers = $dashboardApiController->getTopPerformingVendors($request)->getData(true);
         $vendorsNeedingSupport = $dashboardApiController->getVendorsNeedingSupport($request)->getData(true);
         
-        $years = Billing::select(DB::raw('YEAR(period_start) as year'))
+        $years = Billing::select(DB::raw('EXTRACT(YEAR FROM period_start) as year'))
             ->distinct()->orderBy('year', 'desc')->pluck('year');
         if ($years->isEmpty()) {
             $years->push(now()->year);

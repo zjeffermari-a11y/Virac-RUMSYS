@@ -270,7 +270,7 @@ class VendorController extends Controller
 
         $years = Billing::join('payments', 'billing.id', '=', 'payments.billing_id')
             ->where('billing.stall_id', $vendor->stall->id)
-            ->select(DB::raw('YEAR(payments.payment_date) as year'))
+            ->select(DB::raw('EXTRACT(YEAR FROM payments.payment_date) as year'))
             ->distinct()
             ->orderBy('year', 'desc')
             ->pluck('year');

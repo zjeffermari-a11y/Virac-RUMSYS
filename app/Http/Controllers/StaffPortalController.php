@@ -53,7 +53,7 @@ class StaffPortalController extends Controller
         ];
 
         // Fetch years and sections for dashboard filters FIRST
-        $years = Billing::select(DB::raw('YEAR(period_start) as year'))
+        $years = Billing::select(DB::raw('EXTRACT(YEAR FROM period_start) as year'))
             ->distinct()->orderBy('year', 'desc')->pluck('year');
         if ($years->isEmpty()) {
             $years->push(now()->year);

@@ -132,10 +132,10 @@ class MeterReaderController extends Controller
         $billingMonthName = $billingPeriodMonth->format('F');
 
         $archiveMonths = UtilityReading::select(
-            DB::raw("DATE_FORMAT(reading_date, '%M %Y') as month"),
-            DB::raw("DATE_FORMAT(reading_date, '%m-%Y') as month_value"),
-            DB::raw("YEAR(reading_date) as year"),
-            DB::raw("MONTH(reading_date) as month_num")
+            DB::raw("TO_CHAR(reading_date, 'FMMonth YYYY') as month"),
+            DB::raw("TO_CHAR(reading_date, 'MM-YYYY') as month_value"),
+            DB::raw("EXTRACT(YEAR FROM reading_date) as year"),
+            DB::raw("EXTRACT(MONTH FROM reading_date) as month_num")
         )
         ->where('reading_date', '<', Carbon::today()->startOfMonth())
         ->groupBy('month', 'month_value', 'year', 'month_num')
