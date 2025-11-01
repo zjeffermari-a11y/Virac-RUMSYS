@@ -17,7 +17,7 @@ class DashboardController extends Controller
     public function getAllDashboardData(Request $request)
     {
         // --- Fetch Data for Filters ---
-        $years = Billing::select(DB::raw('YEAR(period_start) as year'))
+        $years = Billing::select(DB::raw('EXTRACT(YEAR FROM period_start) as year'))
             ->distinct()->orderBy('year', 'desc')->pluck('year');
         if ($years->isEmpty()) {
             $years->push(Carbon::now()->year);
@@ -111,10 +111,10 @@ public function getCollectionTrends(Request $request)
     $year = $request->input('year', Carbon::now()->year);
 
     $collections = Billing::select(
-            DB::raw('MONTH(period_start) as month'),
+            DB::raw('EXTRACT(MONTH FROM period_start) as month'),
             'utility_type',
-            DB::raw('SUM(CASE WHEN status = "paid" THEN amount ELSE 0 END) as paid'),
-            DB::raw('SUM(CASE WHEN status = "unpaid" THEN amount ELSE 0 END) as unpaid')
+            DB::raw("SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as paid"),
+            DB::raw("SUM(CASE WHEN status = 'unpaid' THEN amount ELSE 0 END) as unpaid")
         )
         ->whereYear('period_start', $year)
         ->groupBy('month', 'utility_type')
@@ -152,7 +152,7 @@ public function getCollectionTrends(Request $request)
         $year = $request->input('year', Carbon::now()->year);
 
         $consumption = Billing::select(
-                DB::raw('MONTH(period_start) as month'),
+                DB::raw('EXTRACT(MONTH FROM period_start) as month'),
                 'utility_type',
                 DB::raw('SUM(consumption) as total_consumption')
             )
@@ -170,7 +170,7 @@ public function getCollectionTrends(Request $request)
      */
     public function getFilterYears()
     {
-        $years = Billing::select(DB::raw('YEAR(period_start) as year'))
+        $years = Billing::select(DB::raw('EXTRACT(YEAR FROM period_start) as year'))
             ->distinct()
             ->orderBy('year', 'desc')
             ->pluck('year');
