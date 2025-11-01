@@ -213,8 +213,8 @@ public function getCollectionTrends(Request $request)
             )
             ->groupBy('users.id', 'users.name', 'stalls.table_number', 'sections.name')
             ->having(DB::raw('COUNT(billing.id)'), '>', 0) 
-            ->orderByRaw('on_time_bills_count / paid_bills_count DESC')
-            ->orderByDesc('on_time_bills_count')
+            ->orderByRaw('(SUM(CASE WHEN payments.payment_date <= billing.due_date THEN 1 ELSE 0 END)) / (COUNT(billing.id)) DESC')
+            ->orderByDesc(DB::raw('SUM(CASE WHEN payments.payment_date <= billing.due_date THEN 1 ELSE 0 END)'))
             ->limit(5)
             ->get();
 
