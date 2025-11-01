@@ -185,7 +185,7 @@ class MeterReaderController extends Controller
                 ->join('sections', 'stalls.section_id', '=', 'sections.id')
                 ->where('utility_readings.reading_date', '<', Carbon::today()->startOfMonth())
                 ->orderBy('utility_readings.reading_date', 'desc')
-                ->orderBy(DB::raw('CAST(SUBSTRING_INDEX(stalls.table_number, "-", -1) AS UNSIGNED)'), 'asc')
+                ->orderBy(DB::raw("CAST(SUBSTRING(stalls.table_number FROM '[0-9]+$') AS INTEGER)"), 'asc')
                 ->orderBy('stalls.table_number', 'asc');
 
             if ($request->filled('search')) {
