@@ -155,9 +155,9 @@
             'commands' => [
                 'Run All Monthly Tasks (Recommended for Nov 1)' => "{$baseUrl}/run-monthly-tasks?secret={$secret}",
                 'Generate Monthly Bills Only' => "{$baseUrl}/run-command/generate-monthly-bills?secret={$secret}",
-                'Send Billing Statements Only' => "{$baseUrl}/run-command/send-billing-statements?secret={$secret}",
-                'Send Overdue Alerts Only' => "{$baseUrl}/run-command/send-overdue-alerts?secret={$secret}",
-                'Send Payment Reminders' => "{$baseUrl}/run-command/send-payment-reminders?secret={$secret}",
+                'Send Billing Statements Only' => "{$baseUrl}/run-command/sms:send-billing-statements?secret={$secret}",
+                'Send Overdue Alerts Only' => "{$baseUrl}/run-command/sms:send-overdue-alerts?secret={$secret}",
+                'Send Payment Reminders' => "{$baseUrl}/run-command/sms:send-payment-reminders?secret={$secret}",
             ],
             'note' => 'Click any URL to execute that command'
         ]);
