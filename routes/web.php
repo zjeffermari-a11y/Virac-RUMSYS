@@ -34,7 +34,7 @@
         try {
             switch ($command) {
                 case 'generate-monthly-bills':
-                    Artisan::call('billing:generate-monthly');
+                    Artisan::call('billing:generate');
                     $output = Artisan::output();
                     $result = [
                         'success' => true,
