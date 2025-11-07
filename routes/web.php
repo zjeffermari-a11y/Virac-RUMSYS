@@ -148,16 +148,17 @@
         }
         
         $secret = request()->input('secret');
-        $baseUrl = url('/admin');
+        $baseUrl = url('/admin/run-command');
         
         return response()->json([
             'message' => 'Available Commands',
             'commands' => [
-                'Run All Monthly Tasks (Recommended for Nov 1)' => "{$baseUrl}/run-monthly-tasks?secret={$secret}",
-                'Generate Monthly Bills Only' => "{$baseUrl}/run-command/generate-monthly-bills?secret={$secret}",
-                'Send Billing Statements Only' => "{$baseUrl}/run-command/sms:send-billing-statements?secret={$secret}",
-                'Send Overdue Alerts Only' => "{$baseUrl}/run-command/sms:send-overdue-alerts?secret={$secret}",
-                'Send Payment Reminders' => "{$baseUrl}/run-command/sms:send-payment-reminders?secret={$secret}",
+                // ✅ FIX: These keys must match the 'case' statements in the route above
+                'Run All Monthly Tasks (Recommended for Nov 1)' => url('/admin/run-monthly-tasks') . "?secret={$secret}",
+                'Generate Monthly Bills Only' => "{$baseUrl}/billing:generate?secret={$secret}",
+                'Send Billing Statements Only' => "{$baseUrl}/sms:send-billing-statements?secret={$secret}",
+                'Send Overdue Alerts Only' => "{$baseUrl}/sms:send-overdue-alerts?secret={$secret}",
+                'Send Payment Reminders' => "{$baseUrl}/sms:send-payment-reminders?secret={$secret}",
             ],
             'note' => 'Click any URL to execute that command'
         ]);
