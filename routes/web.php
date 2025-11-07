@@ -23,7 +23,7 @@
     use App\Console\Commands\SendPaymentReminders;
     use Illuminate\Support\Facades\Artisan;
 
-    Route::get('/admin/run-command/{command}', function ($command, SmsService $smsService) {
+    Route::get('/admin/run-command/{command}', function ($command) {
         // Security check
         if (request()->input('secret') !== env('ADMIN_SECRET')) {
             abort(403, 'Unauthorized - Invalid secret key!');
@@ -63,7 +63,7 @@
     })->name('admin.run-command');
     
     // Run multiple commands at once (for monthly tasks)
-    Route::get('/admin/run-monthly-tasks', function (SmsService $smsService) {
+    Route::get('/admin/run-monthly-tasks', function () {
         // Security check
         if (request()->input('secret') !== env('ADMIN_SECRET')) {
             abort(403, 'Unauthorized - Invalid secret key!');
@@ -85,22 +85,20 @@
             
             // 2. Send billing statements
             Artisan::call('sms:send-billing-statements');
-            $cmd = new SendBillingStatements();
-            $cmd->handle($smsService);
             $results[] = [
                 'command' => 'Send Billing Statements',
                 'success' => true,
-                'message' => 'Statements sent'
+                'message' => 'Statements sent',
+                'output' => Artisan::output()
             ];
             
             // 3. Send overdue alerts (for existing unpaid bills)
             Artisan::call('sms:send-overdue-alerts');
-            $overdueCmd = new SendOverdueAlerts();
-            $overdueCmd->handle($smsService);
             $results[] = [
                 'command' => 'Send Overdue Alerts',
                 'success' => true,
-                'message' => 'Overdue alerts sent'
+                'message' => 'Overdue alerts sent',
+                'output' => Artisan::output()
             ];
             
             return response()->json([
