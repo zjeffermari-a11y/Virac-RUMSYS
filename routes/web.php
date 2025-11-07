@@ -33,7 +33,7 @@
         
         try {
             switch ($command) {
-                case 'generate-monthly-bills':
+                case 'billing:generate':
                     Artisan::call('billing:generate');
                     $output = Artisan::output();
                     $result = [
