@@ -43,7 +43,7 @@
                     ];
                     break;
                     
-                case 'send-billing-statements':
+                case 'sms:send-billing-statements':
                     $cmd = new SendBillingStatements();
                     $cmd->handle($smsService);
                     $result = [
@@ -52,7 +52,7 @@
                     ];
                     break;
                     
-                case 'send-overdue-alerts':
+                case 'sms:send-overdue-alerts':
                     $cmd = new SendOverdueAlerts();
                     $cmd->handle($smsService);
                     $result = [
@@ -61,7 +61,7 @@
                     ];
                     break;
                     
-                case 'send-payment-reminders':
+                case 'sms:send-payment-reminders':
                     $cmd = new SendPaymentReminders();
                     $cmd->handle($smsService);
                     $result = [
@@ -97,7 +97,7 @@
         
         try {
             // 1. Generate monthly bills
-            Artisan::call('billing:generate-monthly');
+            Artisan::call('billing:generate');
             $results[] = [
                 'command' => 'Generate Monthly Bills',
                 'success' => true,
