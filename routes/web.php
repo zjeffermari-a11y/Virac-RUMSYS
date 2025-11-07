@@ -34,39 +34,15 @@
         try {
             switch ($command) {
                 case 'billing:generate':
-                    Artisan::call('billing:generate');
+                case 'sms:send-billing-statements':
+                case 'sms:send-overdue-alerts':
+                case 'sms:send-payment-reminders':
+                    Artisan::call($command);
                     $output = Artisan::output();
                     $result = [
                         'success' => true,
-                        'message' => 'Monthly bills generated successfully!',
+                        'message' => "Command '{$command}' executed successfully!",
                         'output' => $output
-                    ];
-                    break;
-                    
-                case 'sms:send-billing-statements':
-                    $cmd = new SendBillingStatements();
-                    $cmd->handle($smsService);
-                    $result = [
-                        'success' => true,
-                        'message' => 'Billing statements sent successfully!'
-                    ];
-                    break;
-                    
-                case 'sms:send-overdue-alerts':
-                    $cmd = new SendOverdueAlerts();
-                    $cmd->handle($smsService);
-                    $result = [
-                        'success' => true,
-                        'message' => 'Overdue alerts sent successfully!'
-                    ];
-                    break;
-                    
-                case 'sms:send-payment-reminders':
-                    $cmd = new SendPaymentReminders();
-                    $cmd->handle($smsService);
-                    $result = [
-                        'success' => true,
-                        'message' => 'Payment reminders sent successfully!'
                     ];
                     break;
                     
@@ -108,6 +84,7 @@
             sleep(2);
             
             // 2. Send billing statements
+            Artisan::call('sms:send-billing-statements');
             $cmd = new SendBillingStatements();
             $cmd->handle($smsService);
             $results[] = [
@@ -117,6 +94,7 @@
             ];
             
             // 3. Send overdue alerts (for existing unpaid bills)
+            Artisan::call('sms:send-overdue-alerts');
             $overdueCmd = new SendOverdueAlerts();
             $overdueCmd->handle($smsService);
             $results[] = [
