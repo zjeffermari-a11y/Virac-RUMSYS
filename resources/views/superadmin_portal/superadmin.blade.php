@@ -61,6 +61,11 @@
         <i class="fas fa-bell"></i>
         <span>Edit Requests</span>
     </a>
+    <a href="#announcementSection" data-section="announcementSection"
+        class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+        <i class="fas fa-bullhorn"></i>
+        <span>Announcements</span>
+    </a>
     <a href="#systemUserManagementSection" data-section="systemUserManagementSection"
         class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
         <i class="fas fa-users-cog"></i>
@@ -628,6 +633,23 @@
         ])
 
         <div class="bg-white rounded-2xl shadow-lg p-6">
+            {{-- Credit Tracker --}}
+            <div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-100 p-2 rounded-lg text-blue-600">
+                        <i class="fas fa-coins text-xl"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-blue-900">Semaphore API Credits</h4>
+                        <p class="text-sm text-blue-700">Remaining credits for SMS notifications</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span id="semaphoreCreditBalance" class="text-2xl font-bold text-blue-800">Loading...</span>
+                    <span class="text-sm text-blue-600 font-medium block">Credits</span>
+                </div>
+            </div>
+
             {{-- Tab Navigation --}}
             <div class="mb-6 border-b border-gray-200">
                 <nav class="flex space-x-4" aria-label="Tabs">
@@ -1043,6 +1065,62 @@
                         {{-- Settings rows will be populated by JavaScript --}}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+    
+    {{-- =================================================================== --}}
+    {{-- ANNOUNCEMENT SECTION --}}
+    {{-- =================================================================== --}}
+    <div id="announcementSection" class="dashboard-section overflow-visible">
+        @include('layouts.partials.content-header', ['title' => 'Announcements'])
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {{-- Create Announcement Form --}}
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Create Announcement</h3>
+                    <form id="createAnnouncementForm">
+                        <div class="mb-4">
+                            <label for="announcementTitle" class="block text-gray-700 font-medium mb-2">Title *</label>
+                            <input type="text" id="announcementTitle" required
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                placeholder="Enter title...">
+                        </div>
+                        <div class="mb-4">
+                            <label for="announcementContent" class="block text-gray-700 font-medium mb-2">Content *</label>
+                            <textarea id="announcementContent" required rows="6"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                placeholder="Enter announcement details..."></textarea>
+                        </div>
+                        <div class="mb-6">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="announcementIsActive" checked
+                                    class="form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                <span class="text-gray-700">Publish Immediately</span>
+                            </label>
+                        </div>
+                        <button type="submit" id="saveAnnouncementBtn"
+                            class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                            <i class="fas fa-paper-plane"></i>
+                            <span>Post Announcement</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {{-- Active Announcements List --}}
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Active Announcements</h3>
+                    <div id="announcementsList" class="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                        {{-- Announcements will be populated by JS --}}
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p>Loading announcements...</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

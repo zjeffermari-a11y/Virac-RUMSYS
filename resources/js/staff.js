@@ -48,7 +48,8 @@ const MarketApp = {
                 });
                 if (!response.ok)
                     throw new Error(`HTTP error! Status: ${response.status}`);
-                return await response.json();
+                const result = await response.json();
+                return result.data || result; // Handle paginated or array response
             } catch (error) {
                 console.error("Failed to fetch bill management data:", error);
                 return [];
@@ -61,7 +62,8 @@ const MarketApp = {
                 });
                 if (!response.ok)
                     throw new Error(`HTTP error! Status: ${response.status}`);
-                return await response.json();
+                const result = await response.json();
+                return result.data || result; // Handle paginated or array response
             } catch (error) {
                 console.error("Failed to fetch vendors:", error);
                 return [];
@@ -198,7 +200,7 @@ const MarketApp = {
                 const sectionMatch =
                     !state.filters.section ||
                     vendor.section.toLowerCase() ===
-                        state.filters.section.toLowerCase();
+                    state.filters.section.toLowerCase();
                 const searchMatch =
                     !state.filters.search ||
                     vendor.vendorName
@@ -657,13 +659,13 @@ const MarketApp = {
                         const formatShortDate = (dateStr) =>
                             dateStr
                                 ? new Date(dateStr).toLocaleDateString(
-                                      "en-US",
-                                      {
-                                          month: "short",
-                                          day: "numeric",
-                                          year: "numeric",
-                                      }
-                                  )
+                                    "en-US",
+                                    {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                    }
+                                )
                                 : "N/A";
                         const formatPeriod = (start, end) =>
                             `${formatShortDate(start)} - ${formatShortDate(
@@ -672,37 +674,36 @@ const MarketApp = {
                         const formatStatusDate = (dateStr) =>
                             dateStr
                                 ? new Date(dateStr).toLocaleDateString(
-                                      "en-US",
-                                      { month: "short", day: "numeric" }
-                                  )
+                                    "en-US",
+                                    { month: "short", day: "numeric" }
+                                )
                                 : "";
 
                         return `
                     <tr class="table-row">
-                        <td data-label="Category" class="px-4 py-2 text-center">${
-                            bill.utility_type
-                        }</td>
+                        <td data-label="Category" class="px-4 py-2 text-center">${bill.utility_type
+                            }</td>
                         <td data-label="Period Covered" class="px-4 py-2 text-center">${formatPeriod(
-                            bill.period_start,
-                            bill.period_end
-                        )}</td>
+                                bill.period_start,
+                                bill.period_end
+                            )}</td>
                         <td data-label="Amount Due" class="px-4 py-2 text-center">₱${parseFloat(
-                            bill.payment.amount_paid
-                        ).toFixed(2)}</td>
+                                bill.payment.amount_paid
+                            ).toFixed(2)}</td>
                         <td data-label="Due Date" class="px-4 py-2 text-center">${formatShortDate(
-                            bill.due_date
-                        )}</td>
+                                bill.due_date
+                            )}</td>
                         <td data-label="Amount After Due" class="px-4 py-2 text-center">₱${parseFloat(
-                            bill.amount_after_due
-                        ).toFixed(2)}</td>
+                                bill.amount_after_due
+                            ).toFixed(2)}</td>
                         <td data-label="Disconnection Date" class="px-4 py-2 text-center">${formatShortDate(
-                            bill.disconnection_date
-                        )}</td>
+                                bill.disconnection_date
+                            )}</td>
                         <td data-label="Payment Status" class="px-4 py-2 text-center">
                             <span class="whitespace-nowrap px-4 py-1.5 text-xs font-semibold text-white bg-gray-800 rounded-full">
                                 Paid on ${formatStatusDate(
-                                    bill.payment.payment_date
-                                )}
+                                bill.payment.payment_date
+                            )}
                             </span>
                         </td>
                     </tr>
@@ -1462,20 +1463,16 @@ const MarketApp = {
                     row.className = "table-row";
                     row.innerHTML = `
                         <td data-label="Select" class="p-4 text-right lg:text-center"> 
-                            <input type="checkbox" class="form-checkbox h-5 w-5 text-indigo-600 rounded row-checkbox" data-id="${
-                                item.id
-                            }" ${isChecked ? "checked" : ""}>
+                            <input type="checkbox" class="form-checkbox h-5 w-5 text-indigo-600 rounded row-checkbox" data-id="${item.id
+                        }" ${isChecked ? "checked" : ""}>
                         </td>
-                        <td data-label="Stall/Table Number" class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${
-                            item.stallNumber
+                        <td data-label="Stall/Table Number" class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${item.stallNumber
                         }</td>
-                        <td data-label="Vendor Name" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${
-                            item.vendorName
+                        <td data-label="Vendor Name" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${item.vendorName
                         }</td>
                         <td data-label="Print Receipt" class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                            <button class="print-receipt-btn text-indigo-600 hover:text-indigo-800 transition-smooth" title="Print" data-id="${
-                                item.id
-                            }">
+                            <button class="print-receipt-btn text-indigo-600 hover:text-indigo-800 transition-smooth" title="Print" data-id="${item.id
+                        }">
                                 <i class="fas fa-print fa-lg"></i>
                             </button>
                         </td>
@@ -1774,21 +1771,21 @@ const MarketApp = {
             breakdownHtml += `</tbody><tfoot><tr class="bg-gray-200 font-bold text-gray-800">
                 <td class="px-4 py-2 text-left">Grand Total</td>
                 <td class="px-4 py-2 text-right">₱${totals.Rent.toLocaleString(
-                    "en-US",
-                    { minimumFractionDigits: 2 }
-                )}</td>
+                "en-US",
+                { minimumFractionDigits: 2 }
+            )}</td>
                 <td class="px-4 py-2 text-right">₱${totals.Electricity.toLocaleString(
-                    "en-US",
-                    { minimumFractionDigits: 2 }
-                )}</td>
+                "en-US",
+                { minimumFractionDigits: 2 }
+            )}</td>
                 <td class="px-4 py-2 text-right">₱${totals.Water.toLocaleString(
-                    "en-US",
-                    { minimumFractionDigits: 2 }
-                )}</td>
+                "en-US",
+                { minimumFractionDigits: 2 }
+            )}</td>
                 <td class="px-4 py-2 text-right">₱${totals.grandTotal.toLocaleString(
-                    "en-US",
-                    { minimumFractionDigits: 2 }
-                )}</td>
+                "en-US",
+                { minimumFractionDigits: 2 }
+            )}</td>
             </tr></tfoot></table>`;
             MarketApp.elements.collectionsBreakdownContainer.innerHTML =
                 breakdownHtml;
@@ -1800,15 +1797,14 @@ const MarketApp = {
                 <tr class="table-row">
                     <td class="px-4 py-2">
                         <div>${v.name}</div>
-                        <div class="text-xs text-gray-500">Stall: ${
-                            v.stall.table_number
-                        }</div>
+                        <div class="text-xs text-gray-500">Stall: ${v.stall.table_number
+                            }</div>
                     </td>
                     <td class="px-4 py-2 text-right text-red-600 font-medium">₱${parseFloat(
-                        v.total_due
-                    ).toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                    })}</td>
+                                v.total_due
+                            ).toLocaleString("en-US", {
+                                minimumFractionDigits: 2,
+                            })}</td>
                 </tr>
             `
                     )

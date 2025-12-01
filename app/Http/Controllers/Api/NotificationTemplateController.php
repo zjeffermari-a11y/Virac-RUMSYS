@@ -86,6 +86,12 @@ class NotificationTemplateController extends Controller
         return response()->json(['message' => 'Notification templates updated successfully!']);
     }
 
+    public function getCredits(SmsService $smsService)
+    {
+        $result = $smsService->getCredits();
+        return response()->json($result);
+    }
+
     public function sendTestSms(Request $request, SmsService $smsService)
     {
         $validated = $request->validate([

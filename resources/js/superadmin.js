@@ -118,6 +118,7 @@ class SuperAdminDashboard {
             dueDateDisconnectionDateScheduleSection: false,
             billingStatementSmsNotificationSettingsSection: false,
             notificationSection: false,
+            announcementSection: false,
             systemUserManagementSection: false,
             auditTrailsSection: false,
             discountsSurchargesPenaltySection: false,
@@ -129,6 +130,7 @@ class SuperAdminDashboard {
             billingDates: false,
             billingSmsSettings: false, // Combined listener flag
             notificationSection: false,
+            announcementSection: false,
             userManagement: false,
             auditTrails: false,
             billingSettings: false,
@@ -334,6 +336,9 @@ class SuperAdminDashboard {
             smsSettingsEditButtons: document.getElementById(
                 "smsSettingsEditButtons"
             ),
+            semaphoreCreditBalance: document.getElementById(
+                "semaphoreCreditBalance"
+            ),
 
             // System User Management Elements
             usersTableBody: document.getElementById("usersTableBody"),
@@ -408,6 +413,14 @@ class SuperAdminDashboard {
             cancelBillingSettingsBtn: document.getElementById(
                 "cancelBillingSettingsBtn"
             ),
+
+            // Announcement Elements
+            createAnnouncementForm: document.getElementById("createAnnouncementForm"),
+            announcementTitle: document.getElementById("announcementTitle"),
+            announcementContent: document.getElementById("announcementContent"),
+            announcementIsActive: document.getElementById("announcementIsActive"),
+            saveAnnouncementBtn: document.getElementById("saveAnnouncementBtn"),
+            announcementsList: document.getElementById("announcementsList"),
         };
     }
 
@@ -585,6 +598,12 @@ class SuperAdminDashboard {
                     this.listenersInitialized.notificationSection = true;
                 }
                 break;
+            case "announcementSection":
+                if (!this.listenersInitialized.announcementSection) {
+                    this.setupAnnouncementEventListeners();
+                    this.listenersInitialized.announcementSection = true;
+                }
+                break;
             case "systemUserManagementSection":
                 if (!this.listenersInitialized.userManagement) {
                     this.setupUserManagementEventListeners();
@@ -703,19 +722,16 @@ class SuperAdminDashboard {
                 const timeAgo = this.formatTimeAgo(notification.created_at);
 
                 return `
-                <a href="#notificationSection" data-section="notificationSection" class="nav-link block p-3 transition-colors hover:bg-gray-100 ${
-                    isUnread ? "bg-blue-50" : ""
-                } border-b border-gray-100 last:border-b-0">
+                <a href="#notificationSection" data-section="notificationSection" class="nav-link block p-3 transition-colors hover:bg-gray-100 ${isUnread ? "bg-blue-50" : ""
+                    } border-b border-gray-100 last:border-b-0">
                     <div class="flex items-start gap-3">
-                        ${
-                            isUnread
-                                ? '<div class="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>'
-                                : '<div class="w-2 h-2 bg-transparent mt-1.5 flex-shrink-0"></div>'
-                        }
+                        ${isUnread
+                        ? '<div class="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>'
+                        : '<div class="w-2 h-2 bg-transparent mt-1.5 flex-shrink-0"></div>'
+                    }
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm text-gray-800 break-words">${
-                                data.text || notification.title
-                            }</p>
+                            <p class="text-sm text-gray-800 break-words">${data.text || notification.title
+                    }</p>
                             <p class="text-xs text-blue-600 font-semibold mt-1">${timeAgo}</p>
                         </div>
                     </div>
@@ -757,6 +773,25 @@ class SuperAdminDashboard {
         return "Just now";
     }
 
+    async fetchSemaphoreCredits() {
+        if (!this.elements.semaphoreCreditBalance) return;
+
+        try {
+            const response = await fetch("/api/notification-templates/credits");
+            if (!response.ok) throw new Error("Failed to fetch credits");
+
+            const data = await response.json();
+            if (data.success) {
+                this.elements.semaphoreCreditBalance.textContent = data.credit_balance;
+            } else {
+                this.elements.semaphoreCreditBalance.textContent = "Error";
+            }
+        } catch (error) {
+            console.error("Error fetching Semaphore credits:", error);
+            this.elements.semaphoreCreditBalance.textContent = "Error";
+        }
+    }
+
     render() {
         this.renderActiveSection();
     }
@@ -790,6 +825,12 @@ class SuperAdminDashboard {
                 break;
             case "auditTrailsSection":
                 await this.fetchAuditTrails();
+                break;
+            case "billingStatementSmsNotificationSettingsSection":
+                await this.fetchSemaphoreCredits();
+                break;
+            case "announcementSection":
+                await this.fetchAnnouncements();
                 break;
             // The 'notificationSection' still needs to fetch SMS settings dynamically
         }
@@ -828,9 +869,9 @@ class SuperAdminDashboard {
             // Ensure tableNumber is a string, trim it, and then check for inclusion.
             const matchesSearch = searchTerm
                 ? String(rate.tableNumber)
-                      .toLowerCase()
-                      .trim()
-                      .includes(searchTerm)
+                    .toLowerCase()
+                    .trim()
+                    .includes(searchTerm)
                 : true;
             // --- MODIFICATION END ---
             return matchesSection && matchesSearch;
@@ -1257,15 +1298,14 @@ class SuperAdminDashboard {
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td data-label="Notification Type" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${type.replace(
-                        "SMS - ",
-                        ""
-                    )}</td>
+                    "SMS - ",
+                    ""
+                )}</td>
                     <td data-label="Scheduled Time" class="border border-gray-200 px-4 py-3 text-gray-700">
-                        ${
-                            isEditing
-                                ? `<input type="time" class="sms-schedule-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${type}" value="${currentTime}">`
-                                : `<span>${formatTime12hr(currentTime)}</span>`
-                        }
+                        ${isEditing
+                        ? `<input type="time" class="sms-schedule-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${type}" value="${currentTime}">`
+                        : `<span>${formatTime12hr(currentTime)}</span>`
+                    }
                     </td>
                 </tr>
             `;
@@ -1312,15 +1352,15 @@ class SuperAdminDashboard {
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
                     <td data-label="Item Changed" class="border border-gray-200 px-4 py-3 text-gray-700">${log.item_changed.replace(
-                        "SMS - ",
-                        ""
-                    )}</td>
+                    "SMS - ",
+                    ""
+                )}</td>
                     <td data-label="Old Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formatTime12hr(
-                        log.old_value
-                    )}</td>
+                    log.old_value
+                )}</td>
                     <td data-label="New Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formatTime12hr(
-                        log.new_value
-                    )}</td>
+                    log.new_value
+                )}</td>
                 </tr>
             `;
             })
@@ -1383,7 +1423,7 @@ class SuperAdminDashboard {
             if (!response.ok)
                 throw new Error(
                     (await response.json()).message ||
-                        "Failed to save schedules."
+                    "Failed to save schedules."
                 );
 
             this.showToast("SMS schedules updated successfully!", "success");
@@ -1481,7 +1521,7 @@ class SuperAdminDashboard {
         let filteredUsers = this.allUsers.filter((user) => {
             const matchesSearch = searchTerm
                 ? user.name.toLowerCase().includes(searchTerm) ||
-                  user.username.toLowerCase().includes(searchTerm)
+                user.username.toLowerCase().includes(searchTerm)
                 : true;
             const matchesRole = roleFilter ? user.role_id == roleFilter : true;
             return matchesSearch && matchesRole;
@@ -1525,37 +1565,29 @@ class SuperAdminDashboard {
             .map(
                 (user) => `
         <tr class="hover:bg-gray-50 transition-colors">
-            <td data-label="Role" class="border border-gray-200 px-4 py-3">${
-                user.role
-            }</td>
-            <td data-label="Name" class="border border-gray-200 px-4 py-3">${
-                user.name
-            }</td>
-            <td data-label="Username" class="border border-gray-200 px-4 py-3">${
-                user.username
-            }</td>
-            <td data-label="Last Login" class="border border-gray-200 px-4 py-3">${
-                user.last_login
-                    ? new Date(user.last_login).toLocaleString()
-                    : "Never"
-            }</td>
+            <td data-label="Role" class="border border-gray-200 px-4 py-3">${user.role
+                    }</td>
+            <td data-label="Name" class="border border-gray-200 px-4 py-3">${user.name
+                    }</td>
+            <td data-label="Username" class="border border-gray-200 px-4 py-3">${user.username
+                    }</td>
+            <td data-label="Last Login" class="border border-gray-200 px-4 py-3">${user.last_login
+                        ? new Date(user.last_login).toLocaleString()
+                        : "Never"
+                    }</td>
             <td data-label="Status" class="border border-gray-200 px-4 py-3">
-                <span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${
-                    statusClasses[user.status]
-                }">
-                    ${
-                        user.status.charAt(0).toUpperCase() +
-                        user.status.slice(1)
+                <span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${statusClasses[user.status]
+                    }">
+                    ${user.status.charAt(0).toUpperCase() +
+                    user.status.slice(1)
                     }
                 </span>
             </td>
             <td data-label="Action" class="border border-gray-200 px-4 py-3 text-center">
-                <button data-id="${
-                    user.id
-                }" class="edit-user-btn text-blue-600 hover:text-blue-900 mr-2" title="Edit User"><i class="fas fa-edit"></i></button>
-                <button data-id="${
-                    user.id
-                }" class="delete-user-btn text-red-600 hover:text-red-900" title="Delete User"><i class="fas fa-trash"></i></button>
+                <button data-id="${user.id
+                    }" class="edit-user-btn text-blue-600 hover:text-blue-900 mr-2" title="Edit User"><i class="fas fa-edit"></i></button>
+                <button data-id="${user.id
+                    }" class="delete-user-btn text-red-600 hover:text-red-900" title="Delete User"><i class="fas fa-trash"></i></button>
             </td>
         </tr>
     `
@@ -1574,18 +1606,15 @@ class SuperAdminDashboard {
         const pageLinks = links
             .map(
                 (link) =>
-                    `<a href="${link.url}" class="px-3 py-1 border rounded ${
-                        link.active
-                            ? "bg-market-primary text-white"
-                            : "bg-white"
-                    } ${
-                        !link.url
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "text-gray-700"
-                    }">${
-                        link.label === "&laquo; Previous"
-                            ? '<i class="fas fa-chevron-left"></i>'
-                            : link.label === "Next &raquo;"
+                    `<a href="${link.url}" class="px-3 py-1 border rounded ${link.active
+                        ? "bg-market-primary text-white"
+                        : "bg-white"
+                    } ${!link.url
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "text-gray-700"
+                    }">${link.label === "&laquo; Previous"
+                        ? '<i class="fas fa-chevron-left"></i>'
+                        : link.label === "Next &raquo;"
                             ? '<i class="fas fa-chevron-right"></i>'
                             : link.label
                     }</a>`
@@ -1791,7 +1820,7 @@ class SuperAdminDashboard {
             if (this.state.activeSection === "auditTrailsSection") {
                 const isNearBottom =
                     this.elements.mainContent.scrollTop +
-                        this.elements.mainContent.clientHeight >=
+                    this.elements.mainContent.clientHeight >=
                     this.elements.mainContent.scrollHeight - 200;
                 if (isNearBottom) {
                     this.fetchAuditTrails();
@@ -2069,27 +2098,23 @@ class SuperAdminDashboard {
                 return `
             <tr class="hover:bg-gray-50">
                 <td data-label="Reuest Date" class="border p-3">${formattedDate}</td>
-                <td data-label="Request Reason" class="border p-3">${
-                    req.request_reason
-                }</td>
+                <td data-label="Request Reason" class="border p-3">${req.request_reason
+                    }</td>
                 <td data-label="Status" class="border p-3">
-                    <span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${
-                        statusClasses[req.status]
+                    <span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${statusClasses[req.status]
                     }">
-                        ${
-                            req.status.charAt(0).toUpperCase() +
-                            req.status.slice(1)
-                        }
+                        ${req.status.charAt(0).toUpperCase() +
+                    req.status.slice(1)
+                    }
                     </span>
                 </td>
                 <td data-label="Action" class="border p-3 text-center">
-                    ${
-                        req.status === "pending"
-                            ? `
+                    ${req.status === "pending"
+                        ? `
                     <button data-id="${req.id}" class="approve-request-btn text-green-600 hover:text-green-900 mr-2" title="Approve"><i class="fas fa-check-circle fa-lg"></i></button>
                     <button data-id="${req.id}" class="reject-request-btn text-red-600 hover:text-red-900" title="Reject"><i class="fas fa-times-circle fa-lg"></i></button>
                     `
-                            : "-"
+                        : "-"
                     }
                 </td>
             </tr>
@@ -2152,18 +2177,15 @@ class SuperAdminDashboard {
             .map(
                 (contact) => `
         <tr class="hover:bg-gray-50 transition-colors" data-id="${contact.id}">
-            <td data-label="User" class="border border-gray-200 px-4 py-3 font-medium text-gray-700">${
-                contact.role_name
-            }</td>
+            <td data-label="User" class="border border-gray-200 px-4 py-3 font-medium text-gray-700">${contact.role_name
+                    }</td>
             <td data-label="Number" class="border border-gray-200 px-4 py-3 text-gray-700">
-                ${
-                    isEditing
-                        ? `<input type="text" class="sms-contact-input w-full border border-gray-300 rounded-lg px-3 py-2" value="${
-                              contact.contact_number || ""
-                          }" placeholder="Enter phone number">`
+                ${isEditing
+                        ? `<input type="text" class="sms-contact-input w-full border border-gray-300 rounded-lg px-3 py-2" value="${contact.contact_number || ""
+                        }" placeholder="Enter phone number">`
                         : contact.contact_number ||
-                          '<span class="text-gray-400">Not set</span>'
-                }
+                        '<span class="text-gray-400">Not set</span>'
+                    }
             </td>
         </tr>
     `
@@ -2239,12 +2261,10 @@ class SuperAdminDashboard {
             this.elements.utilityRatesTableBody.innerHTML = this.utilityRates
                 .map(
                     (rate) => `
-                <tr class="bg-gradient-to-r from-gray-50 to-gray-100" data-id="util-${
-                    rate.id
-                }">
-                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700">${
-                        rate.utility
-                    }</td>
+                <tr class="bg-gradient-to-r from-gray-50 to-gray-100" data-id="util-${rate.id
+                        }">
+                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700">${rate.utility
+                        }</td>
                     
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700"> 
                         
@@ -2262,15 +2282,13 @@ class SuperAdminDashboard {
             this.elements.utilityRatesTableBody.innerHTML = this.utilityRates
                 .map(
                     (rate) => `
-                <tr class="hover:bg-gray-50 transition-colors" data-id="util-${
-                    rate.id
-                }">
-                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${
-                        rate.utility
-                    }</td>
+                <tr class="hover:bg-gray-50 transition-colors" data-id="util-${rate.id
+                        }">
+                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${rate.utility
+                        }</td>
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${rate.rate.toFixed(
-                        2
-                    )} / ${rate.unit}</td>
+                            2
+                        )} / ${rate.unit}</td>
                 </tr>`
                 )
                 .join("");
@@ -2421,15 +2439,14 @@ class SuperAdminDashboard {
                     return `
                           <tr class="hover:bg-gray-50 transition-colors">
                               <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
-                              <td data-label="Utility Type" class="border border-gray-200 px-4 py-3 text-gray-700">${
-                                  log.utility_type
-                              }</td>
+                              <td data-label="Utility Type" class="border border-gray-200 px-4 py-3 text-gray-700">${log.utility_type
+                        }</td>
                               <td data-label="Old Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
-                                  log.old_rate
-                              ).toFixed(2)}</td>
+                            log.old_rate
+                        ).toFixed(2)}</td>
                               <td data-label="New Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
-                                  log.new_rate
-                              ).toFixed(2)}</td>
+                            log.new_rate
+                        ).toFixed(2)}</td>
                           </tr>
                       `;
                 })
@@ -2570,7 +2587,7 @@ class SuperAdminDashboard {
             if (isNaN(dayNum)) return `<strong>${day}</strong>`;
             const suffix =
                 ["th", "st", "nd", "rd"][
-                    ((((dayNum + 90) % 100) - 10) % 10) - 1
+                ((((dayNum + 90) % 100) - 10) % 10) - 1
                 ] || "th";
             return `<strong>${dayNum}${suffix} day of the month</strong>`;
         };
@@ -2628,7 +2645,7 @@ class SuperAdminDashboard {
             if (isNaN(dayNum)) return day; // Should not happen but good practice
             const suffix =
                 ["th", "st", "nd", "rd"][
-                    ((((dayNum + 90) % 100) - 10) % 10) - 1
+                ((((dayNum + 90) % 100) - 10) % 10) - 1
                 ] || "th";
             return `${dayNum}${suffix} day`;
         };
@@ -2650,8 +2667,7 @@ class SuperAdminDashboard {
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
-                    <td data-label="Item Changed" class="border border-gray-200 px-4 py-3 text-gray-700">${
-                        log.item_changed
+                    <td data-label="Item Changed" class="border border-gray-200 px-4 py-3 text-gray-700">${log.item_changed
                     }</td>
                     <td data-label="Old Schedule" class="border border-gray-200 px-4 py-3 text-gray-700">${formatDayValue(
                         log.old_value
@@ -2765,7 +2781,7 @@ class SuperAdminDashboard {
             if (!response.ok) {
                 throw new Error(
                     (await response.json()).message ||
-                        "Failed to update schedules."
+                    "Failed to update schedules."
                 );
             }
 
@@ -2792,10 +2808,10 @@ class SuperAdminDashboard {
             day % 10 === 1 && day !== 11
                 ? "st"
                 : day % 10 === 2 && day !== 12
-                ? "nd"
-                : day % 10 === 3 && day !== 13
-                ? "rd"
-                : "th";
+                    ? "nd"
+                    : day % 10 === 3 && day !== 13
+                        ? "rd"
+                        : "th";
         this.elements.scheduleDayDisplay.textContent = `${day}${suffix}`;
         this.elements.scheduleDayInput.value = day;
     }
@@ -2833,10 +2849,10 @@ class SuperAdminDashboard {
                         dayNum % 10 === 1 && dayNum !== 11
                             ? "st"
                             : dayNum % 10 === 2 && dayNum !== 12
-                            ? "nd"
-                            : dayNum % 10 === 3 && dayNum !== 13
-                            ? "rd"
-                            : "th";
+                                ? "nd"
+                                : dayNum % 10 === 3 && dayNum !== 13
+                                    ? "rd"
+                                    : "th";
                     return `${dayNum}${suffix}`;
                 };
 
@@ -2844,11 +2860,11 @@ class SuperAdminDashboard {
                       <tr class="hover:bg-gray-50 transition-colors">
                           <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
                           <td data-label="Old Schedule Day" class="border border-gray-200 px-4 py-3 text-gray-700">${formatDay(
-                              log.old_value
-                          )}</td>
+                    log.old_value
+                )}</td>
                           <td data-label="New Schedule Day" class="border border-gray-200 px-4 py-3 text-gray-700">${formatDay(
-                              log.new_value
-                          )}</td>
+                    log.new_value
+                )}</td>
                       </tr>
                   `;
             })
@@ -2914,7 +2930,7 @@ class SuperAdminDashboard {
             if (!response.ok) {
                 throw new Error(
                     (await response.json()).message ||
-                        "Failed to update schedule."
+                    "Failed to update schedule."
                 );
             }
 
@@ -2971,19 +2987,18 @@ class SuperAdminDashboard {
 
         // Replace the row content with an editing interface
         row.innerHTML = `
-            <td class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${
-                utilityRate.utility
+            <td class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${utilityRate.utility
             }</td>
             <td class="border border-gray-200 px-4 py-3">
                 <input type="number" class="edit-utility-rate-input no-spinner w-full border border-gray-300 rounded px-2 py-1" value="${parseFloat(
-                    utilityRate.rate
-                ).toFixed(2)}" min="0" step="0.01">
+                utilityRate.rate
+            ).toFixed(2)}" min="0" step="0.01">
             </td>
             
             <td class="border border-gray-200 px-4 py-3">
                 <input type="number" class="edit-monthly-rate-input no-spinner w-full border border-gray-300 rounded px-2 py-1" value="${parseFloat(
-                    utilityRate.monthlyRate
-                ).toFixed(2)}" min="0" step="0.01">
+                utilityRate.monthlyRate
+            ).toFixed(2)}" min="0" step="0.01">
             </td>
             
             <td class="border border-gray-200 px-4 py-3 text-center">
@@ -3255,16 +3270,13 @@ class SuperAdminDashboard {
         const pageLinks = links
             .map(
                 (link) =>
-                    `<button data-url="${
-                        link.url
-                    }" class="pagination-link px-3 py-1 border rounded ${
-                        link.active
-                            ? "bg-market-primary text-white"
-                            : "bg-white"
-                    } ${
-                        !link.url
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "text-gray-700"
+                    `<button data-url="${link.url
+                    }" class="pagination-link px-3 py-1 border rounded ${link.active
+                        ? "bg-market-primary text-white"
+                        : "bg-white"
+                    } ${!link.url
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "text-gray-700"
                     }" ${!link.url ? "disabled" : ""}>${link.label}</button>`
             )
             .join("");
@@ -3296,28 +3308,25 @@ class SuperAdminDashboard {
                 // It will be an HTML string if the section is 'Dry Section', otherwise it's an empty string.
                 const areaCell =
                     this.state.currentRentalSection === "Dry Section"
-                        ? `<td data-label="Area" class="border border-gray-200 px-4 py-3 text-gray-700">${
-                              rate.area || "N/A"
-                          } m²</td>`
+                        ? `<td data-label="Area" class="border border-gray-200 px-4 py-3 text-gray-700">${rate.area || "N/A"
+                        } m²</td>`
                         : "";
 
                 // Return the complete table row template string.
                 return `
-                    <tr class="hover:bg-gray-50 transition-colors" data-id="${
-                        rate.id
+                    <tr class="hover:bg-gray-50 transition-colors" data-id="${rate.id
                     }">
-                        <td data-label="Table Number" class="border border-gray-200 px-4 py-3 text-gray-700">${
-                            rate.tableNumber
-                        }</td>
+                        <td data-label="Table Number" class="border border-gray-200 px-4 py-3 text-gray-700">${rate.tableNumber
+                    }</td>
                         
                         ${areaCell}
                         
                         <td data-label="Rate (per day)" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
-                            rate.dailyRate
-                        ).toFixed(2)}</td>
+                        rate.dailyRate
+                    ).toFixed(2)}</td>
                         <td data-label="Monthly Rental" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
-                            rate.monthlyRate
-                        ).toFixed(2)}</td>
+                        rate.monthlyRate
+                    ).toFixed(2)}</td>
                     </tr>
                 `;
             })
@@ -3347,34 +3356,30 @@ class SuperAdminDashboard {
                 // Conditionally create the 'Area' input cell.
                 const areaCell =
                     this.state.currentRentalSection === "Dry Section"
-                        ? `<td data-label="Area" class="border border-gray-200 px-4 py-3"><input type="number" class="edit-area no-spinner w-full border border-gray-300 rounded px-2 py-1" value="${
-                              rate.area || ""
-                          }" placeholder="0.00" min="0" step="0.01"></td>`
+                        ? `<td data-label="Area" class="border border-gray-200 px-4 py-3"><input type="number" class="edit-area no-spinner w-full border border-gray-300 rounded px-2 py-1" value="${rate.area || ""
+                        }" placeholder="0.00" min="0" step="0.01"></td>`
                         : "";
 
                 // Return the complete table row for editing.
                 return `
-                    <tr class="hover:bg-gray-50 transition-colors" data-id="${
-                        rate.id
+                    <tr class="hover:bg-gray-50 transition-colors" data-id="${rate.id
                     }">
                        <td data-label="Table Number" class="border border-gray-200 px-4 py-3 bg-gray-100">
-                            <input type="text" class="edit-table-number w-full border-gray-200 bg-gray-100 rounded px-2 py-1 text-gray-600 cursor-not-allowed" value="${
-                                rate.tableNumber
-                            }" readonly>
+                            <input type="text" class="edit-table-number w-full border-gray-200 bg-gray-100 rounded px-2 py-1 text-gray-600 cursor-not-allowed" value="${rate.tableNumber
+                    }" readonly>
                         </td>
                         
                         ${areaCell}
                         
                         <td data-label="Rate (per day)" class="border border-gray-200 px-4 py-3"><input type="number" class="edit-daily-rate no-spinner w-full border border-gray-300 rounded px-2 py-1" value="${parseFloat(
-                            rate.dailyRate
-                        ).toFixed(2)}" min="0" step="0.01"></td>
+                        rate.dailyRate
+                    ).toFixed(2)}" min="0" step="0.01"></td>
                         <td data-label="Monthly Rental" class="border border-gray-200 px-4 py-3">
                          <input type="number" class="edit-monthly-rate no-spinner w-full border-gray-200 bg-gray-100 rounded px-2 py-1" readonly>
                         </td>
                         <td data-label="Action" class="border border-gray-200 px-4 py-3 text-center">
-                            <button class="delete-btn bg-red-500 text-white px-3 py-1 rounded-lg" data-id="${
-                                rate.id
-                            }"><i class="fas fa-trash"></i></button>
+                            <button class="delete-btn bg-red-500 text-white px-3 py-1 rounded-lg" data-id="${rate.id
+                    }"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                 `;
@@ -3600,8 +3605,8 @@ class SuperAdminDashboard {
             type === "success"
                 ? "bg-green-500"
                 : type === "error"
-                ? "bg-red-500"
-                : "bg-blue-500";
+                    ? "bg-red-500"
+                    : "bg-blue-500";
         toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-full transition-all duration-300 flex items-center gap-3`;
         toast.innerHTML = `<i class="fas fa-info-circle"></i><span>${message}</span>`;
         this.elements.toastContainer.appendChild(toast);
@@ -3733,12 +3738,10 @@ class SuperAdminDashboard {
                         const bellRect = bellButton.getBoundingClientRect();
 
                         this.activeDropdown.style.position = "absolute"; // Use absolute to scroll
-                        this.activeDropdown.style.top = `${
-                            bellRect.bottom + window.scrollY + 5
-                        }px`;
-                        this.activeDropdown.style.left = `${
-                            bellRect.right + window.scrollX - dropdownWidth
-                        }px`; // Align right edges
+                        this.activeDropdown.style.top = `${bellRect.bottom + window.scrollY + 5
+                            }px`;
+                        this.activeDropdown.style.left = `${bellRect.right + window.scrollX - dropdownWidth
+                            }px`; // Align right edges
 
                         this.renderNotificationDropdown();
 
@@ -3902,30 +3905,27 @@ class SuperAdminDashboard {
             rentSettingsTableBody.innerHTML = `
                 <tr data-id="${rent.id}">
                     <td data-label="Category" class="border border-gray-200 p-3 font-medium">Rent</td>
-                    <td data-label="Discount (%)" class="border border-gray-200 p-3 discount-cell">${
-                        isEditing
-                            ? createPercentageDropdown(
-                                  "discount_rate",
-                                  rent.discount_rate
-                              )
-                            : formatDisplay(rent.discount_rate)
-                    }</td>
-                    <td data-label="Surcharge (%)" class="border border-gray-200 p-3 surcharge-cell">${
-                        isEditing
-                            ? createPercentageDropdown(
-                                  "surcharge_rate",
-                                  rent.surcharge_rate
-                              )
-                            : formatDisplay(rent.surcharge_rate)
-                    }</td>
-                    <td data-label="Monthly Interest (%)" class="border border-gray-200 p-3 interest-cell">${
-                        isEditing
-                            ? createPercentageDropdown(
-                                  "monthly_interest_rate",
-                                  rent.monthly_interest_rate
-                              )
-                            : formatDisplay(rent.monthly_interest_rate)
-                    }</td>
+                    <td data-label="Discount (%)" class="border border-gray-200 p-3 discount-cell">${isEditing
+                    ? createPercentageDropdown(
+                        "discount_rate",
+                        rent.discount_rate
+                    )
+                    : formatDisplay(rent.discount_rate)
+                }</td>
+                    <td data-label="Surcharge (%)" class="border border-gray-200 p-3 surcharge-cell">${isEditing
+                    ? createPercentageDropdown(
+                        "surcharge_rate",
+                        rent.surcharge_rate
+                    )
+                    : formatDisplay(rent.surcharge_rate)
+                }</td>
+                    <td data-label="Monthly Interest (%)" class="border border-gray-200 p-3 interest-cell">${isEditing
+                    ? createPercentageDropdown(
+                        "monthly_interest_rate",
+                        rent.monthly_interest_rate
+                    )
+                    : formatDisplay(rent.monthly_interest_rate)
+                }</td>
                 </tr>
             `;
         }
@@ -3939,21 +3939,19 @@ class SuperAdminDashboard {
                 return `
                 <tr data-id="${setting.id}">
                     <td data-label="Category" class="border border-gray-200 p-3 font-medium">${util}</td>
-                    <td data-label="Discount (%)" class="border border-gray-200 p-3 discount-cell">${
-                        isEditing
-                            ? createPercentageDropdown(
-                                  "discount_rate",
-                                  setting.discount_rate
-                              )
-                            : formatDisplay(setting.discount_rate)
+                    <td data-label="Discount (%)" class="border border-gray-200 p-3 discount-cell">${isEditing
+                        ? createPercentageDropdown(
+                            "discount_rate",
+                            setting.discount_rate
+                        )
+                        : formatDisplay(setting.discount_rate)
                     }</td>
-                    <td data-label="Penalty (%)" class="border border-gray-200 p-3 penalty-cell">${
-                        isEditing
-                            ? createPercentageDropdown(
-                                  "penalty_rate",
-                                  setting.penalty_rate
-                              )
-                            : formatDisplay(setting.penalty_rate)
+                    <td data-label="Penalty (%)" class="border border-gray-200 p-3 penalty-cell">${isEditing
+                        ? createPercentageDropdown(
+                            "penalty_rate",
+                            setting.penalty_rate
+                        )
+                        : formatDisplay(setting.penalty_rate)
                     }</td>
                 </tr>
             `;
@@ -3977,18 +3975,16 @@ class SuperAdminDashboard {
                 <td data-label="Date & Time" class="border p-3">${new Date(
                     log.changed_at
                 ).toLocaleString()}</td>
-                <td data-label="Category" class="border p-3">${
-                    log.utility_type
-                }</td>
-                <td data-label="Item Changed" class="border p-3">${
-                    log.field_changed
-                }</td>
+                <td data-label="Category" class="border p-3">${log.utility_type
+                    }</td>
+                <td data-label="Item Changed" class="border p-3">${log.field_changed
+                    }</td>
                 <td data-label="Old Value" class="border p-3">${parseFloat(
-                    log.old_value
-                ).toFixed(2)}%</td>
+                        log.old_value
+                    ).toFixed(2)}%</td>
                 <td data-label="New Value" class="border p-3">${parseFloat(
-                    log.new_value
-                ).toFixed(2)}%</td>
+                        log.new_value
+                    ).toFixed(2)}%</td>
             </tr>
         `
             )
@@ -4072,6 +4068,170 @@ class SuperAdminDashboard {
             await this.fetchBillingSettingsHistory();
         } catch (error) {
             this.showToast(error.message, "error");
+        }
+    }
+
+    // ==========================================
+    // ANNOUNCEMENT SECTION METHODS
+    // ==========================================
+
+    setupAnnouncementEventListeners() {
+        if (this.elements.createAnnouncementForm) {
+            this.elements.createAnnouncementForm.addEventListener("submit", (e) => {
+                e.preventDefault();
+                this.saveAnnouncement();
+            });
+        }
+
+        if (this.elements.announcementsList) {
+            this.elements.announcementsList.addEventListener("click", (e) => {
+                const deleteBtn = e.target.closest(".delete-announcement-btn");
+                if (deleteBtn) {
+                    const id = deleteBtn.dataset.id;
+                    this.confirmDeleteAnnouncement(id);
+                }
+            });
+        }
+    }
+
+    async fetchAnnouncements() {
+        if (!this.elements.announcementsList) return;
+
+        try {
+            const response = await fetch("/api/admin/announcements");
+            if (!response.ok) throw new Error("Failed to fetch announcements");
+
+            const announcements = await response.json();
+            this.renderAnnouncements(announcements);
+            this.dataLoaded.announcementSection = true;
+        } catch (error) {
+            console.error("Error fetching announcements:", error);
+            this.elements.announcementsList.innerHTML = `
+                <div class="text-center text-red-500 py-4">
+                    <i class="fas fa-exclamation-circle mb-2"></i>
+                    <p>Failed to load announcements.</p>
+                </div>`;
+        }
+    }
+
+    renderAnnouncements(announcements) {
+        if (!this.elements.announcementsList) return;
+
+        if (announcements.length === 0) {
+            this.elements.announcementsList.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-bullhorn text-2xl mb-2 opacity-50"></i>
+                    <p>No active announcements.</p>
+                </div>`;
+            return;
+        }
+
+        this.elements.announcementsList.innerHTML = announcements.map(announcement => `
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start mb-2">
+                    <h4 class="font-bold text-gray-800">${announcement.title}</h4>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">${new Date(announcement.created_at).toLocaleDateString()}</span>
+                        <button data-id="${announcement.id}" 
+                            class="delete-announcement-btn text-red-500 hover:text-red-700 p-1 rounded transition-colors" title="Delete">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-gray-600 text-sm whitespace-pre-wrap">${announcement.content}</p>
+                <div class="mt-2 flex items-center gap-2">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium ${announcement.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">
+                        ${announcement.is_active ? 'Active' : 'Draft'}
+                    </span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async saveAnnouncement() {
+        const title = this.elements.announcementTitle.value;
+        const content = this.elements.announcementContent.value;
+        const isActive = this.elements.announcementIsActive.checked;
+        const btn = this.elements.saveAnnouncementBtn;
+
+        if (!title || !content) {
+            this.showToast("Please fill in all required fields.", "error");
+            return;
+        }
+
+        try {
+            const originalBtnText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
+
+            const response = await fetch("/api/admin/announcements", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+                },
+                body: JSON.stringify({
+                    title,
+                    content,
+                    is_active: isActive
+                }),
+            });
+
+            if (!response.ok) throw new Error("Failed to create announcement");
+
+            this.showToast("Announcement posted successfully!", "success");
+            this.elements.createAnnouncementForm.reset();
+            this.fetchAnnouncements(); // Refresh list
+
+        } catch (error) {
+            console.error("Error saving announcement:", error);
+            this.showToast("Failed to post announcement.", "error");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Post Announcement</span>';
+        }
+    }
+
+    confirmDeleteAnnouncement(id) {
+        this.elements.deleteModal.classList.remove("hidden");
+        const confirmBtn = this.elements.confirmDelete;
+        const cancelBtn = this.elements.cancelDelete;
+
+        // Remove previous listeners to prevent multiple firings
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        this.elements.confirmDelete = newConfirmBtn;
+
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        this.elements.cancelDelete = newCancelBtn;
+
+        this.elements.confirmDelete.addEventListener("click", () => {
+            this.deleteAnnouncement(id);
+            this.elements.deleteModal.classList.add("hidden");
+        });
+
+        this.elements.cancelDelete.addEventListener("click", () => {
+            this.elements.deleteModal.classList.add("hidden");
+        });
+    }
+
+    async deleteAnnouncement(id) {
+        try {
+            const response = await fetch(`/api/admin/announcements/${id}`, {
+                method: "DELETE",
+                headers: {
+                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+                },
+            });
+
+            if (!response.ok) throw new Error("Failed to delete announcement");
+
+            this.showToast("Announcement deleted successfully", "success");
+            this.fetchAnnouncements();
+        } catch (error) {
+            console.error("Error deleting announcement:", error);
+            this.showToast("Failed to delete announcement", "error");
         }
     }
 }

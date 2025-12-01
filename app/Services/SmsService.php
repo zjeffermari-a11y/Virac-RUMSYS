@@ -62,6 +62,26 @@ class SmsService
         return $this->send($recipientNumber, $message, true);
     }
 
+    public function getCredits()
+    {
+        $url = $this->baseUrl . '/account?apikey=' . $this->apiKey;
+
+        try {
+            $response = Http::get($url);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return ['success' => true, 'credit_balance' => $data['credit_balance'] ?? 'N/A'];
+            } else {
+                Log::error("Failed to fetch Semaphore credits.", ['response' => $response->body()]);
+                return ['success' => false, 'message' => 'Failed to fetch credits.'];
+            }
+        } catch (\Exception $e) {
+            Log::error('Semaphore credit fetch failed: ' . $e->getMessage(), ['exception' => $e]);
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
     private function mergeTemplates(array $defaults, $customs): array
     {
         foreach ($customs as $custom) {

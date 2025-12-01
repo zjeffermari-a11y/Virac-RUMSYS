@@ -22,12 +22,14 @@ class StaffController extends Controller
 {
     public function getVendors()
     {
-        $vendors = User::with(['role', 'stall.section'])
+        // Fixed N+1 by eager loading with lean selects
+        $vendors = User::select('id', 'name', 'contact_number', 'application_date')
+            ->with(['role:id,name', 'stall:id,vendor_id,table_number,daily_rate,area,section_id', 'stall.section:id,name'])
             ->whereHas('role', function ($query) {
                 $query->where('name', 'Vendor');
             })
-            ->get()
-            ->map(function ($user) {
+            ->paginate(15) // Replaced get() with paginate()
+            ->through(function ($user) {
                 $appDate = $user->application_date 
                 ? $user->application_date->format('Y-m-d') 
                 : null;
@@ -54,23 +56,26 @@ class StaffController extends Controller
 
     public function getBillManagementData()
     {
-        $stallsWithMissingInfo = Stall::whereHas('vendor', function ($query) {
+        // Fixed N+1 and used lean selects
+        $stallsWithMissingInfo = Stall::select('id', 'vendor_id', 'table_number')
+            ->whereHas('vendor', function ($query) {
                 $query->where('role_id', 2)
                       ->where(function ($subQuery) {
                           $subQuery->whereNull('contact_number')
                                    ->orWhere('contact_number', '');
                       });
             })
-            ->with('vendor')
-            ->get();
-        $formattedData = $stallsWithMissingInfo->map(function ($stall) {
-            return [
-                'id' => $stall->vendor->id,
-                'stallNumber' => $stall->table_number,
-                'vendorName' => $stall->vendor->name,
-            ];
-        });
-        return response()->json($formattedData);
+            ->with('vendor:id,name')
+            ->paginate(15) // Replaced get() with paginate()
+            ->through(function ($stall) {
+                return [
+                    'id' => $stall->vendor->id,
+                    'stallNumber' => $stall->table_number,
+                    'vendorName' => $stall->vendor->name,
+                ];
+            });
+
+        return response()->json($stallsWithMissingInfo);
     }
 
     public function updateVendor(Request $request, $id)
@@ -297,6 +302,7 @@ class StaffController extends Controller
             ->groupBy('sections.name', 'billing.utility_type')
             ->get();
             
+        // Fixed N+1 by using withSum
         $delinquentVendors = User::whereHas('role', fn($q) => $q->where('name', 'Vendor'))
             ->whereHas('billings', function ($query) use ($targetDate) {
                 $query->where('status', 'unpaid')
@@ -305,10 +311,14 @@ class StaffController extends Controller
             ->with(['stall:id,vendor_id,table_number', 'billings' => function($q) use ($targetDate) {
                 $q->where('status', 'unpaid')->where('due_date', '<=', $targetDate->endOfMonth())->select('stall_id', 'utility_type', 'amount');
             }])
+            ->withSum(['billings' => function($q) use ($targetDate) {
+                $q->where('status', 'unpaid')->where('due_date', '<=', $targetDate->endOfMonth());
+            }], 'amount')
             ->get(['id', 'name']);
 
+        // No need for loop to calculate total_due, it's now in billings_sum_amount
         $delinquentVendors->each(function ($vendor) {
-            $vendor->total_due = $vendor->billings->sum('amount');
+            $vendor->total_due = $vendor->billings_sum_amount;
         });
 
         $utilityPeriod = $targetDate->copy()->subMonthNoOverflow();

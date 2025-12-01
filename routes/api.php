@@ -88,6 +88,7 @@ Route::get('/schedules/sms/history', [ScheduleController::class, 'getSmsSchedule
 //Notficication template
 use App\Http\Controllers\Api\NotificationTemplateController;
 
+Route::get('/notification-templates/credits', [NotificationTemplateController::class, 'getCredits']);
 Route::get('/notification-templates', [NotificationTemplateController::class, 'index']);
 Route::post('/notification-templates', [NotificationTemplateController::class, 'update']);
 
@@ -122,4 +123,13 @@ Route::prefix('billing-settings')->group(function () {
 
 Route::prefix('api/admin')->middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::get('/sections', [\App\Http\Controllers\Api\SectionController::class, 'index']);
+});
+
+use App\Http\Controllers\Api\AnnouncementController;
+
+Route::prefix('admin/announcements')->middleware(['auth:sanctum', 'role:Admin'])->group(function () {
+    Route::get('/', [AnnouncementController::class, 'index']);
+    Route::post('/', [AnnouncementController::class, 'store']);
+    Route::put('/{announcement}', [AnnouncementController::class, 'update']);
+    Route::delete('/{announcement}', [AnnouncementController::class, 'destroy']);
 });

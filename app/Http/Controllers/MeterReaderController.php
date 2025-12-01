@@ -79,11 +79,13 @@ class MeterReaderController extends Controller
         }
         // --- END OF TASK DISPLAY FIX ---
 
-        $stalls = Stall::with(['section', 'utilityReadings' => function ($query) use ($billingPeriodMonth) {
+        // Fixed N+1 and used lean selects
+        $stalls = Stall::select('id', 'table_number', 'section_id')
+            ->with(['section:id,name', 'utilityReadings' => function ($query) use ($billingPeriodMonth) {
             $query->whereYear('reading_date', $billingPeriodMonth->year)
                   ->whereMonth('reading_date', $billingPeriodMonth->month)
                   ->with('editRequests');
-        }])->orderBy('section_id')->get();
+        }])->orderBy('section_id')->paginate(15); // Replaced get() with paginate()
 
         $stallData = $stalls->map(function ($stall) use ($billingPeriodMonth) {
             $latestReading = $stall->utilityReadings->first();
@@ -180,7 +182,7 @@ class MeterReaderController extends Controller
         try {
             $query = UtilityReading::query()
                 ->select('utility_readings.*')
-                ->with('stall.section') 
+                ->with('stall.section:id,name') // Lean eager load
                 ->join('stalls', 'utility_readings.stall_id', '=', 'stalls.id')
                 ->join('sections', 'stalls.section_id', '=', 'sections.id')
                 ->where('utility_readings.reading_date', '<', Carbon::today()->startOfMonth())
