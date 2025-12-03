@@ -264,6 +264,7 @@
         Route::apiResource('/system-users', SystemUserController::class);
         Route::get('/roles', [RoleController::class, 'index']);
     });
+<<<<<<< HEAD
 
     Route::get('/nuclear-reset', function () {
     // 1. Generate a fresh, valid Bcrypt hash for 'password'
@@ -282,3 +283,23 @@
 
     return "Reset Complete. Rows affected: $affected. <br>You can now login with 'admin' / 'password' <br>or 'beyonce' / 'D3ch@vez'. <br><a href='/login'>Go to Login</a>";
 });
+=======
+Route::get('/fix-login-final', function () {
+    // 1. Fix Admin
+    $admin = \App\Models\User::where('username', 'admin')->first();
+    if ($admin) {
+        // DO NOT use Hash::make() here because your User model has 'password' => 'hashed'
+        $admin->password = 'password'; 
+        $admin->save();
+    }
+
+    // 2. Fix Beyonce
+    $beyonce = \App\Models\User::where('username', 'beyonce')->first();
+    if ($beyonce) {
+        $beyonce->password = 'D3ch@vez'; // Plain text
+        $beyonce->save();
+    }
+
+    return "Passwords fixed! The 'Double-Hash' issue is resolved. <br><a href='/login'>Go to Login</a>";
+});
+>>>>>>> 513ff73849bd73b11f9b6883f48efd4e9087b605
