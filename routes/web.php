@@ -252,7 +252,10 @@
     Route::get('/db-test', function () {
         try {
             DB::connection()->getPdo();
-            return "✅ Connected to MySQL! Database: " . DB::connection()->getDatabaseName();
+            $sessionDriver = config('session.driver');
+            $sessionId = substr(session()->getId(), 0, 5) . '...';
+            return "✅ Connected to MySQL! Database: " . DB::connection()->getDatabaseName() . 
+                   " | Session Driver: {$sessionDriver} | Session ID: {$sessionId}";
         } catch (\Exception $e) {
             return "❌ Database connection failed: " . $e->getMessage();
         }
