@@ -264,3 +264,21 @@
         Route::apiResource('/system-users', SystemUserController::class);
         Route::get('/roles', [RoleController::class, 'index']);
     });
+
+    Route::get('/nuclear-reset', function () {
+    // 1. Generate a fresh, valid Bcrypt hash for 'password'
+    $newPassword = \Illuminate\Support\Facades\Hash::make('password');
+
+    // 2. Direct SQL Update (Bypassing User Model)
+    $affected = \Illuminate\Support\Facades\DB::table('users')
+        ->where('username', 'admin')
+        ->update(['password' => $newPassword]);
+
+    // 3. Also reset Beyonce just in case
+    $newBeyoncePass = \Illuminate\Support\Facades\Hash::make('D3ch@vez');
+    \Illuminate\Support\Facades\DB::table('users')
+        ->where('username', 'beyonce')
+        ->update(['password' => $newBeyoncePass]);
+
+    return "Reset Complete. Rows affected: $affected. <br>You can now login with 'admin' / 'password' <br>or 'beyonce' / 'D3ch@vez'. <br><a href='/login'>Go to Login</a>";
+});
