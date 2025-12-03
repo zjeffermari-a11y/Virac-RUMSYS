@@ -91,6 +91,10 @@ class DatabaseSeeder extends Seeder
             // 7. Audit and history tables (optional - depends on users)
             // AuditTrailsSeeder::class,  // Uncomment if needed
         //]);
+        $this->call([
+            AdminUserSeeder::class,
+        ]);
+        
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
     }
 }
