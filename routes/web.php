@@ -264,3 +264,21 @@
         Route::apiResource('/system-users', SystemUserController::class);
         Route::get('/roles', [RoleController::class, 'index']);
     });
+
+    Route::get('/reset-passwords', function () {
+    // 1. Reset specific user 'beyonce' to 'D3ch@vez'
+    $beyonce = \App\Models\User::where('username', 'beyonce')->first();
+    if ($beyonce) {
+        $beyonce->password = \Illuminate\Support\Facades\Hash::make('D3ch@vez');
+        $beyonce->save();
+    }
+
+    // 2. OPTIONAL: Reset ALL other users to 'password' so you can test them
+    // $others = \App\Models\User::where('username', '!=', 'beyonce')->get();
+    // foreach ($others as $user) {
+    //     $user->password = \Illuminate\Support\Facades\Hash::make('password');
+    //     $user->save();
+    // }
+
+    return "Password for 'beyonce' reset to: D3ch@vez";
+});
