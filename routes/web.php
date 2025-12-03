@@ -254,8 +254,13 @@
             DB::connection()->getPdo();
             $sessionDriver = config('session.driver');
             $sessionId = substr(session()->getId(), 0, 5) . '...';
+            $reqScheme = request()->getScheme();
+            $isSecure = request()->secure() ? 'Yes' : 'No';
+            $xForwardedProto = request()->header('x-forwarded-proto', 'null');
+            
             return "✅ Connected to MySQL! Database: " . DB::connection()->getDatabaseName() . 
-                   " | Session Driver: {$sessionDriver} | Session ID: {$sessionId}";
+                   " | Session Driver: {$sessionDriver} | Session ID: {$sessionId}" .
+                   " | Scheme: {$reqScheme} | Secure: {$isSecure} | X-Forwarded-Proto: {$xForwardedProto}";
         } catch (\Exception $e) {
             return "❌ Database connection failed: " . $e->getMessage();
         }
