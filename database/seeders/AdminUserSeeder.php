@@ -28,6 +28,7 @@ class AdminUserSeeder extends Seeder
             [
                 'role_id' => $roleId,
                 'name' => 'Andy Po',
+                'email' => 'admin@example.com', // Added dummy email to satisfy DB constraint
                 'password' => Hash::make('password'), // Reset password to known value
                 'status' => 'active',
                 'contact_number' => '09384432421',
