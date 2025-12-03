@@ -2242,6 +2242,14 @@ class SuperAdminDashboard {
                 throw new Error("Server returned an error. Please try again.");
             }
 
+            // Optimistic Update: Update local state immediately
+            updatedContacts.forEach(updated => {
+                const contact = this.roleContacts.find(c => c.id === updated.id);
+                if (contact) {
+                    contact.contact_number = updated.contact_number;
+                }
+            });
+
             this.showToast("Contact numbers updated!", "success");
             this.toggleSmsSettingsEditMode(false);
             await this.fetchSmsSettings();
@@ -2900,7 +2908,8 @@ class SuperAdminDashboard {
 
         // 1. Immediately update the UI
         this.currentSchedule.day = newDay;
-        this.toggleScheduleEditMode(false); // Instantly re-renders the schedule display
+        this.renderMeterReadingSchedule(); // Update the view text
+        this.toggleScheduleEditMode(false); // Switch back to view mode
 
         // 2. Immediately create and display a temporary history log
         const optimisticLog = {
@@ -4056,6 +4065,15 @@ class SuperAdminDashboard {
                     errorData.message || "Failed to save settings."
                 );
             }
+
+            // Optimistic Update: Update local state immediately
+            settingsPayload.forEach(updatedSetting => {
+                for (const key in this.billingSettings) {
+                    if (this.billingSettings[key].id === updatedSetting.id) {
+                        Object.assign(this.billingSettings[key], updatedSetting);
+                    }
+                }
+            });
 
             this.showToast("Settings updated successfully!", "success");
             this.toggleBillingSettingsEditMode(false);

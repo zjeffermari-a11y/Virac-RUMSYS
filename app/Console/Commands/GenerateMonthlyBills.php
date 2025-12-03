@@ -12,14 +12,15 @@ use Carbon\Carbon;
 
 class GenerateMonthlyBills extends Command
 {
-    protected $signature = 'billing:generate';
+    protected $signature = 'billing:generate {date? : The date to generate bills for (YYYY-MM-DD)}';
     protected $description = 'Generates monthly bills for all stalls.';
 
     public function handle()
     {
-        $this->info('Starting monthly bill generation...');
+        $dateInput = $this->argument('date');
+        $today = $dateInput ? Carbon::parse($dateInput) : Carbon::today();
 
-        $today = Carbon::today();
+        $this->info("Starting monthly bill generation for date: {$today->toDateString()}...");
         $rentPeriodStart = $today->copy()->startOfMonth();
         $rentPeriodEnd = $today->copy()->endOfMonth();
         $utilityPeriodStart = $today->copy()->subMonthNoOverflow()->startOfMonth();

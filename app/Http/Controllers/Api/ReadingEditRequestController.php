@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Services\SmsService;
 use Illuminate\Support\Facades\Log;
+use App\Services\AuditLogger;
 
 class ReadingEditRequestController extends Controller
 {
@@ -70,6 +71,13 @@ class ReadingEditRequestController extends Controller
             Log::error("Failed to send notification for edit request status update: " . $e->getMessage());
         }
 
+        AuditLogger::log(
+            'Updated Edit Request Status',
+            'Utility Readings',
+            'Success',
+            ['request_id' => $readingEditRequest->id, 'status' => $validated['status'], 'stall_number' => $readingEditRequest->utilityReading->stall->table_number]
+        );
+
         return response()->json(['message' => 'Request status updated successfully.']);
     }
     
@@ -126,6 +134,13 @@ public function store(Request $request)
             Log::error('Failed to send SMS for new edit request: ' . $e->getMessage());
         }
     }
+
+    AuditLogger::log(
+        'Requested Reading Edit',
+        'Utility Readings',
+        'Success',
+        ['request_id' => $editRequest->id, 'reading_id' => $request->utility_reading_id, 'reason' => $request->reason]
+    );
 
     return response()->json($editRequest, 201);
 }

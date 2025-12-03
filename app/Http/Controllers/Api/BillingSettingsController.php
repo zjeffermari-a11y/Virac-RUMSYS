@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cache;
 use App\Models\AuditTrail;
+use App\Services\AuditLogger;
 
 class BillingSettingsController extends Controller
 {
@@ -46,6 +47,7 @@ class BillingSettingsController extends Controller
             $user = Auth::user();
 
             DB::transaction(function () use ($request, $user) {
+                $allChanges = [];
                 foreach ($request->settings as $settingData) {
                     $setting = BillingSetting::find($settingData['id']);
                     if (!$setting) continue;
@@ -75,7 +77,17 @@ class BillingSettingsController extends Controller
                     if (!empty($changes)) {
                         $setting->save();
                         DB::table('billing_setting_histories')->insert($changes);
+                        $allChanges = array_merge($allChanges, $changes);
                     }
+                }
+
+                if (!empty($allChanges)) {
+                    AuditLogger::log(
+                        'Updated Billing Settings',
+                        'Billing Settings',
+                        'Success',
+                        ['changes' => $allChanges]
+                    );
                 }
             });
 

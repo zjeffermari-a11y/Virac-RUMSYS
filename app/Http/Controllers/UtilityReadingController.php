@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\SmsService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use App\Services\AuditLogger;
 
 class UtilityReadingController extends Controller
 {
@@ -136,6 +137,13 @@ public function storeBulk(Request $request)
             Log::error('Failed to send notification for bulk reading submission: ' . $e->getMessage());
             // Do not fail the main request, just log the error.
         }
+
+        AuditLogger::log(
+            'Submitted Meter Readings',
+            'Utility Readings',
+            'Success',
+            ['count' => count($savedReadings), 'readings' => $savedReadings]
+        );
 
         
     } catch (\Exception $e) {

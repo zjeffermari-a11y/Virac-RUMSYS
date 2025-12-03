@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Stall; // It's better to use the model
+use App\Services\AuditLogger;
 
 class RentalRateController extends Controller
 {
@@ -58,7 +59,7 @@ class RentalRateController extends Controller
 
         $maxTableNumber = DB::table('stalls')
             ->where('section_id', $section->id)
-            ->max(DB::raw("CAST(SUBSTRING(table_number FROM '[0-9]+$') AS INTEGER)"));
+            ->max(DB::raw("CAST(REGEXP_SUBSTR(table_number, '[0-9]+$') AS UNSIGNED)"));
 
         return response()->json(['next_table_number' => ((int)$maxTableNumber) + 1]);
     }
@@ -87,6 +88,13 @@ class RentalRateController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        AuditLogger::log(
+            'Created Stall',
+            'Rental Rates',
+            'Success',
+            ['stall_id' => $stallId, 'section' => $validatedData['section'], 'table_number' => $validatedData['tableNumber']]
+        );
 
         return response()->json(['message' => 'Stall created successfully', 'id' => $stallId], 201);
     }
@@ -118,6 +126,13 @@ class RentalRateController extends Controller
                     ]);
                 }
             }
+            
+            AuditLogger::log(
+                'Updated Rental Rates',
+                'Rental Rates',
+                'Success',
+                ['count' => count($validatedData['stalls']), 'changes' => $validatedData['stalls']]
+            );
         });
 
         return response()->json(['message' => 'Rates updated successfully!']);
@@ -129,7 +144,16 @@ class RentalRateController extends Controller
      */
     public function destroy($id)
     {
-        DB::table('stalls')->where('id', $id)->delete();
+        $stall = DB::table('stalls')->where('id', $id)->first();
+        if ($stall) {
+            AuditLogger::log(
+                'Deleted Stall',
+                'Rental Rates',
+                'Success',
+                ['stall_id' => $id, 'table_number' => $stall->table_number]
+            );
+            DB::table('stalls')->where('id', $id)->delete();
+        }
         return response()->json(null, 204);
     }
 }

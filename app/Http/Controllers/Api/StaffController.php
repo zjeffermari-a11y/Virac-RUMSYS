@@ -17,6 +17,7 @@ use App\Models\Rate;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth; // <-- Import the Auth facade
+use App\Services\AuditLogger;
 
 class StaffController extends Controller
 {
@@ -112,14 +113,14 @@ class StaffController extends Controller
             }
 
             // <-- START: Audit Trail for Vendor Update -->
-            DB::table('audit_trails')->insert([
-                'user_id' => Auth::id(),
-                'role_id' => Auth::user()->role_id,
-                'action' => 'Updated vendor details for ' . $vendor->name,
-                'module' => 'Vendor Management',
-                'result' => 'Success',
-                'created_at' => now(),
-            ]);
+            // <-- START: Audit Trail for Vendor Update -->
+            AuditLogger::log(
+                'Updated vendor details',
+                'Vendor Management',
+                'Success',
+                ['vendor_id' => $vendor->id, 'name' => $vendor->name, 'changes' => $request->all()]
+            );
+            // <-- END: Audit Trail for Vendor Update -->
             // <-- END: Audit Trail for Vendor Update -->
 
             DB::commit();
@@ -131,14 +132,14 @@ class StaffController extends Controller
             Log::error('Vendor update failed for ID ' . $id . ': ' . $e->getMessage());
 
             // <-- START: Audit Trail for Failed Update -->
-            DB::table('audit_trails')->insert([
-                'user_id' => Auth::id(),
-                'role_id' => Auth::user()->role_id,
-                'action' => 'Attempted to update vendor with ID ' . $id,
-                'module' => 'Vendor Management',
-                'result' => 'Failure',
-                'created_at' => now(),
-            ]);
+            // <-- START: Audit Trail for Failed Update -->
+            AuditLogger::log(
+                'Attempted to update vendor',
+                'Vendor Management',
+                'Failure',
+                ['vendor_id' => $id, 'error' => $e->getMessage()]
+            );
+            // <-- END: Audit Trail for Failed Update -->
             // <-- END: Audit Trail for Failed Update -->
 
             return response()->json(['message' => 'Failed to update vendor: ' . $e->getMessage()], 500);
@@ -255,14 +256,18 @@ class StaffController extends Controller
             ]);
             
             // <-- START: Audit Trail for Marking Bill as Paid -->
-            DB::table('audit_trails')->insert([
-                'user_id' => Auth::id(),
-                'role_id' => Auth::user()->role_id,
-                'action' => 'Recorded payment of ₱' . number_format($billing->amount, 2) . ' for bill #' . $billing->id . ' (Vendor: ' . optional($billing->stall->vendor)->name . ')',
-                'module' => 'Billing',
-                'result' => 'Success',
-                'created_at' => now(),
-            ]);
+            // <-- START: Audit Trail for Marking Bill as Paid -->
+            AuditLogger::log(
+                'Recorded payment',
+                'Billing',
+                'Success',
+                [
+                    'billing_id' => $billing->id,
+                    'amount' => $billing->amount,
+                    'vendor' => optional($billing->stall->vendor)->name
+                ]
+            );
+            // <-- END: Audit Trail -->
             // <-- END: Audit Trail -->
             
             DB::commit();
@@ -344,14 +349,12 @@ class StaffController extends Controller
             ->get()
             ->keyBy('utility_type');
 
-            DB::table('audit_trails')->insert([
-                'user_id' => Auth::id(),
-                'role_id' => Auth::user()->role_id,
-                'action' => 'Generated Monthly Report for ' . $targetDate->format('F Y'),
-                'module' => 'Reports',
-                'result' => 'Success',
-                'created_at' => now(),
-            ]);
+            AuditLogger::log(
+                'Generated Monthly Report',
+                'Reports',
+                'Success',
+                ['period' => $targetDate->format('F Y')]
+            );
 
         return response()->json([
             'report_period' => $targetDate->format('F Y'),
@@ -466,14 +469,14 @@ class StaffController extends Controller
             $stall->save();
 
             // <-- START: Audit Trail for Stall Assignment -->
-            DB::table('audit_trails')->insert([
-                'user_id' => Auth::id(),
-                'role_id' => Auth::user()->role_id,
-                'action' => 'Assigned stall ' . $stall->table_number . ' to vendor ' . $vendor->name,
-                'module' => 'Stall Assignment',
-                'result' => 'Success',
-                'created_at' => now(),
-            ]);
+            // <-- START: Audit Trail for Stall Assignment -->
+            AuditLogger::log(
+                'Assigned stall',
+                'Stall Assignment',
+                'Success',
+                ['stall_number' => $stall->table_number, 'vendor_name' => $vendor->name, 'vendor_id' => $vendor->id]
+            );
+            // <-- END: Audit Trail -->
             // <-- END: Audit Trail -->
 
             Artisan::call('billing:generate-new-vendor', [
@@ -489,14 +492,14 @@ class StaffController extends Controller
             Log::error('Stall assignment failed: ' . $e->getMessage());
 
              // <-- START: Audit Trail for Failed Assignment -->
-            DB::table('audit_trails')->insert([
-                'user_id' => Auth::id(),
-                'role_id' => Auth::user()->role_id,
-                'action' => 'Failed to assign stall to vendor ID ' . $request->vendor_id,
-                'module' => 'Stall Assignment',
-                'result' => 'Failure',
-                'created_at' => now(),
-            ]);
+             // <-- START: Audit Trail for Failed Assignment -->
+            AuditLogger::log(
+                'Failed to assign stall',
+                'Stall Assignment',
+                'Failure',
+                ['vendor_id' => $request->vendor_id, 'error' => $e->getMessage()]
+            );
+            // <-- END: Audit Trail -->
             // <-- END: Audit Trail -->
             
             return response()->json(['message' => 'An error occurred during stall assignment.'], 500);

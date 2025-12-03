@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use App\Services\AuditLogger;
+
 class UtilityRateController extends Controller
 {
     /**
@@ -82,6 +84,13 @@ class UtilityRateController extends Controller
                     'changed_by' => $loggedInUserId,
                     'changed_at' => now(),
                 ]);
+
+                AuditLogger::log(
+                    'Updated Utility Rate',
+                    'Utility Rates',
+                    'Success',
+                    ['rate_id' => $id, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue]
+                );
             }
         });
 
@@ -142,6 +151,13 @@ class UtilityRateController extends Controller
                         ]);
                     }
                 }
+
+                AuditLogger::log(
+                    'Batch Updated Utility Rates',
+                    'Utility Rates',
+                    'Success',
+                    ['count' => count($rates), 'changes' => $rates]
+                );
             });
 
             // Clear caches for both rates and history to reflect changes

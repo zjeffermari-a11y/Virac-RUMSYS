@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Schedule;
 use Illuminate\Support\Facades\Cache;
+use App\Services\AuditLogger;
 
 class ScheduleController extends Controller
 {
@@ -66,6 +67,13 @@ class ScheduleController extends Controller
                         'new_value' => $newDay,
                         'changed_by' => Auth::id() ?? 1, // Fallback to user 1 for testing
                     ]);
+
+                    AuditLogger::log(
+                        'Updated Meter Reading Schedule',
+                        'Schedules',
+                        'Success',
+                        ['schedule_id' => $scheduleId, 'old_day' => $oldDay, 'new_day' => $newDay]
+                    );
                 }
             });
 
@@ -167,6 +175,13 @@ class ScheduleController extends Controller
                             'new_value' => $newDay,
                             'changed_by' => Auth::id() ?? 1,
                         ]);
+
+                        AuditLogger::log(
+                            'Updated Billing Schedule',
+                            'Schedules',
+                            'Success',
+                            ['type' => $type, 'old_value' => $oldDay, 'new_value' => $newDay]
+                        );
                     }
                 }
             });
@@ -266,6 +281,13 @@ class ScheduleController extends Controller
                             'new_value' => $newTime,
                             'changed_by' => Auth::id() ?? 1,
                         ]);
+
+                        AuditLogger::log(
+                            'Updated SMS Schedule',
+                            'Schedules',
+                            'Success',
+                            ['type' => $type, 'old_value' => $oldTime, 'new_value' => $newTime]
+                        );
                     }
                 }
             });

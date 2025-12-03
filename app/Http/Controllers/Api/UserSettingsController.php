@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\AuditLogger;
 
 class UserSettingsController extends Controller
 {
@@ -33,6 +34,13 @@ class UserSettingsController extends Controller
                 ->where('id', $contact['id'])
                 ->update(['contact_number' => $contact['contact_number']]);
         }
+
+        AuditLogger::log(
+            'Updated Role Contacts',
+            'User Settings',
+            'Success',
+            ['changes' => $validated['contacts']]
+        );
 
         return response()->json(['message' => 'Contact numbers updated successfully.']);
     }

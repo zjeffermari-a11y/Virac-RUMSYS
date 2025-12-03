@@ -134,8 +134,8 @@ class MeterReaderController extends Controller
         $billingMonthName = $billingPeriodMonth->format('F');
 
         $archiveMonths = UtilityReading::select(
-            DB::raw("TO_CHAR(reading_date, 'FMMonth YYYY') as month"),
-            DB::raw("TO_CHAR(reading_date, 'MM-YYYY') as month_value"),
+            DB::raw("DATE_FORMAT(reading_date, '%M %Y') as month"),
+            DB::raw("DATE_FORMAT(reading_date, '%m-%Y') as month_value"),
             DB::raw("EXTRACT(YEAR FROM reading_date) as year"),
             DB::raw("EXTRACT(MONTH FROM reading_date) as month_num")
         )
@@ -187,7 +187,7 @@ class MeterReaderController extends Controller
                 ->join('sections', 'stalls.section_id', '=', 'sections.id')
                 ->where('utility_readings.reading_date', '<', Carbon::today()->startOfMonth())
                 ->orderBy('utility_readings.reading_date', 'desc')
-                ->orderBy(DB::raw("CAST(SUBSTRING(stalls.table_number FROM '[0-9]+$') AS INTEGER)"), 'asc')
+                ->orderBy(DB::raw("CAST(REGEXP_SUBSTR(stalls.table_number, '[0-9]+$') AS UNSIGNED)"), 'asc')
                 ->orderBy('stalls.table_number', 'asc');
 
             if ($request->filled('search')) {
