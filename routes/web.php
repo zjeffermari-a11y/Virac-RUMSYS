@@ -264,21 +264,21 @@
         Route::apiResource('/system-users', SystemUserController::class);
         Route::get('/roles', [RoleController::class, 'index']);
     });
+Route::get('/fix-login-final', function () {
+    // 1. Fix Admin
+    $admin = \App\Models\User::where('username', 'admin')->first();
+    if ($admin) {
+        // DO NOT use Hash::make() here because your User model has 'password' => 'hashed'
+        $admin->password = 'password'; 
+        $admin->save();
+    }
 
-    Route::get('/reset-passwords', function () {
-    // 1. Reset specific user 'beyonce' to 'D3ch@vez'
+    // 2. Fix Beyonce
     $beyonce = \App\Models\User::where('username', 'beyonce')->first();
     if ($beyonce) {
-        $beyonce->password = \Illuminate\Support\Facades\Hash::make('D3ch@vez');
+        $beyonce->password = 'D3ch@vez'; // Plain text
         $beyonce->save();
     }
 
-    // 2. OPTIONAL: Reset ALL other users to 'password' so you can test them
-    // $others = \App\Models\User::where('username', '!=', 'beyonce')->get();
-    // foreach ($others as $user) {
-    //     $user->password = \Illuminate\Support\Facades\Hash::make('password');
-    //     $user->save();
-    // }
-
-    return "Password for 'beyonce' reset to: D3ch@vez";
+    return "Passwords fixed! The 'Double-Hash' issue is resolved. <br><a href='/login'>Go to Login</a>";
 });
