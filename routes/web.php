@@ -266,6 +266,30 @@
         }
     });
 
+    Route::get('/user-debug', function () {
+        $username = request('username', 'admin');
+        $password = request('password', 'password');
+        
+        try {
+            $user = \App\Models\User::where('username', $username)->with('role')->first();
+            
+            if (!$user) {
+                return "❌ User '{$username}' not found in database.";
+            }
+            
+            $check = \Illuminate\Support\Facades\Hash::check($password, $user->password);
+            $role = $user->role ? $user->role->name : '❌ No Role Assigned';
+            
+            return "✅ User Found: {$user->username} <br>" .
+                   "ID: {$user->id} <br>" .
+                   "Role: {$role} <br>" .
+                   "Password Check ('{$password}'): " . ($check ? '✅ MATCH' : '❌ FAIL') . "<br>" .
+                   "Stored Hash: " . substr($user->password, 0, 15) . "...";
+        } catch (\Exception $e) {
+            return "Error: " . $e->getMessage();
+        }
+    });
+
     Route::get('/send-sms', [VendorController::class, 'sendSms']);
 
     Route::middleware(['auth', 'role:Admin'])->prefix('api/admin')->group(function () {
