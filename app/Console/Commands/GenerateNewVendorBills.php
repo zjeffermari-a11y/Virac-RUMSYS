@@ -161,7 +161,13 @@ class GenerateNewVendorBills extends Command
         }
         $key = "Due Date - {$type}";
         $day = $schedules->get($key)->description ?? null;
-        return is_numeric($day) ? $billingPeriod->copy()->day((int)$day)->toDateString() : null;
+        
+        // Fallback to end of month if schedule is missing or invalid
+        if (!is_numeric($day)) {
+            return $billingPeriod->copy()->endOfMonth()->toDateString();
+        }
+        
+        return $billingPeriod->copy()->day((int)$day)->toDateString();
     }
 
     private function getDisconnectionDate($type, Carbon $billingPeriod, $schedules)
