@@ -490,6 +490,7 @@ class StaffController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Stall assignment failed: ' . $e->getMessage());
+            Log::error($e->getTraceAsString()); // Log trace for more details
 
              // <-- START: Audit Trail for Failed Assignment -->
              // <-- START: Audit Trail for Failed Assignment -->
@@ -502,7 +503,8 @@ class StaffController extends Controller
             // <-- END: Audit Trail -->
             // <-- END: Audit Trail -->
             
-            return response()->json(['message' => 'An error occurred during stall assignment.'], 500);
+            // Return the actual error message for debugging
+            return response()->json(['message' => 'Stall assignment error: ' . $e->getMessage()], 500);
         }
     }
 }
