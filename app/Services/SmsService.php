@@ -21,8 +21,8 @@ class SmsService
         $this->senderName = config('services.semaphore.sender_name');
 
         if (!$this->apiKey) {
-            Log::error('Semaphore API key is not set.');
-            throw new \Exception("Semaphore API key is missing.");
+            Log::warning('Semaphore API key is not set. SMS features will be disabled.');
+            // throw new \Exception("Semaphore API key is missing."); // Disabled to prevent 500 error
         }
     }
 
@@ -30,6 +30,10 @@ class SmsService
     {
         $endpoint = $priority ? '/priority' : '/messages';
         $url = $this->baseUrl . $endpoint;
+
+        if (!$this->apiKey) {
+            return ['success' => false, 'message' => 'Semaphore API key is missing.'];
+        }
 
         try {
             $payload = [
@@ -64,6 +68,10 @@ class SmsService
 
     public function getCredits()
     {
+        if (!$this->apiKey) {
+            return ['success' => false, 'message' => 'Semaphore API key is missing.'];
+        }
+
         $url = $this->baseUrl . '/account?apikey=' . $this->apiKey;
 
         try {
