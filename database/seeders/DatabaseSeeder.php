@@ -50,14 +50,17 @@ class DatabaseSeeder extends Seeder
                             $count++;
                             if ($count % 50 == 0) $this->command->getOutput()->write('.');
                         } catch (\Exception $e) {
-                            $this->command->error("\nError importing query: " . $e->getMessage());
+                            if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                                // Ignore duplicate entries
+                            } else {
+                                $this->command->error("\nError importing query: " . $e->getMessage());
+                            }
                         }
                         $query = "";
                     }
                 }
                 fclose($handle);
                 $this->command->info("\nData imported successfully!");
-            }
         } else {
             $this->command->error('SQL file not found at: ' . $sqlPath);
         }

@@ -19,9 +19,14 @@ return new class extends Migration
         }
 
         // Fix billing
-        if (Schema::hasTable('billing') && !Schema::hasColumn('billing', 'penalty')) {
+        if (Schema::hasTable('billing')) {
             Schema::table('billing', function (Blueprint $table) {
-                $table->decimal('penalty', 10, 2)->default(0)->after('amount');
+                if (!Schema::hasColumn('billing', 'penalty')) {
+                    $table->decimal('penalty', 10, 2)->default(0)->after('amount');
+                }
+                if (!Schema::hasColumn('billing', 'amount_after_due')) {
+                    $table->decimal('amount_after_due', 10, 2)->nullable()->after('penalty');
+                }
             });
         }
 
@@ -50,9 +55,14 @@ return new class extends Migration
                 $table->dropColumn('details');
             });
         }
-        if (Schema::hasTable('billing') && Schema::hasColumn('billing', 'penalty')) {
+        if (Schema::hasTable('billing')) {
             Schema::table('billing', function (Blueprint $table) {
-                $table->dropColumn('penalty');
+                if (Schema::hasColumn('billing', 'penalty')) {
+                    $table->dropColumn('penalty');
+                }
+                if (Schema::hasColumn('billing', 'amount_after_due')) {
+                    $table->dropColumn('amount_after_due');
+                }
             });
         }
         if (Schema::hasTable('schedules') && Schema::hasColumn('schedules', 'schedule_day')) {
