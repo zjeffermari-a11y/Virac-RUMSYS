@@ -54,6 +54,20 @@ class DatabaseSeeder extends Seeder
                                 // Ignore duplicate entries
                             } else {
                                 $this->command->error("\nError importing query: " . $e->getMessage());
+                            }
+                        }
+                        $query = "";
+                    }
+                }
+                fclose($handle);
+                $this->command->info("\nData imported successfully!");
+            }
+        } else {
+            $this->command->error('SQL file not found at: ' . $sqlPath);
+        }
+        
+        $this->call([
+            AdminUserSeeder::class,
         ]);
         
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
