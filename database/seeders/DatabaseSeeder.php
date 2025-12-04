@@ -11,20 +11,6 @@ class DatabaseSeeder extends Seeder
 {
     /**
      * Seed the application's database.
-     */
-    public function run(): void
-    {
-       DB::disableQueryLog();
-        ini_set('memory_limit', '-1');
-        set_time_limit(0);
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-
-        $sqlPath = database_path('seeders/cap102_latest.sql');
-
-        if (File::exists($sqlPath)) {
-            $this->command->info('Importing cap102_latest.sql (Streaming Mode)...');
-            
-            $handle = fopen($sqlPath, "r");
             if ($handle) {
                 $query = ""; 
                 $count = 0;
