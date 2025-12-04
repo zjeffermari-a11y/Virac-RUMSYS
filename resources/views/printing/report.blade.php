@@ -4,12 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Monthly Report</title>
-    {{-- Inline the compiled JavaScript for PDF generation --}}
-    @if (!empty($chartJsContent))
-        <script>
-            {!! $chartJsContent !!}
-        </script>
-    @endif
+    {{-- Load libraries via CDN for client-side generation --}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -186,18 +183,7 @@
     </div>
 
     <script>
-        // This script will run inside the headless browser to generate the charts
         document.addEventListener('DOMContentLoaded', function() {
-            // Debug: Check if Chart.js is loaded
-            console.log('Chart.js loaded:', typeof Chart !== 'undefined');
-            console.log('Chart object:', typeof Chart);
-
-            // Ensure Chart.js is loaded
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js is not loaded');
-                return;
-            }
-
             const chartData = @json($data['chart_data']);
             const utilityColors = {
                 Rent: {
@@ -265,6 +251,29 @@
                 createBarChart(`${util.toLowerCase()}Chart`, `${util} Collections`, data, utilityColors[
                     util]);
             });
+
+            // Auto-generate PDF after charts are rendered
+            setTimeout(() => {
+                const element = document.body;
+                const opt = {
+                    margin: 0.5,
+                    filename: '{{ $filename }}',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                };
+                
+                // Show a message to the user
+                const msg = document.createElement('div');
+                msg.innerHTML = '<div style="position:fixed;top:0;left:0;width:100%;background:#4f46e5;color:white;text-align:center;padding:10px;font-size:14px;z-index:9999;">Generating PDF... Please wait.</div>';
+                document.body.prepend(msg);
+
+                html2pdf().set(opt).from(element).save().then(() => {
+                    msg.remove();
+                    // Optional: Close window after download? 
+                    // window.close(); 
+                });
+            }, 1500); // 1.5s delay to ensure charts are fully drawn
         });
     </script>
 </body>
