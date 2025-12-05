@@ -107,7 +107,11 @@
                         <div class="flex-shrink-0">
                             <div id="sidebarProfileImage"
                                 class="w-20 h-20 rounded-xl bg-gray-200 flex items-center justify-center shadow-inner overflow-hidden">
-                                <i id="sidebarProfileIcon" class="fas fa-user text-4xl text-gray-400"></i>
+                                @if(Auth::user()->profile_picture)
+                                    <img src="{{ Auth::user()->profile_picture }}" alt="Profile" class="w-full h-full object-cover">
+                                @else
+                                    <i id="sidebarProfileIcon" class="fas fa-user text-4xl text-gray-400"></i>
+                                @endif
                             </div>
                         </div>
                         <div class="flex flex-1">
