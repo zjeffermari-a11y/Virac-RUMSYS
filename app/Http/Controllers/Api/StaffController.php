@@ -35,6 +35,19 @@ class StaffController extends Controller
                 $appDate = $user->application_date 
                 ? $user->application_date->format('Y-m-d') 
                 : null;
+                
+                // Generate profile picture URL (handles base64, S3 path, or null)
+                $profilePictureUrl = null;
+                if ($user->profile_picture) {
+                    if (str_starts_with($user->profile_picture, 'data:')) {
+                        // Legacy base64 data
+                        $profilePictureUrl = $user->profile_picture;
+                    } else {
+                        // S3 path - generate URL
+                        $profilePictureUrl = \Storage::disk('s3')->url($user->profile_picture);
+                    }
+                }
+                
                 return [
                     'id' => $user->id,
                     'vendorName' => $user->name,
@@ -44,7 +57,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture_url' => $user->profile_picture, // Base64 data stored directly
+                    'profile_picture_url' => $profilePictureUrl,
                 ];
             });
     
@@ -512,13 +525,13 @@ class StaffController extends Controller
 
     /**
      * Upload a profile picture for a vendor.
-     * Stores the image as base64 in the database to avoid filesystem dependencies on cloud.
+     * Stores the image in S3/R2 object storage for production use.
      */
     public function uploadProfilePicture(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'vendor_id' => 'required|integer|exists:users,id',
-            'profile_picture' => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:2048', // 2MB max for base64
+            'profile_picture' => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:5120', // 5MB max
         ]);
 
         if ($validator->fails()) {
@@ -528,14 +541,23 @@ class StaffController extends Controller
         try {
             $vendor = User::findOrFail($request->vendor_id);
             
-            // Read the file and convert to base64
-            $file = $request->file('profile_picture');
-            $imageData = file_get_contents($file->getRealPath());
-            $mimeType = $file->getMimeType();
-            $base64Image = 'data:' . $mimeType . ';base64,' . base64_encode($imageData);
+            // Delete old profile picture from S3 if exists (and it's a path, not base64)
+            if ($vendor->profile_picture && !str_starts_with($vendor->profile_picture, 'data:')) {
+                \Storage::disk('s3')->delete($vendor->profile_picture);
+            }
 
-            // Update user record with base64 data
-            $vendor->profile_picture = $base64Image;
+            // Store new profile picture in S3
+            $file = $request->file('profile_picture');
+            $filename = 'profile_pictures/vendor_' . $vendor->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            
+            // Store the file in S3 with public visibility
+            \Storage::disk('s3')->put($filename, file_get_contents($file->getRealPath()), 'public');
+            
+            // Get the public URL
+            $url = \Storage::disk('s3')->url($filename);
+
+            // Update user record with the S3 path (we store the path, not the full URL)
+            $vendor->profile_picture = $filename;
             $vendor->save();
 
             // Log the action
@@ -548,7 +570,7 @@ class StaffController extends Controller
 
             return response()->json([
                 'message' => 'Profile picture uploaded successfully!',
-                'profile_picture_url' => $base64Image,
+                'profile_picture_url' => $url,
             ]);
 
         } catch (\Exception $e) {
