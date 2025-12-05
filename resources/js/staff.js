@@ -1547,6 +1547,22 @@ const MarketApp = {
                 return;
             }
 
+            // Load profile picture if available
+            const profilePicturePreview = document.getElementById("profilePicturePreview");
+            const profilePictureIcon = document.getElementById("profilePictureIcon");
+
+            if (profilePicturePreview && profilePictureIcon) {
+                if (vendor.profile_picture_url) {
+                    profilePicturePreview.src = vendor.profile_picture_url;
+                    profilePicturePreview.classList.remove("hidden");
+                    profilePictureIcon.classList.add("hidden");
+                } else {
+                    profilePicturePreview.src = "";
+                    profilePicturePreview.classList.add("hidden");
+                    profilePictureIcon.classList.remove("hidden");
+                }
+            }
+
             profileInfoContainer
                 .querySelectorAll("span[data-field]")
                 .forEach((span) => {

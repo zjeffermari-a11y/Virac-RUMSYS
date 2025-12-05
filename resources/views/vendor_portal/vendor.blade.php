@@ -237,8 +237,12 @@
                 {{-- Profile Image --}}
                 <div
                     class="w-72 h-72 rounded-2xl shadow-inner overflow-hidden bg-gray-200 relative flex items-center justify-center flex-shrink-0">
-                    <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">
-                    <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400"></i>
+                    @if($vendor->profile_picture)
+                        <img id="profileSectionImg" src="{{ $vendor->profile_picture }}" alt="Profile" class="w-full h-full object-cover">
+                    @else
+                        <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">
+                        <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400"></i>
+                    @endif
                 </div>
                 {{-- Profile Details --}}
                 <div class="flex-1 card-gradient p-8 rounded-2xl shadow-soft">
