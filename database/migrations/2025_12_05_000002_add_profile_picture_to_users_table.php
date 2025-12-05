@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('profile_picture')->nullable()->after('contact_number');
+            // Using longText to store base64 encoded image data
+            // This avoids filesystem dependencies on cloud environments
+            $table->longText('profile_picture')->nullable()->after('contact_number');
         });
     }
 

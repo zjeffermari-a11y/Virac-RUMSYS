@@ -44,7 +44,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture_url' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
+                    'profile_picture_url' => $user->profile_picture, // Base64 data stored directly
                 ];
             });
     
@@ -512,12 +512,13 @@ class StaffController extends Controller
 
     /**
      * Upload a profile picture for a vendor.
+     * Stores the image as base64 in the database to avoid filesystem dependencies on cloud.
      */
     public function uploadProfilePicture(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'vendor_id' => 'required|integer|exists:users,id',
-            'profile_picture' => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:5120', // 5MB max
+            'profile_picture' => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:2048', // 2MB max for base64
         ]);
 
         if ($validator->fails()) {
@@ -527,21 +528,14 @@ class StaffController extends Controller
         try {
             $vendor = User::findOrFail($request->vendor_id);
             
-            // Delete old profile picture if exists
-            if ($vendor->profile_picture) {
-                $oldPath = storage_path('app/public/' . $vendor->profile_picture);
-                if (file_exists($oldPath)) {
-                    unlink($oldPath);
-                }
-            }
-
-            // Store new profile picture
+            // Read the file and convert to base64
             $file = $request->file('profile_picture');
-            $filename = 'vendor_' . $vendor->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $path = $file->storeAs('profile_pictures', $filename, 'public');
+            $imageData = file_get_contents($file->getRealPath());
+            $mimeType = $file->getMimeType();
+            $base64Image = 'data:' . $mimeType . ';base64,' . base64_encode($imageData);
 
-            // Update user record
-            $vendor->profile_picture = $path;
+            // Update user record with base64 data
+            $vendor->profile_picture = $base64Image;
             $vendor->save();
 
             // Log the action
@@ -554,7 +548,7 @@ class StaffController extends Controller
 
             return response()->json([
                 'message' => 'Profile picture uploaded successfully!',
-                'profile_picture_url' => asset('storage/' . $path),
+                'profile_picture_url' => $base64Image,
             ]);
 
         } catch (\Exception $e) {
