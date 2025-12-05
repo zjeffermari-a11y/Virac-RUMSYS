@@ -36,6 +36,7 @@ Route::middleware(['auth:sanctum', 'role:Staff'])->prefix('staff')->group(functi
     Route::get('/unassigned-vendors', [StaffController::class, 'getUnassignedVendors']);
     Route::get('/available-stalls', [StaffController::class, 'getAvailableStalls']);
     Route::post('/assign-stall', [StaffController::class, 'assignStall']);
+    Route::post('/upload-profile-picture', [StaffController::class, 'uploadProfilePicture']);
 });
 
 

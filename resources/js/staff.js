@@ -190,6 +190,31 @@ const MarketApp = {
                 return { success: false, message: error.message };
             }
         },
+        async uploadProfilePicture(vendorId, file) {
+            try {
+                const formData = new FormData();
+                formData.append("vendor_id", vendorId);
+                formData.append("profile_picture", file);
+
+                const response = await fetch("/api/staff/upload-profile-picture", {
+                    method: "POST",
+                    headers: {
+                        "X-CSRF-TOKEN": document
+                            .querySelector('meta[name="csrf-token"]')
+                            .getAttribute("content"),
+                    },
+                    body: formData,
+                    credentials: "include",
+                });
+                const result = await response.json();
+                if (!response.ok)
+                    throw new Error(result.message || "Upload failed");
+                return { success: true, ...result };
+            } catch (error) {
+                console.error("Profile picture upload error:", error);
+                return { success: false, message: error.message };
+            }
+        },
     },
 
     elements: {},
@@ -2050,6 +2075,62 @@ const MarketApp = {
         );
         elements.editModal?.addEventListener("click", (e) => {
             if (e.target === elements.editModal) methods.closeEditModal();
+        });
+
+        // Profile Picture Upload Handler
+        const profilePictureInput = document.getElementById("profilePictureInput");
+        profilePictureInput?.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const vendor = MarketApp.getters.currentVendor(MarketApp.state);
+            if (!vendor) return;
+
+            // Show loading state on the image container
+            const preview = document.getElementById("profilePicturePreview");
+            const icon = document.getElementById("profilePictureIcon");
+            const container = preview?.parentElement;
+
+            if (container) {
+                container.innerHTML = `<div class="flex items-center justify-center w-full h-full">
+                    <i class="fas fa-spinner fa-spin text-4xl text-indigo-500"></i>
+                </div>`;
+            }
+
+            const result = await MarketApp.database.uploadProfilePicture(vendor.id, file);
+
+            if (result.success) {
+                // Update the preview with the new image
+                if (container) {
+                    container.innerHTML = `
+                        <img id="profilePicturePreview" src="${result.profile_picture_url}" alt="Vendor's Profile Picture" class="w-full h-full object-cover">
+                    `;
+                }
+                // Update the vendor data in state
+                const vendorIndex = MarketApp.state.allVendors.findIndex(v => v.id === vendor.id);
+                if (vendorIndex !== -1) {
+                    MarketApp.state.allVendors[vendorIndex].profile_picture_url = result.profile_picture_url;
+                }
+                MarketApp.methods.showToast("Profile picture updated!", "success");
+            } else {
+                // Restore the original state
+                if (container) {
+                    if (vendor.profile_picture_url) {
+                        container.innerHTML = `
+                            <img id="profilePicturePreview" src="${vendor.profile_picture_url}" alt="Vendor's Profile Picture" class="w-full h-full object-cover">
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <img id="profilePicturePreview" src="" alt="Vendor's Profile Picture" class="w-full h-full object-cover hidden">
+                            <i id="profilePictureIcon" class="fas fa-user text-6xl text-gray-400"></i>
+                        `;
+                    }
+                }
+                MarketApp.methods.showToast(`Failed: ${result.message}`, "error");
+            }
+
+            // Clear the input so the same file can be selected again
+            e.target.value = "";
         });
 
         MarketApp.elements.outstandingBalanceLink?.addEventListener(

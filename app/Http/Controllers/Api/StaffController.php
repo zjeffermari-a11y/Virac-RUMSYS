@@ -25,7 +25,7 @@ class StaffController extends Controller
     {
         // Fixed N+1 by eager loading with lean selects
         // Removed pagination to return all vendors for the Vendor Management section
-        $vendors = User::select('id', 'name', 'contact_number', 'application_date')
+        $vendors = User::select('id', 'name', 'contact_number', 'application_date', 'profile_picture')
             ->with(['role:id,name', 'stall:id,vendor_id,table_number,daily_rate,area,section_id', 'stall.section:id,name'])
             ->whereHas('role', function ($query) {
                 $query->where('name', 'Vendor');
@@ -44,6 +44,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
+                    'profile_picture_url' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
                 ];
             });
     
@@ -506,6 +507,59 @@ class StaffController extends Controller
             
             // Return the actual error message for debugging
             return response()->json(['message' => 'Stall assignment error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Upload a profile picture for a vendor.
+     */
+    public function uploadProfilePicture(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'vendor_id' => 'required|integer|exists:users,id',
+            'profile_picture' => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:5120', // 5MB max
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
+        }
+
+        try {
+            $vendor = User::findOrFail($request->vendor_id);
+            
+            // Delete old profile picture if exists
+            if ($vendor->profile_picture) {
+                $oldPath = storage_path('app/public/' . $vendor->profile_picture);
+                if (file_exists($oldPath)) {
+                    unlink($oldPath);
+                }
+            }
+
+            // Store new profile picture
+            $file = $request->file('profile_picture');
+            $filename = 'vendor_' . $vendor->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('profile_pictures', $filename, 'public');
+
+            // Update user record
+            $vendor->profile_picture = $path;
+            $vendor->save();
+
+            // Log the action
+            AuditLogger::log(
+                'Updated profile picture',
+                'Vendor Management',
+                'Success',
+                ['vendor_id' => $vendor->id, 'vendor_name' => $vendor->name]
+            );
+
+            return response()->json([
+                'message' => 'Profile picture uploaded successfully!',
+                'profile_picture_url' => asset('storage/' . $path),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Profile picture upload failed: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to upload profile picture: ' . $e->getMessage()], 500);
         }
     }
 }
