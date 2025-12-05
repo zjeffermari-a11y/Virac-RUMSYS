@@ -43,8 +43,11 @@ class StaffController extends Controller
                         // Legacy base64 data
                         $profilePictureUrl = $user->profile_picture;
                     } else {
-                        // B2 path - generate URL
-                        $profilePictureUrl = \Storage::disk('b2')->url($user->profile_picture);
+                        // B2 path - generate temporary signed URL (valid for 1 hour)
+                        $profilePictureUrl = \Storage::disk('b2')->temporaryUrl(
+                            $user->profile_picture,
+                            now()->addHour()
+                        );
                     }
                 }
                 
@@ -553,11 +556,14 @@ class StaffController extends Controller
             $file = $request->file('profile_picture');
             $filename = 'profile_pictures/vendor_' . $vendor->id . '_' . time() . '.' . $file->getClientOriginalExtension();
             
-            // Store the file in B2 with public visibility
-            \Storage::disk('b2')->put($filename, file_get_contents($file->getRealPath()), 'public');
+            // Store the file in B2 (visibility doesn't matter for private buckets, but good practice)
+            \Storage::disk('b2')->put($filename, file_get_contents($file->getRealPath()));
             
-            // Get the public URL
-            $url = \Storage::disk('b2')->url($filename);
+            // Get a temporary signed URL (valid for 1 hour)
+            $url = \Storage::disk('b2')->temporaryUrl(
+                $filename,
+                now()->addHour()
+            );
 
             // Update user record with the B2 path
             $vendor->profile_picture = $filename;

@@ -242,8 +242,11 @@
                             // Legacy base64 data
                             $profilePictureUrl = $vendor->profile_picture;
                         } else {
-                            // B2 path - generate URL
-                            $profilePictureUrl = Storage::disk('b2')->url($vendor->profile_picture);
+                            // B2 path - generate temporary signed URL
+                            $profilePictureUrl = Storage::disk('b2')->temporaryUrl(
+                                $vendor->profile_picture,
+                                now()->addHour()
+                            );
                         }
                     }
                 @endphp

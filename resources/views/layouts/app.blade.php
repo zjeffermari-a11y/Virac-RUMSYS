@@ -113,7 +113,10 @@
                                         if (str_starts_with(Auth::user()->profile_picture, 'data:')) {
                                             $sidebarProfileUrl = Auth::user()->profile_picture;
                                         } else {
-                                            $sidebarProfileUrl = Storage::disk('b2')->url(Auth::user()->profile_picture);
+                                            $sidebarProfileUrl = Storage::disk('b2')->temporaryUrl(
+                                                Auth::user()->profile_picture,
+                                                now()->addHour()
+                                            );
                                         }
                                     }
                                 @endphp
