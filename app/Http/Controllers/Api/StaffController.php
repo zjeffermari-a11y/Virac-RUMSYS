@@ -24,13 +24,14 @@ class StaffController extends Controller
     public function getVendors()
     {
         // Fixed N+1 by eager loading with lean selects
+        // Removed pagination to return all vendors for the Vendor Management section
         $vendors = User::select('id', 'name', 'contact_number', 'application_date')
             ->with(['role:id,name', 'stall:id,vendor_id,table_number,daily_rate,area,section_id', 'stall.section:id,name'])
             ->whereHas('role', function ($query) {
                 $query->where('name', 'Vendor');
             })
-            ->paginate(15) // Replaced get() with paginate()
-            ->through(function ($user) {
+            ->get()
+            ->map(function ($user) {
                 $appDate = $user->application_date 
                 ? $user->application_date->format('Y-m-d') 
                 : null;
