@@ -31,6 +31,28 @@
                         <p class="text-gray-600">Please sign in to access your dashboard</p>
                     </div>
 
+                    @if ($errors->any())
+                        <div class="mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-exclamation-circle text-red-500"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">
+                                        Login Failed
+                                    </h3>
+                                    <div class="mt-2 text-sm text-red-700">
+                                        <ul class="list-disc pl-5 space-y-1">
+                                            @foreach ($errors->all() as $error)
+                                                <li>{{ $error }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
                     <form method="POST" action="{{ route('login') }}" class="space-y-6" id="loginForm">
                         @csrf <div>
                             <label for="username" class="block text-sm font-medium text-gray-700 mb-1">
