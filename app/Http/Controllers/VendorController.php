@@ -25,7 +25,8 @@ class VendorController extends Controller
         }
 
         if (!$vendor || !$vendor->stall) {
-            abort(404, 'Vendor or stall not found.');
+            // Instead of aborting 404, show a friendly "No Stall Assigned" page
+            return view('vendor_portal.no-stall');
         }
 
         $vendor->load('stall.section');
