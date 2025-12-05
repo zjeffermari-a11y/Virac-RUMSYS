@@ -235,22 +235,10 @@
             </div>
             <div class="flex flex-col lg:flex-row gap-8 items-center">
                 {{-- Profile Image --}}
-                @php
-                    $profilePictureUrl = null;
-                    if ($vendor->profile_picture) {
-                        if (str_starts_with($vendor->profile_picture, 'data:')) {
-                            // Legacy base64 data
-                            $profilePictureUrl = $vendor->profile_picture;
-                        } else {
-                            // S3 path - generate URL
-                            $profilePictureUrl = Storage::disk('s3')->url($vendor->profile_picture);
-                        }
-                    }
-                @endphp
                 <div
                     class="w-72 h-72 rounded-2xl shadow-inner overflow-hidden bg-gray-200 relative flex items-center justify-center flex-shrink-0">
-                    @if($profilePictureUrl)
-                        <img id="profileSectionImg" src="{{ $profilePictureUrl }}" alt="Profile" class="w-full h-full object-cover">
+                    @if($vendor->profile_picture)
+                        <img id="profileSectionImg" src="{{ $vendor->profile_picture }}" alt="Profile" class="w-full h-full object-cover">
                     @else
                         <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">
                         <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400"></i>
