@@ -115,7 +115,7 @@
                                         } else {
                                             $sidebarProfileUrl = Storage::disk('b2')->temporaryUrl(
                                                 Auth::user()->profile_picture,
-                                                now()->addHour()
+                                                now()->addDays(7)
                                             );
                                         }
                                     }

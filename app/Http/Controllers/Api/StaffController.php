@@ -43,10 +43,10 @@ class StaffController extends Controller
                         // Legacy base64 data
                         $profilePictureUrl = $user->profile_picture;
                     } else {
-                        // B2 path - generate temporary signed URL (valid for 1 hour)
+                        // B2 path - generate temporary signed URL (valid for 7 days)
                         $profilePictureUrl = \Storage::disk('b2')->temporaryUrl(
                             $user->profile_picture,
-                            now()->addHour()
+                            now()->addDays(7)
                         );
                     }
                 }
@@ -559,10 +559,10 @@ class StaffController extends Controller
             // Store the file in B2 (visibility doesn't matter for private buckets, but good practice)
             \Storage::disk('b2')->put($filename, file_get_contents($file->getRealPath()));
             
-            // Get a temporary signed URL (valid for 1 hour)
+            // Get a temporary signed URL (valid for 7 days)
             $url = \Storage::disk('b2')->temporaryUrl(
                 $filename,
-                now()->addHour()
+                now()->addDays(7)
             );
 
             // Update user record with the B2 path

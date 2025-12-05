@@ -245,7 +245,7 @@
                             // B2 path - generate temporary signed URL
                             $profilePictureUrl = Storage::disk('b2')->temporaryUrl(
                                 $vendor->profile_picture,
-                                now()->addHour()
+                                now()->addDays(7)
                             );
                         }
                     }
