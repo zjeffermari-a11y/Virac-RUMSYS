@@ -107,8 +107,18 @@
                         <div class="flex-shrink-0">
                             <div id="sidebarProfileImage"
                                 class="w-20 h-20 rounded-xl bg-gray-200 flex items-center justify-center shadow-inner overflow-hidden">
-                                @if(Auth::user()->profile_picture)
-                                    <img src="{{ Auth::user()->profile_picture }}" alt="Profile" class="w-full h-full object-cover">
+                                @php
+                                    $sidebarProfileUrl = null;
+                                    if (Auth::user()->role && Auth::user()->role->name == 'Vendor' && Auth::user()->profile_picture) {
+                                        if (str_starts_with(Auth::user()->profile_picture, 'data:')) {
+                                            $sidebarProfileUrl = Auth::user()->profile_picture;
+                                        } else {
+                                            $sidebarProfileUrl = Storage::disk('b2')->url(Auth::user()->profile_picture);
+                                        }
+                                    }
+                                @endphp
+                                @if($sidebarProfileUrl)
+                                    <img src="{{ $sidebarProfileUrl }}" alt="Profile" class="w-full h-full object-cover">
                                 @else
                                     <i id="sidebarProfileIcon" class="fas fa-user text-4xl text-gray-400"></i>
                                 @endif
