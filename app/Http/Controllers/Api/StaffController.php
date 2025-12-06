@@ -762,13 +762,13 @@ class StaffController extends Controller
         try {
             // Delete old profile picture if exists
             if ($vendor->profile_picture) {
-                Storage::delete($vendor->profile_picture);
+                Storage::disk('b2')->delete($vendor->profile_picture);
             }
 
-            // Store the image
+            // Store the image to Backblaze B2
             $image = $request->file('profile_picture');
             $filename = 'profile_' . $vendor->id . '_' . time() . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('profile-pictures', $filename); // Uses default disk
+            $path = Storage::disk('b2')->putFileAs('profile-pictures', $image, $filename);
 
             // Update vendor record
             $vendor->profile_picture = $path;

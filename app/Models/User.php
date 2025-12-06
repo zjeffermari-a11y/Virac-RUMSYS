@@ -210,7 +210,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the profile picture URL
+     * Get the profile picture URL from Backblaze B2
      */
     public function getProfilePictureUrlAttribute(): ?string
     {
@@ -219,12 +219,12 @@ class User extends Authenticatable
         }
 
         try {
-            return \Illuminate\Support\Facades\Storage::temporaryUrl(
+            return \Illuminate\Support\Facades\Storage::disk('b2')->temporaryUrl(
                 $this->profile_picture,
                 now()->addDays(7)
             );
         } catch (\Exception $e) {
-            return \Illuminate\Support\Facades\Storage::url($this->profile_picture);
+            return \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
         }
     }
 }
