@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('profile_picture')->nullable()->after('contact_number');
-        });
+        if (!Schema::hasColumn('users', 'profile_picture')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('profile_picture')->nullable()->after('contact_number');
+            });
+        }
     }
 
     /**
