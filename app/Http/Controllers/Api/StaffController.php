@@ -783,26 +783,48 @@ class StaffController extends Controller
                 $contents = file_get_contents($image->getRealPath());
                 Log::info('File contents read, size: ' . strlen($contents) . ' bytes');
                 
-                $result = Storage::disk('b2')->put($fullPath, $contents, [
-                    'visibility' => 'private',
+                // Log B2 configuration (without secrets)
+                $diskConfig = config('filesystems.disks.b2');
+                Log::info('B2 Disk config', [
+                    'bucket' => $diskConfig['bucket'] ?? 'NOT SET',
+                    'region' => $diskConfig['region'] ?? 'NOT SET',
+                    'endpoint' => $diskConfig['endpoint'] ?? 'NOT SET',
+                    'key_set' => !empty($diskConfig['key']),
+                    'secret_set' => !empty($diskConfig['secret']),
+                ]);
+
+                // Use the underlying S3 client directly for better error handling
+                $disk = Storage::disk('b2');
+                $adapter = $disk->getAdapter();
+                $client = $adapter->getClient();
+                
+                $response = $client->putObject([
+                    'Bucket' => $diskConfig['bucket'],
+                    'Key' => $fullPath,
+                    'Body' => $contents,
+                    'ContentType' => $image->getMimeType(),
                 ]);
                 
-                Log::info('B2 put() result: ' . ($result ? 'TRUE' : 'FALSE'));
-                
-                if (!$result) {
-                    // Try to get last error
-                    $lastError = error_get_last();
-                    Log::error('B2 upload failed - last PHP error: ' . json_encode($lastError));
-                    throw new \Exception('B2 upload returned false. Check B2 credentials and bucket configuration.');
-                }
+                Log::info('S3 PutObject response', [
+                    'ETag' => $response->get('ETag'),
+                    'VersionId' => $response->get('VersionId'),
+                ]);
                 
                 $path = $fullPath;
             } catch (\Aws\S3\Exception\S3Exception $s3e) {
                 Log::error('AWS S3 Exception: ' . $s3e->getMessage(), [
                     'awsErrorCode' => $s3e->getAwsErrorCode(),
                     'awsErrorType' => $s3e->getAwsErrorType(),
+                    'awsRequestId' => $s3e->getAwsRequestId(),
+                    'statusCode' => $s3e->getStatusCode(),
                 ]);
                 throw new \Exception('S3 Error: ' . $s3e->getAwsErrorCode() . ' - ' . $s3e->getMessage());
+            } catch (\Exception $uploadException) {
+                Log::error('Upload exception: ' . $uploadException->getMessage(), [
+                    'class' => get_class($uploadException),
+                    'trace' => $uploadException->getTraceAsString(),
+                ]);
+                throw $uploadException;
             }
 
             Log::info('B2 upload result - path: ' . ($path ?: 'FALSE/EMPTY'));
