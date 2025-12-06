@@ -26,6 +26,16 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
-
     }
+
+    $this->app->afterResolving(FilesystemAdapter::class, function (FilesystemAdapter $adapter) {
+        if ($adapter->getDriver()->getAdapter() instanceof AwsS3V3Adapter) {
+            $adapter->macro('getS3Client', function () {
+                $reflection = new \ReflectionClass($this->getDriver()->getAdapter());
+                $property = $reflection->getProperty('client');
+                $property->setAccessible(true);
+                return $property->getValue($this->getDriver()->getAdapter());
+            });
+        }
+    });
 }
