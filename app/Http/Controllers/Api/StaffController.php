@@ -793,32 +793,14 @@ class StaffController extends Controller
                     'secret_set' => !empty($diskConfig['secret']),
                 ]);
 
-                // Use the underlying S3 client directly for better error handling
-                $disk = Storage::disk('b2');
-                $adapter = $disk->getAdapter();
-                $client = $adapter->getClient();
+                // Use standard Laravel Storage method
+                $result = Storage::disk('b2')->put($fullPath, $contents);
                 
-                $response = $client->putObject([
-                    'Bucket' => $diskConfig['bucket'],
-                    'Key' => $fullPath,
-                    'Body' => $contents,
-                    'ContentType' => $image->getMimeType(),
-                ]);
-                
-                Log::info('S3 PutObject response', [
-                    'ETag' => $response->get('ETag'),
-                    'VersionId' => $response->get('VersionId'),
-                ]);
-                
+                if (!$result) {
+                    throw new \Exception('Failed to upload file to B2 via Storage::put');
+                }
+
                 $path = $fullPath;
-            } catch (\Aws\S3\Exception\S3Exception $s3e) {
-                Log::error('AWS S3 Exception: ' . $s3e->getMessage(), [
-                    'awsErrorCode' => $s3e->getAwsErrorCode(),
-                    'awsErrorType' => $s3e->getAwsErrorType(),
-                    'awsRequestId' => $s3e->getAwsRequestId(),
-                    'statusCode' => $s3e->getStatusCode(),
-                ]);
-                throw new \Exception('S3 Error: ' . $s3e->getAwsErrorCode() . ' - ' . $s3e->getMessage());
             } catch (\Exception $uploadException) {
                 Log::error('Upload exception: ' . $uploadException->getMessage(), [
                     'class' => get_class($uploadException),
@@ -826,6 +808,7 @@ class StaffController extends Controller
                 ]);
                 throw $uploadException;
             }
+
 
             Log::info('B2 upload result - path: ' . ($path ?: 'FALSE/EMPTY'));
 
