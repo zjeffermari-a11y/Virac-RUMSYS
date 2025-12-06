@@ -815,8 +815,7 @@ class StaffController extends Controller
         $path = Storage::disk('b2')->putFileAs(
             'vendors/profile-pictures',
             $file,
-            $filename,
-            'public'
+            $filename
         );
         
         if (!$path) {
