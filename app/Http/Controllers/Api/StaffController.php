@@ -908,7 +908,7 @@ class StaffController extends Controller
         return response()->json([
             'success' => false,
             'message' => 'Failed to upload vendor profile picture',
-            'error' => config('app.debug') ? $e->getMessage() : 'An error occurred during upload'
+            'error' => $e->getMessage() // TEMPORARY DEBUGGING
         ], 500);
     }
 }
