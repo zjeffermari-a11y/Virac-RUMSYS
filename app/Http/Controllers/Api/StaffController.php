@@ -769,9 +769,42 @@ class StaffController extends Controller
             // Store the image to Backblaze B2
             $image = $request->file('profile_picture');
             $filename = 'profile_' . $vendor->id . '_' . time() . '.' . $image->getClientOriginalExtension();
+            $fullPath = 'profile-pictures/' . $filename;
             
-            Log::info('Uploading to B2: profile-pictures/' . $filename);
-            $path = Storage::disk('b2')->putFileAs('profile-pictures', $image, $filename);
+            Log::info('B2 Upload attempt', [
+                'filename' => $filename,
+                'fullPath' => $fullPath,
+                'fileSize' => $image->getSize(),
+                'mimeType' => $image->getMimeType(),
+            ]);
+
+            // Try to upload with more explicit error handling
+            try {
+                $contents = file_get_contents($image->getRealPath());
+                Log::info('File contents read, size: ' . strlen($contents) . ' bytes');
+                
+                $result = Storage::disk('b2')->put($fullPath, $contents, [
+                    'visibility' => 'private',
+                ]);
+                
+                Log::info('B2 put() result: ' . ($result ? 'TRUE' : 'FALSE'));
+                
+                if (!$result) {
+                    // Try to get last error
+                    $lastError = error_get_last();
+                    Log::error('B2 upload failed - last PHP error: ' . json_encode($lastError));
+                    throw new \Exception('B2 upload returned false. Check B2 credentials and bucket configuration.');
+                }
+                
+                $path = $fullPath;
+            } catch (\Aws\S3\Exception\S3Exception $s3e) {
+                Log::error('AWS S3 Exception: ' . $s3e->getMessage(), [
+                    'awsErrorCode' => $s3e->getAwsErrorCode(),
+                    'awsErrorType' => $s3e->getAwsErrorType(),
+                ]);
+                throw new \Exception('S3 Error: ' . $s3e->getAwsErrorCode() . ' - ' . $s3e->getMessage());
+            }
+
             Log::info('B2 upload result - path: ' . ($path ?: 'FALSE/EMPTY'));
 
             if (!$path) {
