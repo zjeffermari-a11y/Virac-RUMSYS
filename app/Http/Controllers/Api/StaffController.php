@@ -845,7 +845,7 @@ class StaffController extends Controller
 
             // Generate the URL
            $url = Storage::disk('b2')->temporaryUrl($path, now()->addDays(7));
-Log::info('Generated temporary URL: ' . $url);
+            Log::info('Generated temporary URL: ' . $url);
 
             AuditLogger::log(
                 'Uploaded Vendor Profile Picture',
