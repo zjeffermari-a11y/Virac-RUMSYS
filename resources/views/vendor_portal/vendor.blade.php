@@ -294,7 +294,7 @@
                     <div
                         class="w-72 h-72 rounded-2xl shadow-inner overflow-hidden bg-gray-200 relative flex items-center justify-center flex-shrink-0">
                         @if($vendor->profile_picture)
-                            <img id="profileSectionImg" src="{{ Storage::url($vendor->profile_picture) }}" alt="Profile" class="w-full h-full object-cover">
+                            <img id="profileSectionImg" src="{{ $vendor->profile_picture_url }}" alt="Profile" class="w-full h-full object-cover">
                             <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400 hidden"></i>
                         @else
                             <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">

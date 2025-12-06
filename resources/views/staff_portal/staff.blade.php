@@ -773,7 +773,7 @@
                     <div class="relative inline-block">
                         <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
                             @if(auth()->user()->profile_picture)
-                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
+                                <img id="profilePictureImg" src="{{ auth()->user()->profile_picture_url }}" 
                                      alt="Profile Picture" class="w-full h-full object-cover">
                             @else
                                 <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">

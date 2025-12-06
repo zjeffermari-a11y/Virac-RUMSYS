@@ -44,32 +44,37 @@ class ReportController extends Controller
             'chartJsContent' => $chartJsContent
         ])->render();
 
-        // Use Browsershot to generate the PDF from the rendered HTML
-        // Added delay to ensure Chart.js is loaded before rendering
-        $pdf = Browsershot::html($html)
-            ->format('Letter')
-            ->showBrowserHeaderAndFooter(false)
-            ->waitUntilNetworkIdle()
-            ->delay(3000) // Increase to 3 seconds to ensure charts render
-            ->setOption('args', ['--no-sandbox'])
-            ->pdf();
+        try {
+            // Use Browsershot to generate the PDF from the rendered HTML
+            // Added delay to ensure Chart.js is loaded before rendering
+            $pdf = Browsershot::html($html)
+                ->format('Letter')
+                ->showBrowserHeaderAndFooter(false)
+                ->waitUntilNetworkIdle()
+                ->delay(3000) // Increase to 3 seconds to ensure charts render
+                ->setOption('args', ['--no-sandbox'])
+                ->pdf();
 
-        // Create a filename based on the report period
-        $filename = 'Monthly_Report_' . str_replace(' ', '_', $data['report_period']) . '.pdf';
+            // Create a filename based on the report period
+            $filename = 'Monthly_Report_' . str_replace(' ', '_', $data['report_period']) . '.pdf';
 
-        DB::table('audit_trails')->insert([
-            'user_id' => Auth::id(),
-            'role_id' => Auth::user()->role_id,
-            'action' => 'Downloaded Monthly Report for ' . $data['report_period'],
-            'module' => 'Reports',
-            'result' => 'Success',
-            'created_at' => now(),
-        ]);
+            DB::table('audit_trails')->insert([
+                'user_id' => Auth::id(),
+                'role_id' => Auth::user()->role_id,
+                'action' => 'Downloaded Monthly Report for ' . $data['report_period'],
+                'module' => 'Reports',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
 
-        // Return the generated PDF as a download
-        return response($pdf)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            // Return the generated PDF as a download
+            return response($pdf)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Report Generation Failed: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to generate report: ' . $e->getMessage()], 400);
+        }
     }
 
     /**
