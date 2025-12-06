@@ -48,7 +48,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture' => $user->profile_picture ? Storage::url($user->profile_picture) : null,
+                    'profile_picture' => $user->profile_picture_url,
                 ];
             });
     
@@ -762,13 +762,13 @@ class StaffController extends Controller
         try {
             // Delete old profile picture if exists
             if ($vendor->profile_picture) {
-                Storage::disk('public')->delete($vendor->profile_picture);
+                Storage::delete($vendor->profile_picture);
             }
 
             // Store the image
             $image = $request->file('profile_picture');
             $filename = 'profile_' . $vendor->id . '_' . time() . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('profile-pictures', $filename, 'public');
+            $path = $image->storeAs('profile-pictures', $filename); // Uses default disk
 
             // Update vendor record
             $vendor->profile_picture = $path;
@@ -781,16 +781,9 @@ class StaffController extends Controller
                 ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
             );
 
-            // Generate absolute URL for the profile picture
-            $url = Storage::disk('public')->url($path);
-            // Ensure it's an absolute URL
-            if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                $url = asset($url);
-            }
-            
             return response()->json([
                 'message' => 'Vendor profile picture uploaded successfully.',
-                'profile_picture_url' => $url
+                'profile_picture_url' => $vendor->profile_picture_url
             ]);
         } catch (\Exception $e) {
             Log::error('Vendor profile picture upload failed: ' . $e->getMessage(), [

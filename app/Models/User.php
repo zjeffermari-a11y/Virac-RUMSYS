@@ -27,6 +27,8 @@ class User extends Authenticatable
         'password'          => 'hashed',
     ];
 
+    protected $appends = ['profile_picture_url'];
+
     /* -----------------------------------------------------------------
      | Relationships
      |------------------------------------------------------------------*/
