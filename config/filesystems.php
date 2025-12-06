@@ -67,7 +67,7 @@ return [
             'region' => env('B2_REGION', 'us-east-005'),
             'bucket' => env('B2_BUCKET'),
             'endpoint' => env('B2_ENDPOINT'),
-            'url' => env('B2_URL'), // For public URL generation
+
             'use_path_style_endpoint' => true,
             'visibility' => 'private',
             'throw' => true,
