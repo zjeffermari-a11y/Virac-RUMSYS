@@ -1,0 +1,16 @@
+[
+    {
+        "corsRuleName": "allowVirac",
+        "allowedOrigins": [
+            "https://virac-rumsys.laravel.cloud"
+        ],
+        "allowedHeaders": [
+            "*"
+        ],
+        "allowedOperations": [
+            "s3_get",
+            "s3_head"
+        ],
+        "maxAgeSeconds": 3600
+    }
+]
