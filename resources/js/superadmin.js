@@ -2599,6 +2599,22 @@ class SuperAdminDashboard {
         }
     }
 
+    async fetchUtilityRates() {
+        try {
+            const response = await fetch("/api/utility-rates");
+            if (!response.ok) throw new Error("Failed to fetch utility rates.");
+            this.utilityRates = await response.json();
+            this.renderUtilityRatesTable();
+        } catch (error) {
+            console.error("Error fetching utility rates:", error);
+            if (this.elements.utilityRatesTableBody) {
+                this.elements.utilityRatesTableBody.innerHTML = `
+                    <tr><td colspan="2" class="text-center py-4 text-red-500">Failed to load rates.</td></tr>
+                `;
+            }
+        }
+    }
+
     renderUtilityRatesTable(isEditing = false) {
         if (!this.elements.utilityRatesTableBody) return;
 
