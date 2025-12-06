@@ -762,28 +762,47 @@ class StaffController extends Controller
         try {
             // Delete old profile picture if exists
             if ($vendor->profile_picture) {
+                Log::info('Deleting old profile picture: ' . $vendor->profile_picture);
                 Storage::disk('b2')->delete($vendor->profile_picture);
             }
 
             // Store the image to Backblaze B2
             $image = $request->file('profile_picture');
             $filename = 'profile_' . $vendor->id . '_' . time() . '.' . $image->getClientOriginalExtension();
+            
+            Log::info('Uploading to B2: profile-pictures/' . $filename);
             $path = Storage::disk('b2')->putFileAs('profile-pictures', $image, $filename);
+            Log::info('B2 upload result - path: ' . ($path ?: 'FALSE/EMPTY'));
+
+            if (!$path) {
+                throw new \Exception('B2 upload returned empty path');
+            }
+
+            // Verify file exists on B2
+            $exists = Storage::disk('b2')->exists($path);
+            Log::info('B2 file exists check: ' . ($exists ? 'YES' : 'NO'));
 
             // Update vendor record
             $vendor->profile_picture = $path;
             $vendor->save();
+            
+            Log::info('Vendor saved with profile_picture: ' . $vendor->profile_picture);
+
+            // Generate the URL
+            $url = $vendor->profile_picture_url;
+            Log::info('Generated profile_picture_url: ' . ($url ?: 'NULL'));
 
             AuditLogger::log(
                 'Uploaded Vendor Profile Picture',
                 'Vendor Management',
                 'Success',
-                ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
+                ['vendor_id' => $vendor->id, 'staff_id' => Auth::id(), 'path' => $path]
             );
 
             return response()->json([
                 'message' => 'Vendor profile picture uploaded successfully.',
-                'profile_picture_url' => $vendor->profile_picture_url
+                'profile_picture_url' => $url,
+                'debug_path' => $path
             ]);
         } catch (\Exception $e) {
             Log::error('Vendor profile picture upload failed: ' . $e->getMessage(), [
