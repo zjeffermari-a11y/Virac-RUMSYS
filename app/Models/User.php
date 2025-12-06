@@ -215,6 +215,14 @@ class User extends Authenticatable
         if (!$this->profile_picture) {
             return null;
         }
-        return \Illuminate\Support\Facades\Storage::url($this->profile_picture);
+
+        try {
+            return \Illuminate\Support\Facades\Storage::temporaryUrl(
+                $this->profile_picture,
+                now()->addDays(7)
+            );
+        } catch (\Exception $e) {
+            return \Illuminate\Support\Facades\Storage::url($this->profile_picture);
+        }
     }
 }

@@ -18,10 +18,10 @@ class SuperAdminDashboard {
         // Ensure utilityRates is always an array
         // The API returns an array directly, but check both .data and direct access
         const utilityRatesData = window.INITIAL_STATE?.utilityRates?.data || window.INITIAL_STATE?.utilityRates;
-        this.utilityRates = Array.isArray(utilityRatesData) 
-            ? utilityRatesData 
+        this.utilityRates = Array.isArray(utilityRatesData)
+            ? utilityRatesData
             : [];
-        
+
         // Debug: Log initial utility rates
         console.log('Initial Utility Rates:', this.utilityRates);
         this.utilityRateHistory =
@@ -76,7 +76,7 @@ class SuperAdminDashboard {
         const utilityRateHistoryData = window.INITIAL_STATE?.utilityRateHistory?.data || window.INITIAL_STATE?.utilityRateHistory || [];
         this.utilityRateHistoryPage = Array.isArray(utilityRateHistoryData) && utilityRateHistoryData.length > 0 ? 2 : 1; // Start at page 2 if we have initial data, otherwise page 1
         this.utilityRateHistoryHasMore =
-            !!window.INITIAL_STATE?.utilityRateHistory?.next_page_url || 
+            !!window.INITIAL_STATE?.utilityRateHistory?.next_page_url ||
             !!window.INITIAL_STATE?.utilityRateHistory?.has_more;
         this.isFetchingUtilityHistory = false;
         this.scheduleHistoryPage = 2;
@@ -542,19 +542,19 @@ class SuperAdminDashboard {
         );
 
         this.filterAndRenderRates();
-        
+
         // Always render all data on page load (even if empty)
         // They will show "No data found" or "Loading..." if empty, or display data if available
-        
+
         // Utility Rates
         this.renderUtilityRatesTable();
         this.renderUtilityRateHistoryTable();
-        
+
         // If utility rates are empty, fetch them
         if (!this.utilityRates || this.utilityRates.length === 0) {
             this.fetchUtilityRates();
         }
-        
+
         // If utility rate history is empty, fetch it
         if (!this.utilityRateHistory || this.utilityRateHistory.length === 0) {
             this.utilityRateHistory = [];
@@ -562,32 +562,32 @@ class SuperAdminDashboard {
             this.utilityRateHistoryHasMore = true;
             this.fetchUtilityRateHistory();
         }
-        
+
         // Meter Reading Schedule
         this.renderMeterReadingSchedule();
         this.renderScheduleHistoryTable();
-        
+
         // Billing Date Schedules
         this.renderBillingDateSchedules();
         this.renderBillingDateHistory();
-        
+
         // If billing date schedules are empty, fetch them
         if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
             this.fetchBillingDateSchedules();
         }
-        
+
         // Billing Settings (Discounts, Surcharges, Penalty)
         this.renderBillingSettingsTables();
         this.renderBillingSettingsHistory();
-        
+
         // If billing settings are empty, fetch them
         if (!this.billingSettings || Object.keys(this.billingSettings).length === 0) {
             this.fetchBillingSettings();
         }
-        
+
         // Rental Rate History
         this.renderRentalRateHistory();
-        
+
         if (!this.rentalRateHistory || this.rentalRateHistory.length === 0) {
             this.rentalRateHistory = [];
             this.rentalRateHistoryPage = 1;
@@ -606,7 +606,7 @@ class SuperAdminDashboard {
         }
         // Poll for notifications every 2 seconds for faster updates
         setInterval(this.fetchUnreadNotifications.bind(this), 2000);
-        
+
         // Also fetch immediately when page becomes visible (user switches tabs/windows)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
@@ -1013,10 +1013,10 @@ class SuperAdminDashboard {
 
             // The API returns an array directly
             const responseData = await response.json();
-            
+
             // Ensure utilityRates is always an array
-            this.utilityRates = Array.isArray(responseData) 
-                ? responseData 
+            this.utilityRates = Array.isArray(responseData)
+                ? responseData
                 : [];
 
             console.log('Utility Rates loaded:', this.utilityRates);
@@ -1047,7 +1047,7 @@ class SuperAdminDashboard {
             // Handle both paginated and non-paginated responses
             const historyData = data.data || data;
             const hasMore = data.has_more !== undefined ? data.has_more : (data.next_page_url !== null);
-            
+
             if (historyData && Array.isArray(historyData) && historyData.length > 0) {
                 this.utilityRateHistory.push(...historyData);
                 this.utilityRateHistoryHasMore = hasMore;
@@ -1056,7 +1056,7 @@ class SuperAdminDashboard {
                 // No more data
                 this.utilityRateHistoryHasMore = false;
             }
-            
+
             this.renderUtilityRateHistoryTable();
         } catch (error) {
             console.error("Failed to fetch utility rate history:", error);
@@ -1224,18 +1224,18 @@ class SuperAdminDashboard {
             placeholderSearch.addEventListener("input", (e) => {
                 const searchTerm = e.target.value.toLowerCase();
                 const categories = document.querySelectorAll(".placeholder-category");
-                
+
                 categories.forEach((category) => {
                     const buttons = category.querySelectorAll(".placeholder-btn");
                     const hasMatch = Array.from(buttons).some((btn) =>
                         btn.textContent.toLowerCase().includes(searchTerm) ||
                         btn.getAttribute("title")?.toLowerCase().includes(searchTerm)
                     );
-                    
+
                     if (hasMatch || !searchTerm) {
                         category.style.display = "block";
                         buttons.forEach((btn) => {
-                            const matches = 
+                            const matches =
                                 btn.textContent.toLowerCase().includes(searchTerm) ||
                                 btn.getAttribute("title")?.toLowerCase().includes(searchTerm);
                             btn.style.display = matches || !searchTerm ? "inline-block" : "none";
@@ -1453,7 +1453,7 @@ class SuperAdminDashboard {
                 );
                 const currentTime = schedule ? schedule.description : "08:00";
                 const currentDay = schedule ? (schedule.schedule_day ?? config.defaultDay) : config.defaultDay;
-                const currentDays = schedule && schedule.sms_days 
+                const currentDays = schedule && schedule.sms_days
                     ? (Array.isArray(schedule.sms_days) ? schedule.sms_days : [])
                     : (config.defaultDays || []);
 
@@ -1463,9 +1463,9 @@ class SuperAdminDashboard {
                         // Billing Statements: Single day of month selector
                         daysDisplay = `
                             <select class="sms-schedule-day-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${config.type}">
-                                ${Array.from({ length: 31 }, (_, i) => i + 1).map(day => 
-                                    `<option value="${day}" ${currentDay === day ? "selected" : ""}>${day}${day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"}</option>`
-                                ).join("")}
+                                ${Array.from({ length: 31 }, (_, i) => i + 1).map(day =>
+                            `<option value="${day}" ${currentDay === day ? "selected" : ""}>${day}${day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"}</option>`
+                        ).join("")}
                             </select>
                             <p class="text-xs text-gray-500 mt-1">${config.helpText}</p>
                         `;
@@ -1473,7 +1473,7 @@ class SuperAdminDashboard {
                         // Payment Reminders and Overdue Alerts: Multiple days with add/remove
                         const daysList = currentDays.length > 0 ? currentDays : [];
                         const sortedDays = [...daysList].sort((a, b) => a - b);
-                        
+
                         daysDisplay = `
                             <div class="sms-days-container" data-type="${config.type}">
                                 <div class="flex flex-wrap gap-2 mb-2">
@@ -1550,7 +1550,7 @@ class SuperAdminDashboard {
             btn.addEventListener("click", (e) => {
                 const type = e.target.closest(".remove-day-btn").dataset.type;
                 const dayToRemove = parseInt(e.target.closest(".remove-day-btn").dataset.day);
-                
+
                 const schedule = this.smsSchedules.find(s => s.schedule_type === type);
                 if (schedule && schedule.sms_days) {
                     schedule.sms_days = schedule.sms_days.filter(d => d !== dayToRemove);
@@ -2601,13 +2601,13 @@ class SuperAdminDashboard {
 
     renderUtilityRatesTable(isEditing = false) {
         if (!this.elements.utilityRatesTableBody) return;
-        
+
         // Ensure utilityRates is an array
         if (!Array.isArray(this.utilityRates)) {
             console.warn('utilityRates is not an array:', this.utilityRates);
             this.utilityRates = [];
         }
-        
+
         // Debug: Log the utility rates data structure
         console.log('Utility Rates Data:', this.utilityRates);
         if (this.utilityRates.length > 0) {
@@ -2927,7 +2927,7 @@ class SuperAdminDashboard {
     renderBillingDateSchedules(isEditing = false) {
         const tableBody = this.elements.billingDatesTableBody;
         if (!tableBody) return;
-        
+
         // If no schedules data, show loading message and fetch
         if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
             tableBody.innerHTML = `
@@ -2971,11 +2971,11 @@ class SuperAdminDashboard {
         const createDayDropdown = (schedule, scheduleType, isEnabled, currentValue = null, isEditing = false) => {
             // Determine the value to use - prioritize currentValue (already processed), then schedule.description
             let scheduleValue = "Not Set";
-            
+
             // Use currentValue if it's valid (this is the processed value from view mode)
             if (currentValue && currentValue !== "Not Set" && currentValue !== null && currentValue !== undefined && currentValue !== "") {
                 scheduleValue = String(currentValue);
-            } 
+            }
             // Fallback to schedule.description if currentValue is not available
             else if (schedule && schedule.description !== null && schedule.description !== undefined && schedule.description !== "") {
                 let desc = String(schedule.description).trim();
@@ -2987,7 +2987,7 @@ class SuperAdminDashboard {
                     scheduleValue = desc; // Keep special values as-is
                 }
             }
-            
+
             // Debug logging
             if (isEditing) {
                 console.log(`  → Dropdown ${scheduleType}:`, {
@@ -2997,17 +2997,17 @@ class SuperAdminDashboard {
                     willSet: scheduleValue !== "Not Set"
                 });
             }
-            
+
             // Determine if this is for Rent based on scheduleType
             const isRent = scheduleType.includes('Rent');
-            
+
             // Build options HTML with selected attribute already in place (like billing settings does)
             let optionsHTML = "";
-            
+
             // "Not Set" option
             const notSetSelected = scheduleValue === "Not Set" ? " selected" : "";
             optionsHTML += `<option value="Not Set"${notSetSelected}>Not Set</option>`;
-            
+
             // Add special options for Rent
             if (isRent && scheduleType.includes('Due Date')) {
                 const endOfMonthSelected = scheduleValue === "End of the month" ? " selected" : "";
@@ -3017,13 +3017,13 @@ class SuperAdminDashboard {
                 const naSelected = scheduleValue === "N/A" ? " selected" : "";
                 optionsHTML += `<option value="N/A"${naSelected}>N/A</option>`;
             }
-            
+
             // Add day options (1-31) with selected attribute
             for (let i = 1; i <= 31; i++) {
                 const daySelected = scheduleValue === String(i) ? " selected" : "";
                 optionsHTML += `<option value="${i}"${daySelected}>${i}</option>`;
             }
-            
+
             // Return the complete select HTML (like billing settings does)
             return `
                 <select ${!isEnabled ? 'disabled' : ''} 
@@ -3041,12 +3041,12 @@ class SuperAdminDashboard {
             }
             const dayNum = parseInt(day);
             if (isNaN(dayNum)) return `<strong>${day}</strong>`;
-            
+
             // Correct ordinal suffix logic
             let suffix = "th";
             const lastDigit = dayNum % 10;
             const lastTwoDigits = dayNum % 100;
-            
+
             // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
             if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
                 suffix = "th";
@@ -3057,7 +3057,7 @@ class SuperAdminDashboard {
             } else if (lastDigit === 3) {
                 suffix = "rd";
             }
-            
+
             return `<strong>${dayNum}${suffix} day of the month</strong>`;
         };
 
@@ -3079,7 +3079,7 @@ class SuperAdminDashboard {
             // Check both possible field names (description or Description)
             const dueDateDesc = dueDateSchedule?.description ?? dueDateSchedule?.Description ?? null;
             const discoDateDesc = discoDateSchedule?.description ?? discoDateSchedule?.Description ?? null;
-            
+
             // Debug logging for each utility
             if (isEditing) {
                 console.log(`\n--- ${util} ---`);
@@ -3088,7 +3088,7 @@ class SuperAdminDashboard {
                 console.log(`Disconnection Schedule:`, discoDateSchedule);
                 console.log(`Disconnection Description:`, discoDateDesc, `Type:`, typeof discoDateDesc);
             }
-            
+
             // Convert to string, preserving the actual saved value
             // Handle null, undefined, and empty string as "Not Set"
             let dueDateValue = "Not Set";
@@ -3102,7 +3102,7 @@ class SuperAdminDashboard {
                 }
                 // Keep special values as-is
             }
-            
+
             let discoDateValue = "Not Set";
             if (discoDateDesc !== null && discoDateDesc !== undefined && discoDateDesc !== "") {
                 // Convert to string and trim whitespace
@@ -3114,7 +3114,7 @@ class SuperAdminDashboard {
                 }
                 // Keep special values as-is
             }
-            
+
             if (isEditing) {
                 console.log(`\n✅ ${util} - Final Values:`, {
                     dueDate: { raw: dueDateDesc, processed: dueDateValue },
@@ -3123,7 +3123,7 @@ class SuperAdminDashboard {
                     discoDateSchedule: discoDateSchedule
                 });
             }
-            
+
             // Render cells - editable dropdowns when editing, formatted text when viewing
             // Pass the current saved value to ensure it's preserved in the dropdown
             dueDateCell = isEditing
@@ -3159,12 +3159,12 @@ class SuperAdminDashboard {
             if (day === "Not Set" || !day) return "Not Set";
             const dayNum = parseInt(day);
             if (isNaN(dayNum)) return day; // Should not happen but good practice
-            
+
             // Correct ordinal suffix logic
             let suffix = "th";
             const lastDigit = dayNum % 10;
             const lastTwoDigits = dayNum % 100;
-            
+
             // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
             if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
                 suffix = "th";
@@ -3175,7 +3175,7 @@ class SuperAdminDashboard {
             } else if (lastDigit === 3) {
                 suffix = "rd";
             }
-            
+
             return `${dayNum}${suffix} day`;
         };
 
@@ -3259,22 +3259,22 @@ class SuperAdminDashboard {
         const selects = this.elements.billingDatesTableBody.querySelectorAll(
             ".billing-date-select:not([disabled])"
         );
-        
+
         // Only include schedules that have actually changed
         selects.forEach((select) => {
             const scheduleType = select.dataset.type;
             const newDay = select.value;
-            
+
             // Find original value
             const originalSchedule = this.originalBillingDates?.find(
                 (s) => s.schedule_type === scheduleType
             );
             const oldValue = originalSchedule ? originalSchedule.description : "Not Set";
-            
+
             // Only add to payload if value has changed
             // Convert oldValue to string for proper comparison
             const oldValueStr = oldValue !== null && oldValue !== undefined ? String(oldValue) : "Not Set";
-            
+
             if (oldValueStr !== newDay && !(oldValueStr === null && newDay === "Not Set")) {
                 // Ensure we have valid data
                 if (scheduleType && newDay !== null && newDay !== undefined) {
@@ -3809,7 +3809,7 @@ class SuperAdminDashboard {
             }
 
             this.showToast("Rates updated successfully!", "success");
-            
+
             // Refresh rental rate history after successful update
             this.rentalRateHistory = [];
             this.rentalRateHistoryPage = 1;
@@ -4022,12 +4022,12 @@ class SuperAdminDashboard {
             hasMore: this.rentalRateHistoryHasMore,
             page: this.rentalRateHistoryPage
         });
-        
+
         if (this.isFetchingRentalRateHistory || !this.rentalRateHistoryHasMore) {
             console.log("Skipping fetch - already fetching or no more data");
             return;
         }
-        
+
         this.isFetchingRentalRateHistory = true;
         if (this.elements.rentalRateHistoryLoader)
             this.elements.rentalRateHistoryLoader.style.display = "block";
@@ -4038,20 +4038,20 @@ class SuperAdminDashboard {
                 `/api/rental-rates/history?page=${this.rentalRateHistoryPage}`
             );
             console.log("API Response status:", response.status, response.statusText);
-            
+
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 console.error("API Error:", errorData);
                 throw new Error(errorData.message || "Network response was not ok");
             }
             const data = await response.json();
-            
+
             console.log("Rental Rate History API Response:", data);
             console.log("History Data:", data.data);
             console.log("Total Records:", data.total);
             console.log("Has More:", data.has_more);
             console.log("Current Page:", data.current_page);
-            
+
             // Additional debugging
             if (!data.data || data.data.length === 0) {
                 console.warn("⚠️ No history data in response. Response structure:", Object.keys(data));
@@ -4063,7 +4063,7 @@ class SuperAdminDashboard {
             // Handle both paginated and non-paginated responses
             const historyData = data.data || data;
             const hasMore = data.has_more !== undefined ? data.has_more : (data.next_page_url !== null);
-            
+
             if (historyData && Array.isArray(historyData) && historyData.length > 0) {
                 this.rentalRateHistory.push(...historyData);
                 this.rentalRateHistoryHasMore = hasMore;
@@ -4388,7 +4388,7 @@ class SuperAdminDashboard {
         if (this.elements.changePasswordForm) {
             this.elements.changePasswordForm.addEventListener("submit", async (e) => {
                 e.preventDefault();
-                
+
                 const btn = this.elements.changePasswordBtn;
                 const originalText = btn.innerHTML;
                 btn.disabled = true;
@@ -4437,7 +4437,7 @@ class SuperAdminDashboard {
         // Profile picture upload
         const profilePictureInput = document.getElementById("profilePictureInput");
         const removeProfilePictureBtn = document.getElementById("removeProfilePictureBtn");
-        
+
         if (profilePictureInput) {
             profilePictureInput.addEventListener("change", async (e) => {
                 const file = e.target.files[0];
@@ -4694,6 +4694,104 @@ class SuperAdminDashboard {
         );
     }
 
+    setupBillingSmsSettingsEventListeners() {
+        // Tab Switching Logic
+        this.elements.notificationTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and contents
+                this.elements.notificationTabs.forEach(t => {
+                    t.classList.remove('border-blue-500', 'text-blue-600');
+                    t.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                });
+                this.elements.notificationTabContents.forEach(c => c.classList.add('hidden'));
+
+                // Add active class to clicked tab and show corresponding content
+                tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                tab.classList.add('border-blue-500', 'text-blue-600');
+
+                const targetId = tab.getAttribute('data-tab');
+                const targetContent = document.getElementById(targetId);
+                if (targetContent) {
+                    targetContent.classList.remove('hidden');
+                }
+            });
+        });
+
+        // Save Templates Button
+        if (this.elements.saveTemplatesBtn) {
+            this.elements.saveTemplatesBtn.addEventListener('click', async () => {
+                const btn = this.elements.saveTemplatesBtn;
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+                try {
+                    const payload = {
+                        bill_statement: {
+                            wet_section: this.elements.templateBillStatementWet.value,
+                            dry_section: this.elements.templateBillStatementDry.value
+                        },
+                        payment_reminder: {
+                            template: this.elements.templatePaymentReminder.value
+                        },
+                        overdue_alert: {
+                            template: this.elements.templateOverdueAlert.value
+                        }
+                    };
+
+                    const response = await fetch('/api/notification-templates', {
+                        method: 'POST', // Using POST for update based on controller method
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) throw new Error('Failed to save templates');
+
+                    this.showToast('Notification templates saved successfully!', 'success');
+                } catch (error) {
+                    console.error('Error saving templates:', error);
+                    this.showToast('Failed to save templates.', 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            });
+        }
+
+        // Load Semaphore Credit Balance
+        this.loadSemaphoreCreditBalance();
+    }
+
+    async loadSemaphoreCreditBalance() {
+        if (!this.elements.semaphoreCreditBalance) return;
+
+        this.elements.semaphoreCreditBalance.textContent = "Loading...";
+
+        try {
+            // Fetch validation: billing-settings endpoint created previously
+            const response = await fetch('/api/billing-settings/credits');
+
+            if (!response.ok) {
+                // Try fallback if route defines it elsewhere or fails
+                console.warn("Primary credit route failed, checking response...");
+            }
+
+            const data = await response.json();
+
+            if (data.credits !== undefined) {
+                this.elements.semaphoreCreditBalance.textContent = `Credit Balance: ₱${data.credits}`;
+            } else {
+                this.elements.semaphoreCreditBalance.textContent = "Credit Balance: N/A";
+            }
+        } catch (error) {
+            console.error("Error loading Semaphore credits:", error);
+            this.elements.semaphoreCreditBalance.textContent = "Credit Balance: Error";
+        }
+    }
+
     async fetchBillingSettings() {
         try {
             const response = await fetch("/api/billing-settings");
@@ -4743,7 +4841,7 @@ class SuperAdminDashboard {
         const { rentSettingsTableBody, utilitySettingsTableBody } =
             this.elements;
         if (!rentSettingsTableBody || !utilitySettingsTableBody) return;
-        
+
         // If no billing settings data, show loading message and fetch
         if (!this.billingSettings || Object.keys(this.billingSettings).length === 0) {
             rentSettingsTableBody.innerHTML = `
@@ -4984,7 +5082,7 @@ class SuperAdminDashboard {
                     const wetSection = document.getElementById('recipientWetSection');
                     const drySection = document.getElementById('recipientDrySection');
                     const semiWetSection = document.getElementById('recipientSemiWetSection');
-                    
+
                     if (e.target.checked) {
                         // Uncheck and disable specific sections when "All Sections" is checked
                         if (wetSection) {
@@ -5037,7 +5135,7 @@ class SuperAdminDashboard {
                 }
             });
         }
-        
+
         // Event listeners for draft announcements
         if (this.elements.draftAnnouncementsList) {
             this.elements.draftAnnouncementsList.addEventListener("click", (e) => {
@@ -5046,7 +5144,7 @@ class SuperAdminDashboard {
                     const id = deleteBtn.dataset.id;
                     this.confirmDeleteAnnouncement(id);
                 }
-                
+
                 const activateBtn = e.target.closest(".activate-announcement-btn");
                 if (activateBtn) {
                     const id = activateBtn.dataset.id;
@@ -5064,11 +5162,11 @@ class SuperAdminDashboard {
             if (!response.ok) throw new Error("Failed to fetch announcements");
 
             const announcements = await response.json();
-            
+
             // Separate sent and draft announcements
             const sentAnnouncements = announcements.filter(a => a.is_active);
             const draftAnnouncements = announcements.filter(a => !a.is_active);
-            
+
             this.renderSentAnnouncements(sentAnnouncements);
             this.renderDraftAnnouncements(draftAnnouncements);
             this.dataLoaded.announcementSection = true;
@@ -5109,7 +5207,7 @@ class SuperAdminDashboard {
             const date = new Date(announcement.created_at);
             const dateStr = date.toLocaleDateString();
             const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-            
+
             return `
             <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
                 <div class="flex justify-between items-start mb-2">
@@ -5149,7 +5247,7 @@ class SuperAdminDashboard {
             const date = new Date(announcement.created_at);
             const dateStr = date.toLocaleDateString();
             const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-            
+
             return `
             <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
                 <div class="flex justify-between items-start mb-2">

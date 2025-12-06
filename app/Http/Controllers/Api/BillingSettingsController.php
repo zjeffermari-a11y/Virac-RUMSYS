@@ -141,4 +141,13 @@ class BillingSettingsController extends Controller
 
         return response()->json($history);
     }
+
+    /**
+     * Get Semaphore credit balance.
+     */
+    public function getCredits(\App\Services\SemaphoreService $semaphoreService)
+    {
+        $credits = $semaphoreService->checkBalance();
+        return response()->json(['credits' => $credits ?? 'N/A']);
+    }
 }

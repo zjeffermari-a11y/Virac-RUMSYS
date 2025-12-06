@@ -128,6 +128,7 @@ use App\Http\Controllers\Api\BillingSettingsController;
 
 Route::prefix('billing-settings')->group(function () {
     Route::get('/', [BillingSettingsController::class, 'index']);
+    Route::get('/credits', [BillingSettingsController::class, 'getCredits']);
     Route::put('/', [BillingSettingsController::class, 'update']);
     Route::get('/history', [BillingSettingsController::class, 'history']);
 });
