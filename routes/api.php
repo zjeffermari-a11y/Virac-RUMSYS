@@ -31,12 +31,14 @@ Route::middleware(['auth:sanctum', 'role:Staff'])->prefix('staff')->group(functi
     Route::get('/vendors/{user}/payment-history-filtered', [StaffController::class, 'getFilteredPaymentHistory']);
     Route::post('/bills/{billingId}/pay', [StaffController::class, 'markAsPaid']);
     Route::get('/vendor/{user}/dashboard-data', [StaffController::class, 'getVendorDashboardData']);
+    Route::get('/vendor/{user}/analytics', [StaffController::class, 'getVendorAnalytics']);
     Route::get('/vendors/{user}/payment-years', [StaffController::class, 'getPaymentYears']);
     Route::get('/reports/monthly', [StaffController::class, 'getMonthlyReport']);
     Route::get('/unassigned-vendors', [StaffController::class, 'getUnassignedVendors']);
     Route::get('/available-stalls', [StaffController::class, 'getAvailableStalls']);
     Route::post('/assign-stall', [StaffController::class, 'assignStall']);
-    Route::post('/upload-profile-picture', [StaffController::class, 'uploadProfilePicture']);
+    Route::post('/vendors/{vendorId}/upload-profile-picture', [StaffController::class, 'uploadVendorProfilePicture']);
+    Route::delete('/vendors/{vendorId}/remove-profile-picture', [StaffController::class, 'removeVendorProfilePicture']);
 });
 
 
@@ -49,6 +51,7 @@ Route::put('/rental-rates/batch-update', [RentalRateController::class, 'batchUpd
 Route::put('/rental-rates/{stall}', [RentalRateController::class, 'update']);
 Route::delete('/rental-rates/{stall}', [RentalRateController::class, 'destroy']);
 Route::get('/sections/{sectionName}/next-table-number', [RentalRateController::class, 'getNextTableNumber']);
+Route::get('/rental-rates/history', [RentalRateController::class, 'history']);
 
 
 use App\Http\Controllers\Api\UtilityRateController;
@@ -109,6 +112,13 @@ Route::get('/notifications/unread', [NotificationController::class, 'unread']);
 Route::get('/user-settings/role-contacts', [UserSettingsController::class, 'getRoleContacts']);
 Route::put('/user-settings/role-contacts', [UserSettingsController::class, 'updateRoleContacts']);
 
+// Route for changing user password (authenticated users)
+Route::post('/user-settings/change-password', [UserSettingsController::class, 'changePassword'])->middleware('auth:sanctum');
+
+// Routes for profile picture management
+Route::post('/user-settings/upload-profile-picture', [UserSettingsController::class, 'uploadProfilePicture'])->middleware('auth:sanctum');
+Route::delete('/user-settings/remove-profile-picture', [UserSettingsController::class, 'removeProfilePicture'])->middleware('auth:sanctum');
+
 use App\Http\Controllers\Api\AuditTrailController;
 
 // route for fetching audit trail logs
@@ -126,6 +136,7 @@ Route::prefix('api/admin')->middleware(['auth:sanctum', 'role:Admin'])->group(fu
     Route::get('/sections', [\App\Http\Controllers\Api\SectionController::class, 'index']);
 });
 
+
 use App\Http\Controllers\Api\AnnouncementController;
 
 Route::prefix('admin/announcements')->middleware(['auth:sanctum', 'role:Admin'])->group(function () {
@@ -134,3 +145,8 @@ Route::prefix('admin/announcements')->middleware(['auth:sanctum', 'role:Admin'])
     Route::put('/{announcement}', [AnnouncementController::class, 'update']);
     Route::delete('/{announcement}', [AnnouncementController::class, 'destroy']);
 });
+
+// Public endpoint for vendors and staff to fetch active announcements
+Route::get('/announcements/active', [AnnouncementController::class, 'active'])->middleware('auth:sanctum');
+Route::get('/announcements/all-for-user', [AnnouncementController::class, 'allForUser'])->middleware('auth:sanctum');
+Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])->middleware('auth:sanctum');

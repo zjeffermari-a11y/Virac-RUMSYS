@@ -51,9 +51,13 @@ if (!app()->runningInConsole() && Schema::hasTable('schedules')) {
     }
 }
 
-// 🚀 SEND BILLING STATEMENTS: Use dynamic time, default to 08:00 if not set
-$billingStatementTime = $smsSchedules->get('SMS - Billing Statements')?->description ?? '08:00';
-Schedule::command('sms:send-billing-statements')->monthlyOn(1, $billingStatementTime);
+// 🚀 SEND BILLING STATEMENTS: Use dynamic day and time from database
+$billingStatementSchedule = $smsSchedules->get('SMS - Billing Statements');
+$billingStatementTime = $billingStatementSchedule?->description ?? '08:00';
+$billingStatementDay = $billingStatementSchedule?->schedule_day ?? 1;
+// Ensure day is valid (1-31)
+$billingStatementDay = ($billingStatementDay >= 1 && $billingStatementDay <= 31) ? $billingStatementDay : 1;
+Schedule::command('sms:send-billing-statements')->monthlyOn($billingStatementDay, $billingStatementTime);
 
 // ⏰ SEND PAYMENT REMINDERS: Use dynamic time, default to 08:00 if not set
 $paymentReminderTime = $smsSchedules->get('SMS - Payment Reminders')?->description ?? '08:00';

@@ -14,5 +14,11 @@ class Schedule extends Model
         'schedule_type',
         'description',
         'schedule_date',
+        'schedule_day',
+        'sms_days',
+    ];
+
+    protected $casts = [
+        'sms_days' => 'array',
     ];
 }

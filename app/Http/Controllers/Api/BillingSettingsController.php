@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cache;
 use App\Models\AuditTrail;
 use App\Services\AuditLogger;
+use App\Services\AnnouncementService;
 
 class BillingSettingsController extends Controller
 {
@@ -62,15 +63,32 @@ class BillingSettingsController extends Controller
                     foreach ($fieldsToCompare as $field) {
                         // Check if the field exists in the submitted data and is different from the DB value
                         if (isset($settingData[$field]) && $setting->$field != $settingData[$field]) {
+                            $oldValue = $setting->$field;
+                            $newValue = $settingData[$field];
+                            
                             $changes[] = [
                                 'billing_setting_id' => $setting->id,
                                 'changed_by' => $request->user_id, // Use user_id from the request
                                 'field_changed' => str_replace('_', ' ', ucwords($field, '_')), // Format for readability
-                                'old_value' => $setting->$field * 100, // Store as percentage
-                                'new_value' => $settingData[$field] * 100, // Store as percentage
+                                'old_value' => $oldValue * 100, // Store as percentage
+                                'new_value' => $newValue * 100, // Store as percentage
                                 'changed_at' => now(),
                             ];
-                            $setting->$field = $settingData[$field];
+                            $setting->$field = $newValue;
+
+                            // Create draft announcement for billing setting change
+                            try {
+                                $announcementService = new AnnouncementService();
+                                $announcementService->createBillingSettingChangeAnnouncement(
+                                    $setting->utility_type,
+                                    $field,
+                                    $oldValue,
+                                    $newValue
+                                );
+                            } catch (\Exception $e) {
+                                // Log error but don't fail the transaction
+                                \Illuminate\Support\Facades\Log::error('Failed to create billing setting change announcement: ' . $e->getMessage());
+                            }
                         }
                     }
 
@@ -80,6 +98,9 @@ class BillingSettingsController extends Controller
                         $allChanges = array_merge($allChanges, $changes);
                     }
                 }
+                
+                // Clear cache when settings are updated
+                Cache::forget('billing_settings');
 
                 if (!empty($allChanges)) {
                     AuditLogger::log(

@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@php
+    use Illuminate\Support\Facades\Storage;
+@endphp
+
 @section('title', 'Virac Public Market - Admin Aide Dashboard')
 
 @vite('resources/js/staff.js')
@@ -14,8 +18,8 @@
     <div class="flex-grow">
         <a href="#homeSection" data-section="homeSection"
             class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
-            <i class="fas fa-home"></i>
-            <span>Home</span>
+            <i class="fas fa-tasks"></i>
+            <span>Pending Tasks</span>
         </a>
         <a href="#vendorManagementSection" data-section="vendorManagementSection"
             class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
@@ -37,10 +41,22 @@
             <i class="fas fa-chart-line"></i>
             <span>Reports</span>
         </a>
+        <a href="#notificationsSection" data-section="notificationsSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-bell"></i>
+            <span>Notifications</span>
+        </a>
+        <a href="#profileSection" data-section="profileSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
     </div>
 @endsection
 
 @section('content')
+    {{-- Announcement banner removed - announcements now appear as notifications in the bell dropdown --}}
+
     <style>
         @media print {
 
@@ -66,17 +82,39 @@
         window.STAFF_PORTAL_STATE = @json($initialState ?? null);
         window.DASHBOARD_STATE = @json($dashboardState ?? null);
         window.BILLING_SETTINGS = @json($billingSettings ?? null);
+        window.UTILITY_RATES = @json($utilityRates ?? null);
     </script>
 
     {{-- Home Section --}}
     <div id="homeSection" class="dashboard-section">
         <div
-            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
             <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
             </div>
             <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
             </div>
-            <h2 id="homeHeader" class="text-2xl md:text-3xl font-semibold relative z-10">Hello, Market Staff!</h2>
+            <div class="flex items-center justify-between relative z-10">
+                <h2 id="homeHeader" class="text-2xl md:text-3xl font-semibold">Hello, Market Staff!</h2>
+                {{-- Notification Bell --}}
+                <div class="notificationBell relative">
+                    <button
+                        class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                        <i class="fas fa-bell text-2xl"></i>
+                        <span
+                            class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                    </button>
+                    {{-- Notification Dropdown Panel --}}
+                    <div
+                        class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                        <div class="p-3 font-semibold text-gray-800 border-b">
+                            Notifications
+                        </div>
+                        <div class="notificationList max-h-96 overflow-y-auto">
+                            {{-- Notification items will be inserted here by JS --}}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="bg-white p-4 md:p-8 rounded-2xl shadow-soft">
@@ -85,9 +123,6 @@
                     <i class="fas fa-list-ul"></i>
                     Pending Tasks
                 </h3>
-                <div class="status-badge status-pending text-xs md:text-sm mt-2 md:mt-0">
-                    Today's Assignments
-                </div>
             </div>
 
             <p class="text-gray-600 mb-6">Please refer to the table below for current billing and receipt printing.</p>
@@ -141,13 +176,34 @@
         {{-- List View (This should be here) --}}
         <div id="vendorListView">
             <div
-                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
                 <div
                     class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
                 </div>
                 <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
                 </div>
-                <h2 id="vendorManagementHeader" class="text-3xl font-semibold relative z-10">Vendor Management</h2>
+                <div class="flex items-center justify-between relative z-10">
+                    <h2 id="vendorManagementHeader" class="text-3xl font-semibold">Vendor Management</h2>
+                    {{-- Notification Bell --}}
+                    <div class="notificationBell relative">
+                        <button
+                            class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                            <i class="fas fa-bell text-2xl"></i>
+                            <span
+                                class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                        </button>
+                        {{-- Notification Dropdown Panel --}}
+                        <div
+                            class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                            <div class="p-3 font-semibold text-gray-800 border-b">
+                                Notifications
+                            </div>
+                            <div class="notificationList max-h-96 overflow-y-auto">
+                                {{-- Notification items will be inserted here by JS --}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="card-table p-6 rounded-2xl shadow-soft h-auto max-w-6xl mx-auto">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
@@ -195,19 +251,40 @@
         {{-- Detail View (This should be here) --}}
         <div id="vendorDetailSection" class="hidden">
             <div
-                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
                 <div
                     class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
                 </div>
                 <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
                 </div>
                 <div class="flex justify-between items-center relative z-10">
-                    <h2 class="text-3xl font-semibold relative z-10">Vendor Information</h2>
+                    <h2 class="text-3xl font-semibold">Vendor Information</h2>
+                    <div class="flex items-center gap-3">
+                        {{-- Notification Bell --}}
+                        <div class="notificationBell relative">
+                            <button
+                                class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                                <i class="fas fa-bell text-2xl"></i>
+                                <span
+                                    class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                            </button>
+                            {{-- Notification Dropdown Panel --}}
+                            <div
+                                class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                                <div class="p-3 font-semibold text-gray-800 border-b">
+                                    Notifications
+                                </div>
+                                <div class="notificationList max-h-96 overflow-y-auto">
+                                    {{-- Notification items will be inserted here by JS --}}
+                                </div>
+                            </div>
+                        </div>
                     <button id="backToVendorList"
                         class="bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-white/30 transition-smooth flex items-center gap-2">
                         <i class="fas fa-arrow-left"></i>
                         Back to List
                     </button>
+                    </div>
                 </div>
             </div>
             <div class="bg-white p-4 md:p-8 rounded-2xl shadow-soft">
@@ -280,13 +357,36 @@
     </div>
 
     <div id="stallAssignmentSection" class="dashboard-section">
-        <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg">
-            <h2 class="text-3xl font-semibold">Stall Assignment</h2>
-            <p class="text-lg">Assign available stalls to unassigned vendors.</p>
+        <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-4 md:p-6 rounded-2xl mb-4 shadow-lg relative overflow-hidden">
+            <div class="flex items-start justify-between">
+                <div>
+            <h2 class="text-2xl md:text-3xl font-semibold">Stall Assignment</h2>
+                    <p class="text-base md:text-lg mt-1">Assign available stalls to unassigned vendors.</p>
+                </div>
+                {{-- Notification Bell --}}
+                <div class="notificationBell relative">
+                    <button
+                        class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                        <i class="fas fa-bell text-2xl"></i>
+                        <span
+                            class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                    </button>
+                    {{-- Notification Dropdown Panel --}}
+                    <div
+                        class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                        <div class="p-3 font-semibold text-gray-800 border-b">
+                            Notifications
+                        </div>
+                        <div class="notificationList max-h-96 overflow-y-auto">
+                            {{-- Notification items will be inserted here by JS --}}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="card-table p-4 md:p-8 rounded-2xl shadow-soft max-w-4xl mx-auto">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
+        <div class="card-table p-4 md:p-6 rounded-2xl shadow-soft">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-end">
 
                 {{-- Vendor Selection --}}
                 <div>
@@ -315,8 +415,8 @@
                 </div>
             </div>
 
-            <div class="mt-8 text-center">
-                <button id="assignStallBtn" class="action-button w-full md:w-1/2">
+            <div class="mt-6 text-center">
+                <button id="assignStallBtn" class="action-button w-full">
                     <i class="fas fa-link"></i>
                     Assign Stall to Vendor
                 </button>
@@ -328,12 +428,33 @@
     <div id="dashboardSection" class="dashboard-section">
         {{-- Header --}}
         <div
-            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
             <div
                 class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
             </div>
             <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16"></div>
-            <h2 class="text-2xl md:text-3xl font-semibold relative z-10">Dashboard</h2>
+            <div class="flex items-center justify-between relative z-10">
+                <h2 class="text-2xl md:text-3xl font-semibold">Dashboard</h2>
+                {{-- Notification Bell --}}
+                <div class="notificationBell relative">
+                    <button
+                        class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                        <i class="fas fa-bell text-2xl"></i>
+                        <span
+                            class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                    </button>
+                    {{-- Notification Dropdown Panel --}}
+                    <div
+                        class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                        <div class="p-3 font-semibold text-gray-800 border-b">
+                            Notifications
+                        </div>
+                        <div class="notificationList max-h-96 overflow-y-auto">
+                            {{-- Notification items will be inserted here by JS --}}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {{-- Sub-header with Title and Year Filter --}}
@@ -426,13 +547,34 @@
     <div id="reportsSection" class="dashboard-section">
         {{-- Header remains the same --}}
         <div
-            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+            class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
             <div
                 class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
             </div>
             <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16">
             </div>
-            <h2 id="reportsHeader" class="text-3xl font-semibold relative z-10">Reports</h2>
+            <div class="flex items-center justify-between relative z-10">
+                <h2 id="reportsHeader" class="text-3xl font-semibold">Reports</h2>
+                {{-- Notification Bell --}}
+                <div class="notificationBell relative">
+                    <button
+                        class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                        <i class="fas fa-bell text-2xl"></i>
+                        <span
+                            class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                    </button>
+                    {{-- Notification Dropdown Panel --}}
+                    <div
+                        class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                        <div class="p-3 font-semibold text-gray-800 border-b">
+                            Notifications
+                        </div>
+                        <div class="notificationList max-h-96 overflow-y-auto">
+                            {{-- Notification items will be inserted here by JS --}}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="bg-white p-4 md:p-8 rounded-2xl shadow-soft">
@@ -615,6 +757,137 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Profile Section --}}
+    <div id="profileSection" class="dashboard-section">
+        @include('layouts.partials.content-header', ['title' => 'User Profile'])
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {{-- Profile Picture & Information --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                {{-- Profile Picture Section --}}
+                <div class="mb-6 text-center">
+                    <div class="relative inline-block">
+                        <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
+                            @if(auth()->user()->profile_picture)
+                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
+                                     alt="Profile Picture" class="w-full h-full object-cover">
+                            @else
+                                <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">
+                                    <i class="fas fa-user text-6xl text-gray-400"></i>
+                                </div>
+                            @endif
+                        </div>
+                        <label for="profilePictureInput" class="absolute bottom-0 right-0 bg-market-primary text-white rounded-full p-2 cursor-pointer hover:bg-market-secondary transition-colors shadow-lg">
+                            <i class="fas fa-camera"></i>
+                            <input type="file" id="profilePictureInput" accept="image/*" class="hidden">
+                        </label>
+                    </div>
+                    <button id="removeProfilePictureBtn" class="text-sm text-red-600 hover:text-red-800 {{ auth()->user()->profile_picture ? '' : 'hidden' }}">
+                        <i class="fas fa-trash"></i> Remove Picture
+                    </button>
+                </div>
+
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-user text-market-primary"></i>
+                    Profile Information
+                </h3>
+                <div class="space-y-4">
+                    @php
+                        $user = auth()->user();
+                        $profileDetails = [
+                            ['icon' => 'fa-user', 'label' => 'Name', 'value' => $user->name],
+                            ['icon' => 'fa-at', 'label' => 'Username', 'value' => $user->username],
+                            ['icon' => 'fa-user-tag', 'label' => 'Role', 'value' => $user->role->name ?? 'N/A'],
+                            ['icon' => 'fa-phone', 'label' => 'Contact Number', 'value' => $user->contact_number ?? 'Not set'],
+                            ['icon' => 'fa-calendar', 'label' => 'Last Login', 'value' => $user->last_login ? \Carbon\Carbon::parse($user->last_login)->format('F j, Y g:i A') : 'Never'],
+                            ['icon' => 'fa-info-circle', 'label' => 'Status', 'value' => ucfirst($user->status ?? 'active')],
+                        ];
+                    @endphp
+                    @foreach ($profileDetails as $detail)
+                        <div class="flex items-center p-3 bg-gray-50 rounded-lg">
+                            <i class="fas {{ $detail['icon'] }} text-market-primary w-8 text-center"></i>
+                            <div class="flex-1 ml-4">
+                                <span class="text-sm text-gray-600">{{ $detail['label'] }}</span>
+                                <p class="font-semibold text-gray-800">{{ $detail['value'] }}</p>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Change Password --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-key text-market-primary"></i>
+                    Change Password
+                </h3>
+                <form id="changePasswordForm">
+                    @csrf
+                    <div class="mb-4">
+                        <label for="currentPassword" class="block text-gray-700 font-medium mb-2">Current Password</label>
+                        <input type="password" id="currentPassword" name="current_password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <div class="mb-4">
+                        <label for="newPassword" class="block text-gray-700 font-medium mb-2">New Password</label>
+                        <input type="password" id="newPassword" name="password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Must be at least 8 characters with letters, numbers, symbols, and mixed case</p>
+                    </div>
+                    <div class="mb-6">
+                        <label for="confirmPassword" class="block text-gray-700 font-medium mb-2">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" name="password_confirmation" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <button type="submit" id="changePasswordBtn"
+                        class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-key"></i>
+                        <span>Change Password</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- Notifications Section --}}
+    <div id="notificationsSection" class="dashboard-section">
+        <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-4 md:p-6 rounded-2xl mb-4 shadow-lg relative overflow-hidden">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-semibold">Notifications</h2>
+                    <p class="text-base md:text-lg mt-1">View all your notifications</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-table p-4 md:p-6 rounded-2xl shadow-soft">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+                <div class="flex items-center gap-4">
+                    <button id="markAllAsReadBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg transition-smooth flex items-center gap-2">
+                        <i class="fas fa-check-double"></i>
+                        <span>Mark All as Read</span>
+                    </button>
+                    <span id="unreadCountBadge" class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hidden">
+                        <span id="unreadCountText">0</span> unread
+                    </span>
+                </div>
+            </div>
+
+            <div id="notificationsLoader" class="text-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin mr-2"></i>Loading notifications...
+            </div>
+
+            <div id="notificationsList" class="space-y-3 hidden">
+                {{-- Notifications will be populated by JavaScript --}}
+            </div>
+
+            <div id="noNotificationsMessage" class="text-center py-8 text-gray-500 hidden">
+                <i class="fas fa-bell-slash text-4xl mb-4 text-gray-400"></i>
+                <p class="text-lg">You have no notifications.</p>
             </div>
         </div>
     </div>

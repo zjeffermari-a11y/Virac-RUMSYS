@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@php
+    use Illuminate\Support\Facades\Storage;
+@endphp
+
 @section('title', 'Virac Public Market - Superadmin Dashboard')
 
 @vite('resources/js/superadmin.js')
@@ -75,6 +79,11 @@
         class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
         <i class="fas fa-clipboard-list"></i>
         <span>Audit Trails</span>
+    </a>
+    <a href="#profileSection" data-section="profileSection"
+        class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+        <i class="fas fa-user-circle"></i>
+        <span>Profile</span>
     </a>
 @endsection
 
@@ -350,6 +359,34 @@
             </div>
         </div>
 
+        {{-- History Log Card --}}
+        <div class="bg-white rounded-2xl shadow-lg p-6">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-6">History Logs</h3>
+            <div id="rentalRateHistoryContainer" class="history-log-container">
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse responsive-table">
+                        <thead>
+                            <tr class="bg-gradient-to-r from-gray-50 to-gray-100">
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Date & Time</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Action</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Table Number</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Section</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Old Daily Rate</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">New Daily Rate</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Old Monthly Rate</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">New Monthly Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rentalRateHistoryTableBody">
+                            {{-- History rows will be populated by JavaScript --}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="rentalRateHistoryLoader" class="history-log-loader">
+                <i class="fas fa-spinner fa-spin"></i> Loading...
+            </div>
+        </div>
     </div>
 
     {{-- =================================================================== --}}
@@ -358,7 +395,7 @@
     <div id="electricityWaterRatesSection" class="dashboard-section overflow-visible">
         @include('layouts.partials.content-header', [
             'title' => 'Billing Management',
-            'subtitle' => 'Market Stall/Table Rental Rates',
+            'subtitle' => 'Electricity and Water Rates',
             'icon' => 'fa-file-invoice-dollar',
         ])
 
@@ -691,7 +728,7 @@
                             <label class="block text-gray-800 font-semibold mb-2">Live Preview</label>
                             <div class="w-full max-w-xs h-64 bg-gray-800 rounded-2xl p-2 shadow-lg">
                                 <div data-preview-for="templateBillStatementWet"
-                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words">
+                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words overflow-y-auto overflow-x-hidden whitespace-pre-wrap">
                                     Your message preview will appear here.
                                 </div>
                             </div>
@@ -713,7 +750,7 @@
                             <label class="block text-gray-800 font-semibold mb-2">Live Preview</label>
                             <div class="w-full max-w-xs h-64 bg-gray-800 rounded-2xl p-2 shadow-lg">
                                 <div data-preview-for="templateBillStatementDry"
-                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words">
+                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words overflow-y-auto overflow-x-hidden whitespace-pre-wrap">
                                     Your message preview will appear here.
                                 </div>
                             </div>
@@ -739,7 +776,7 @@
                             <label class="block text-gray-800 font-semibold mb-2">Live Preview</label>
                             <div class="w-full max-w-xs h-64 bg-gray-800 rounded-2xl p-2 shadow-lg">
                                 <div data-preview-for="templatePaymentReminder"
-                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words"></div>
+                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words overflow-y-auto overflow-x-hidden whitespace-pre-wrap"></div>
                             </div>
                         </div>
                     </div>
@@ -762,7 +799,7 @@
                             <label class="block text-gray-800 font-semibold mb-2">Live Preview</label>
                             <div class="w-full max-w-xs h-64 bg-gray-800 rounded-2xl p-2 shadow-lg">
                                 <div data-preview-for="templateOverdueAlert"
-                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words"></div>
+                                    class="bg-white rounded-lg h-full p-3 text-gray-800 break-words overflow-y-auto overflow-x-hidden whitespace-pre-wrap"></div>
                             </div>
                         </div>
                     </div>
@@ -771,35 +808,112 @@
 
             {{-- Placeholder Guide and Save Button --}}
             <div class="mt-8 pt-6 border-t border-gray-200">
-                <h4 class="text-lg font-semibold text-gray-800 mb-3">Click to Insert Placeholders</h4>
-                <div id="placeholderButtons" class="flex flex-wrap gap-2 mb-6">
-                    {{-- These will now be buttons --}}
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ vendor_name }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ stall_number }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ due_date }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ disconnection_date }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ total_due }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ unpaid_items }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ rent_amount }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ water_amount }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ electricity_amount }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ new_total_due }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ bill_details }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ upcoming_bill_details }}</button>
-                    <button
-                        class="placeholder-btn bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-market-primary hover:text-white transition-colors">@{{ overdue_bill_details }}</button>
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-lg font-semibold text-gray-800">Available Placeholders</h4>
+                    <input type="text" id="placeholderSearch" placeholder="Search placeholders..." 
+                        class="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-market-primary focus:border-market-primary">
+                </div>
+                
+                <div id="placeholderButtons" class="space-y-4 mb-6">
+                    {{-- Basic Information --}}
+                    <div class="placeholder-category">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <i class="fas fa-user text-market-primary"></i>
+                            Basic Information
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="placeholder-btn bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md hover:bg-blue-100 border border-blue-200 transition-colors text-sm font-mono" 
+                                data-category="basic" title="Vendor's full name">@{{ vendor_name }}</button>
+                            <button class="placeholder-btn bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md hover:bg-blue-100 border border-blue-200 transition-colors text-sm font-mono" 
+                                data-category="basic" title="Stall/Table number">@{{ stall_number }}</button>
+                            <button class="placeholder-btn bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md hover:bg-blue-100 border border-blue-200 transition-colors text-sm font-mono" 
+                                data-category="basic" title="Current timestamp">@{{ timestamp }}</button>
+                        </div>
+                    </div>
+
+                    {{-- Bill Month & Dates --}}
+                    <div class="placeholder-category">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <i class="fas fa-calendar text-market-primary"></i>
+                            Dates & Period
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="placeholder-btn bg-green-50 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-100 border border-green-200 transition-colors text-sm font-mono" 
+                                data-category="dates" title="Billing month (e.g., September 2025)">@{{ bill_month }}</button>
+                            <button class="placeholder-btn bg-green-50 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-100 border border-green-200 transition-colors text-sm font-mono" 
+                                data-category="dates" title="Earliest due date">@{{ due_date }}</button>
+                            <button class="placeholder-btn bg-green-50 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-100 border border-green-200 transition-colors text-sm font-mono" 
+                                data-category="dates" title="Electricity disconnection date">@{{ disconnection_date }}</button>
+                        </div>
+                    </div>
+
+                    {{-- Detailed Bill Information --}}
+                    <div class="placeholder-category">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <i class="fas fa-file-invoice-dollar text-market-primary"></i>
+                            Detailed Bill Information
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="placeholder-btn bg-purple-50 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-100 border border-purple-200 transition-colors text-sm font-mono" 
+                                data-category="details" title="Rent details with original, discounted amount, and due date">@{{ rent_details }}</button>
+                            <button class="placeholder-btn bg-purple-50 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-100 border border-purple-200 transition-colors text-sm font-mono" 
+                                data-category="details" title="Water bill amount and due date">@{{ water_details }}</button>
+                            <button class="placeholder-btn bg-purple-50 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-100 border border-purple-200 transition-colors text-sm font-mono" 
+                                data-category="details" title="Electricity calculation, amount, due date, and disconnection date">@{{ electricity_details }}</button>
+                        </div>
+                    </div>
+
+                    {{-- Amounts & Totals --}}
+                    <div class="placeholder-category">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <i class="fas fa-money-bill-wave text-market-primary"></i>
+                            Amounts & Totals
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="placeholder-btn bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md hover:bg-yellow-100 border border-yellow-200 transition-colors text-sm font-mono" 
+                                data-category="amounts" title="Total amount due">@{{ total_due }}</button>
+                            <button class="placeholder-btn bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md hover:bg-yellow-100 border border-yellow-200 transition-colors text-sm font-mono" 
+                                data-category="amounts" title="New total due (with penalties)">@{{ new_total_due }}</button>
+                            <button class="placeholder-btn bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md hover:bg-yellow-100 border border-yellow-200 transition-colors text-sm font-mono" 
+                                data-category="amounts" title="Rent amount only">@{{ rent_amount }}</button>
+                            <button class="placeholder-btn bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md hover:bg-yellow-100 border border-yellow-200 transition-colors text-sm font-mono" 
+                                data-category="amounts" title="Water amount only">@{{ water_amount }}</button>
+                            <button class="placeholder-btn bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md hover:bg-yellow-100 border border-yellow-200 transition-colors text-sm font-mono" 
+                                data-category="amounts" title="Electricity amount only">@{{ electricity_amount }}</button>
+                        </div>
+                    </div>
+
+                    {{-- Bill Summaries --}}
+                    <div class="placeholder-category">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <i class="fas fa-list text-market-primary"></i>
+                            Bill Summaries
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="placeholder-btn bg-orange-50 text-orange-700 px-3 py-1.5 rounded-md hover:bg-orange-100 border border-orange-200 transition-colors text-sm font-mono" 
+                                data-category="summaries" title="All unpaid bills with amounts and due dates">@{{ bill_details }}</button>
+                            <button class="placeholder-btn bg-orange-50 text-orange-700 px-3 py-1.5 rounded-md hover:bg-orange-100 border border-orange-200 transition-colors text-sm font-mono" 
+                                data-category="summaries" title="Upcoming bills (not yet due)">@{{ upcoming_bill_details }}</button>
+                            <button class="placeholder-btn bg-orange-50 text-orange-700 px-3 py-1.5 rounded-md hover:bg-orange-100 border border-orange-200 transition-colors text-sm font-mono" 
+                                data-category="summaries" title="Overdue bills">@{{ overdue_bill_details }}</button>
+                            <button class="placeholder-btn bg-orange-50 text-orange-700 px-3 py-1.5 rounded-md hover:bg-orange-100 border border-orange-200 transition-colors text-sm font-mono" 
+                                data-category="summaries" title="List of unpaid utility types">@{{ unpaid_items }}</button>
+                            <button class="placeholder-btn bg-orange-50 text-orange-700 px-3 py-1.5 rounded-md hover:bg-orange-100 border border-orange-200 transition-colors text-sm font-mono" 
+                                data-category="summaries" title="List of overdue utility types">@{{ overdue_items }}</button>
+                        </div>
+                    </div>
+
+                    {{-- Links & Other --}}
+                    <div class="placeholder-category">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <i class="fas fa-link text-market-primary"></i>
+                            Links & Other
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="placeholder-btn bg-gray-50 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 transition-colors text-sm font-mono" 
+                                data-category="other" title="Vendor portal website URL">@{{ website_url }}</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="text-right">
                     <button id="saveTemplatesBtn"
@@ -816,7 +930,7 @@
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h3 class="text-xl font-bold text-gray-800">SMS Sending Schedule</h3>
-                    <p class="text-gray-500">Set the time of day for automated SMS notifications (Philippine Time).</p>
+                    <p class="text-gray-500">Set the days and time for automated SMS notifications (Philippine Time).</p>
                 </div>
                 <div id="smsSchedulesDefaultButtons">
                     <button id="editSmsSchedulesBtn"
@@ -843,6 +957,8 @@
                             <tr class="table-header">
                                 <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Notification
                                     Type</th>
+                                <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Scheduled Days
+                                </th>
                                 <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Scheduled Time
                                 </th>
                             </tr>
@@ -865,9 +981,9 @@
                                         Time</th>
                                     <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Item
                                         Changed</th>
-                                    <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Old Time
+                                    <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Old Value
                                     </th>
-                                    <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">New Time
+                                    <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">New Value
                                     </th>
                                 </tr>
                             </thead>
@@ -1075,50 +1191,94 @@
     <div id="announcementSection" class="dashboard-section overflow-visible">
         @include('layouts.partials.content-header', ['title' => 'Announcements'])
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {{-- Create Announcement Form --}}
-            <div class="lg:col-span-1">
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Create Announcement</h3>
-                    <form id="createAnnouncementForm">
-                        <div class="mb-4">
-                            <label for="announcementTitle" class="block text-gray-700 font-medium mb-2">Title *</label>
-                            <input type="text" id="announcementTitle" required
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
-                                placeholder="Enter title...">
+        <div class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {{-- Left Column: Create Announcement Form --}}
+                <div>
+                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Create Announcement</h3>
+                        <form id="createAnnouncementForm">
+                            <div class="mb-4">
+                                <label for="announcementTitle" class="block text-gray-700 font-medium mb-2">Title *</label>
+                                <input type="text" id="announcementTitle" required
+                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                    placeholder="Enter title...">
+                            </div>
+                            <div class="mb-4">
+                                <label for="announcementContent" class="block text-gray-700 font-medium mb-2">Content *</label>
+                                <textarea id="announcementContent" required rows="8"
+                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                    placeholder="Enter announcement details..."></textarea>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-gray-700 font-medium mb-2">Recipients *</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="recipientStaff" checked
+                                            class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                        <span class="text-gray-700">Staff</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="recipientAllSections" checked
+                                            class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                        <span class="text-gray-700">All Sections</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="recipientWetSection"
+                                            class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                        <span class="text-gray-700">Wet Section</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="recipientDrySection"
+                                            class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                        <span class="text-gray-700">Dry Section</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="recipientSemiWetSection"
+                                            class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                        <span class="text-gray-700">Semi-Wet Section</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" id="announcementIsActive" checked
+                                        class="form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                    <span class="text-gray-700">Publish Immediately</span>
+                                </label>
+                            </div>
+                            <button type="submit" id="saveAnnouncementBtn"
+                                class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                                <i class="fas fa-paper-plane"></i>
+                                <span>Post Announcement</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {{-- Right Column: Draft Announcements --}}
+                <div>
+                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Draft Announcements</h3>
+                        <div id="draftAnnouncementsList" class="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto pr-2">
+                            {{-- Draft announcements will be populated by JS --}}
+                            <div class="text-center text-gray-500 py-8">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Loading announcements...</p>
+                            </div>
                         </div>
-                        <div class="mb-4">
-                            <label for="announcementContent" class="block text-gray-700 font-medium mb-2">Content *</label>
-                            <textarea id="announcementContent" required rows="6"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
-                                placeholder="Enter announcement details..."></textarea>
-                        </div>
-                        <div class="mb-6">
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" id="announcementIsActive" checked
-                                    class="form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
-                                <span class="text-gray-700">Publish Immediately</span>
-                            </label>
-                        </div>
-                        <button type="submit" id="saveAnnouncementBtn"
-                            class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
-                            <i class="fas fa-paper-plane"></i>
-                            <span>Post Announcement</span>
-                        </button>
-                    </form>
+                    </div>
                 </div>
             </div>
 
-            {{-- Active Announcements List --}}
-            <div class="lg:col-span-2">
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Active Announcements</h3>
-                    <div id="announcementsList" class="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                        {{-- Announcements will be populated by JS --}}
-                        <div class="text-center text-gray-500 py-8">
-                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                            <p>Loading announcements...</p>
-                        </div>
+            {{-- Sent Announcements List - Full Width at Bottom --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Sent Announcements</h3>
+                <div id="sentAnnouncementsList" class="space-y-4 max-h-[calc(100vh-500px)] overflow-y-auto pr-2">
+                    {{-- Sent announcements will be populated by JS --}}
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                        <p>Loading announcements...</p>
                     </div>
                 </div>
             </div>
@@ -1363,6 +1523,100 @@
                         Cancel
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- =================================================================== --}}
+    {{-- PROFILE SECTION --}}
+    {{-- =================================================================== --}}
+    <div id="profileSection" class="dashboard-section overflow-visible">
+        @include('layouts.partials.content-header', ['title' => 'User Profile'])
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {{-- Profile Picture & Information --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                {{-- Profile Picture Section --}}
+                <div class="mb-6 text-center">
+                    <div class="relative inline-block">
+                        <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
+                            @if(auth()->user()->profile_picture)
+                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
+                                     alt="Profile Picture" class="w-full h-full object-cover">
+                            @else
+                                <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">
+                                    <i class="fas fa-user text-6xl text-gray-400"></i>
+                                </div>
+                            @endif
+                        </div>
+                        <label for="profilePictureInput" class="absolute bottom-0 right-0 bg-market-primary text-white rounded-full p-2 cursor-pointer hover:bg-market-secondary transition-colors shadow-lg">
+                            <i class="fas fa-camera"></i>
+                            <input type="file" id="profilePictureInput" accept="image/*" class="hidden">
+                        </label>
+                    </div>
+                    <button id="removeProfilePictureBtn" class="text-sm text-red-600 hover:text-red-800 {{ auth()->user()->profile_picture ? '' : 'hidden' }}">
+                        <i class="fas fa-trash"></i> Remove Picture
+                    </button>
+                </div>
+
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-user text-market-primary"></i>
+                    Profile Information
+                </h3>
+                <div class="space-y-4">
+                    @php
+                        $user = auth()->user();
+                        $profileDetails = [
+                            ['icon' => 'fa-user', 'label' => 'Name', 'value' => $user->name],
+                            ['icon' => 'fa-at', 'label' => 'Username', 'value' => $user->username],
+                            ['icon' => 'fa-user-tag', 'label' => 'Role', 'value' => $user->role->name ?? 'N/A'],
+                            ['icon' => 'fa-phone', 'label' => 'Contact Number', 'value' => $user->contact_number ?? 'Not set'],
+                            ['icon' => 'fa-calendar', 'label' => 'Last Login', 'value' => $user->last_login ? \Carbon\Carbon::parse($user->last_login)->format('F j, Y g:i A') : 'Never'],
+                            ['icon' => 'fa-info-circle', 'label' => 'Status', 'value' => ucfirst($user->status ?? 'active')],
+                        ];
+                    @endphp
+                    @foreach ($profileDetails as $detail)
+                        <div class="flex items-center p-3 bg-gray-50 rounded-lg">
+                            <i class="fas {{ $detail['icon'] }} text-market-primary w-8 text-center"></i>
+                            <div class="flex-1 ml-4">
+                                <span class="text-sm text-gray-600">{{ $detail['label'] }}</span>
+                                <p class="font-semibold text-gray-800">{{ $detail['value'] }}</p>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Change Password --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-key text-market-primary"></i>
+                    Change Password
+                </h3>
+                <form id="changePasswordForm">
+                    @csrf
+                    <div class="mb-4">
+                        <label for="currentPassword" class="block text-gray-700 font-medium mb-2">Current Password</label>
+                        <input type="password" id="currentPassword" name="current_password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <div class="mb-4">
+                        <label for="newPassword" class="block text-gray-700 font-medium mb-2">New Password</label>
+                        <input type="password" id="newPassword" name="password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Must be at least 8 characters with letters, numbers, symbols, and mixed case</p>
+                    </div>
+                    <div class="mb-6">
+                        <label for="confirmPassword" class="block text-gray-700 font-medium mb-2">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" name="password_confirmation" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <button type="submit" id="changePasswordBtn"
+                        class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-key"></i>
+                        <span>Change Password</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>

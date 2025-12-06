@@ -32,7 +32,8 @@ class MeterReaderController extends Controller
         // --- END OF LOGIC CHANGE ---
 
         DB::transaction(function () use ($billingPeriodMonth) {
-            $allStalls = Stall::pluck('id');
+            // Only get stalls with vendors
+            $allStalls = Stall::whereHas('vendor')->pluck('id');
             $stallsWithReading = UtilityReading::whereIn('stall_id', $allStalls)
                 ->whereYear('reading_date', $billingPeriodMonth->year)
                 ->whereMonth('reading_date', $billingPeriodMonth->month)
@@ -80,12 +81,14 @@ class MeterReaderController extends Controller
         // --- END OF TASK DISPLAY FIX ---
 
         // Fixed N+1 and used lean selects
+        // Get only stalls with assigned vendors (frontend handles pagination)
         $stalls = Stall::select('id', 'table_number', 'section_id')
+            ->whereHas('vendor') // Only stalls with vendors
             ->with(['section:id,name', 'utilityReadings' => function ($query) use ($billingPeriodMonth) {
             $query->whereYear('reading_date', $billingPeriodMonth->year)
                   ->whereMonth('reading_date', $billingPeriodMonth->month)
                   ->with('editRequests');
-        }])->orderBy('section_id')->paginate(15); // Replaced get() with paginate()
+        }])->orderBy('section_id')->get();
 
         $stallData = $stalls->map(function ($stall) use ($billingPeriodMonth) {
             $latestReading = $stall->utilityReadings->first();

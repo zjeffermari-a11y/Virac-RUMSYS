@@ -13,17 +13,18 @@ class Kernel extends ConsoleKernel
      *
      * @var array
      */
+
     protected $commands = [
-        \App\Console\Commands\GenerateMonthlyBills::class,
-        \App\Console\Commands\GenerateNewVendorBills::class,
-        \App\Console\Commands\CleanupBillingData::class,
-        \App\Console\Commands\ResetCurrentMonthReadings::class,
-        \App\Console\Commands\ClearCurrentMonthReadings::class,
-        \App\Console\Commands\SendBillingStatements::class, 
-        \App\Console\Commands\SendPaymentReminders::class,  
-        \App\Console\Commands\SendOverdueAlerts::class,   
-        \App\Console\Commands\DeletePayment::class,
-        \App\Console\Commands\CleanupSpecificMonthBilling::class,
+    \App\Console\Commands\GenerateMonthlyBills::class,
+    \App\Console\Commands\CleanupBillingData::class,
+    \App\Console\Commands\ResetCurrentMonthReadings::class,
+    \App\Console\Commands\ClearCurrentMonthReadings::class, // Registering the new command
+    \App\Console\Commands\SendBillingStatements::class, 
+    \App\Console\Commands\SendPaymentReminders::class,  
+    \App\Console\Commands\SendOverdueAlerts::class,   
+    \App\Console\Commands\DeletePayment::class,
+    \App\Console\Commands\CleanupSpecificMonthBilling::class,
+    \App\Console\Commands\RemoveTestContactNumbers::class,
     ];
 
     /**
@@ -35,8 +36,6 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('billing:generate')->monthlyOn(1, '00:00');
-        $schedule->command('sms:send-payment-reminders')->dailyAt('08:00');
-        $schedule->command('sms:send-overdue-alerts')->dailyAt('09:00');
     }
 
     /**

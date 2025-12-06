@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Models\Section;
 use App\Models\Billing;
 use App\Models\Payment;
 use Illuminate\View\View;
 use App\Models\BillingSetting;
+use App\Models\Rate;
 use App\Http\Controllers\Api\DashboardController;
 use Carbon\Carbon;
 
@@ -42,8 +44,16 @@ class StaffPortalController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
+                    'profile_picture' => $user->profile_picture ? Storage::url($user->profile_picture) : null,
                 ];
-            });
+            })
+            ->sort(function ($a, $b) {
+                // Sort alphabetically by stall number using natural sort for alphanumeric values
+                $stallA = strtoupper($a['stallNumber'] ?? '');
+                $stallB = strtoupper($b['stallNumber'] ?? '');
+                return strnatcasecmp($stallA, $stallB);
+            })
+            ->values(); // Re-index the collection
 
         $sections = Section::query()->distinct()->pluck('name');
 
@@ -75,7 +85,7 @@ class StaffPortalController extends Controller
                 'utilityConsumption' => $dashboardApiController->getUtilityConsumption($request)->getData(true),
                 'vendorPulse' => [
                     'topPerformers' => $dashboardApiController->getTopPerformingVendors($request)->getData(true),
-                    'needsSupport' => $needsSupportResponse['data'] ?? [],
+                    'needsSupport' => $needsSupportResponse,
                 ],
                 'filterData' => [
                     'years' => $years,
@@ -139,10 +149,41 @@ class StaffPortalController extends Controller
                     throw new \Exception("This vendor has no outstanding bills to pay.");
                 }
 
+                $billingSettings = BillingSetting::all()->keyBy('utility_type');
+                $paymentDate = Carbon::parse($request->payment_date);
+
                 foreach ($unpaidBills as $bill) {
+                    $originalAmount = (float) $bill->amount;
+                    $dueDate = Carbon::parse($bill->due_date);
+                    $finalAmount = $originalAmount;
+                    $settings = $billingSettings->get($bill->utility_type);
+
+                    // Calculate the correct amount based on payment date
+                    if ($paymentDate->gt($dueDate)) {
+                        // Payment was LATE, calculate penalties
+                        if ($bill->utility_type === 'Rent' && $settings) {
+                            $interest_months = (int) floor($dueDate->floatDiffInMonths($paymentDate));
+                            $surcharge = $originalAmount * (float)($settings->surcharge_rate ?? 0);
+                            $interest = $originalAmount * (float)($settings->monthly_interest_rate ?? 0) * $interest_months;
+                            $finalAmount += $surcharge + $interest;
+                        } else if ($settings) {
+                            $penalty = $originalAmount * (float)($settings->penalty_rate ?? 0);
+                            $finalAmount += $penalty;
+                        }
+                    } else if ($paymentDate->day <= 15) {
+                        // Payment was ON TIME (before due date and within discount period), check for discount
+                        $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
+                        $paymentMonth = $paymentDate->format('Y-m');
+
+                        if ($billMonth === $paymentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
+                            $discountAmount = $originalAmount * (float)$settings->discount_rate;
+                            $finalAmount -= $discountAmount;
+                        }
+                    }
+
                     Payment::create([
                         'billing_id' => $bill->id,
-                        'amount_paid' => $bill->amount,
+                        'amount_paid' => $finalAmount,
                         'payment_date' => $request->payment_date,
                     ]);
 
@@ -166,21 +207,21 @@ class StaffPortalController extends Controller
         $vendor->load('stall.section');
 
         $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
-            ->where(function ($query) {
-                $query->where('status', 'unpaid')
-                    ->orWhere(function ($subQuery) {
-                        $subQuery->where('status', 'paid')
-                            ->whereHas('payment', function ($paymentQuery) {
-                                $paymentQuery->whereMonth('payment_date', Carbon::now()->month)
-                                    ->whereYear('payment_date', Carbon::now()->year);
-                            });
-                    });
-            })
+            ->where('status', 'unpaid')
             ->with('payment')
             ->orderBy('due_date', 'desc')
             ->get();
 
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
+        
+        // Get current utility rates
+        $utilityRates = cache()->remember('utility_rates', 3600, function () {
+            return Rate::whereIn('utility_type', ['Electricity', 'Water'])
+                ->select('id', 'utility_type', 'rate', 'monthly_rate')
+                ->get()
+                ->keyBy('utility_type');
+        });
+        
         $today = Carbon::today();
 
         foreach ($outstandingBills as $bill) {
@@ -271,6 +312,7 @@ class StaffPortalController extends Controller
             'groupedBills' => $groupedBills,
             'outstandingBills' => $outstandingBills,
             'billingSettings' => $billingSettings,
+            'utilityRates' => $utilityRates,
         ]);
     }
 

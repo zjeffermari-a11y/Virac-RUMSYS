@@ -91,6 +91,7 @@ class GenerateMonthlyBills extends Command
                     ->first();
 
                 if ($latestReading) {
+                    // Bill with actual consumption
                     $consumption = $latestReading->current_reading - $latestReading->previous_reading;
                     Billing::updateOrCreate(
                         [
@@ -110,6 +111,29 @@ class GenerateMonthlyBills extends Command
                             'status' => 'unpaid'
                         ]
                     );
+                    $this->info("  Electricity bill: {$consumption} kWh × ₱{$electricityRate} = ₱" . ($consumption * $electricityRate));
+                } else {
+                    // Create placeholder bill even if no reading exists (amount = 0)
+                    // This ensures electricity bills always appear in outstanding balance
+                    Billing::updateOrCreate(
+                        [
+                            'stall_id' => $stall->id,
+                            'utility_type' => 'Electricity',
+                            'period_start' => $utilityPeriodStart->toDateString(),
+                        ],
+                        [
+                            'period_end' => $utilityPeriodEnd->toDateString(),
+                            'amount' => 0,
+                            'previous_reading' => 0,
+                            'current_reading' => 0,
+                            'consumption' => 0, 
+                            'rate' => $electricityRate,
+                            'due_date' => $this->getDueDate('Electricity', $rentPeriodStart, $schedules),
+                            'disconnection_date' => $this->getDisconnectionDate('Electricity', $rentPeriodStart, $schedules),
+                            'status' => 'unpaid'
+                        ]
+                    );
+                    $this->info("  Electricity bill: Placeholder created (no reading yet)");
                 }
             }
         }

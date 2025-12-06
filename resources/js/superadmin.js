@@ -15,10 +15,15 @@ class SuperAdminDashboard {
         this.userPollingInterval = null; // Property to hold the interval ID
         this.rentalRates = [];
         this.allRentalRates = window.INITIAL_STATE?.rentalRates?.data || [];
-        this.utilityRates =
-            window.INITIAL_STATE?.utilityRates?.data ||
-            window.INITIAL_STATE?.utilityRates ||
-            [];
+        // Ensure utilityRates is always an array
+        // The API returns an array directly, but check both .data and direct access
+        const utilityRatesData = window.INITIAL_STATE?.utilityRates?.data || window.INITIAL_STATE?.utilityRates;
+        this.utilityRates = Array.isArray(utilityRatesData) 
+            ? utilityRatesData 
+            : [];
+        
+        // Debug: Log initial utility rates
+        console.log('Initial Utility Rates:', this.utilityRates);
         this.utilityRateHistory =
             window.INITIAL_STATE?.utilityRateHistory?.data || [];
         this.currentSchedule = {
@@ -67,9 +72,12 @@ class SuperAdminDashboard {
         this.userPollingInterval = null;
         this.rentalRates = []; // This gets populated by filterAndRenderRates
         this.rentalRatesPagination = {};
-        this.utilityRateHistoryPage = 2; // Start at page 2 for infinite scroll
+        // Initialize pagination state for utility rate history
+        const utilityRateHistoryData = window.INITIAL_STATE?.utilityRateHistory?.data || window.INITIAL_STATE?.utilityRateHistory || [];
+        this.utilityRateHistoryPage = Array.isArray(utilityRateHistoryData) && utilityRateHistoryData.length > 0 ? 2 : 1; // Start at page 2 if we have initial data, otherwise page 1
         this.utilityRateHistoryHasMore =
-            !!window.INITIAL_STATE?.utilityRateHistory?.next_page_url;
+            !!window.INITIAL_STATE?.utilityRateHistory?.next_page_url || 
+            !!window.INITIAL_STATE?.utilityRateHistory?.has_more;
         this.isFetchingUtilityHistory = false;
         this.scheduleHistoryPage = 2;
         this.scheduleHistoryHasMore =
@@ -82,6 +90,7 @@ class SuperAdminDashboard {
         this.billingDateHistoryHasMore =
             !!window.INITIAL_STATE?.billingDatesHistory?.next_page_url;
         this.isFetchingBillingHistory = false;
+        this.originalBillingDates = null; // Store original values when entering edit mode
         this.activeNotificationEditor = null;
         //properties for SMS Schedule history infinite scroll
         this.smsScheduleHistoryPage = 2;
@@ -111,6 +120,11 @@ class SuperAdminDashboard {
         this.billingSettingsHistoryHasMore =
             !!window.INITIAL_STATE?.billingSettingsHistory?.next_page_url;
         this.isFetchingBillingSettingsHistory = false;
+        // Rental Rate History properties
+        this.rentalRateHistory = window.INITIAL_STATE?.rentalRateHistory?.data || [];
+        this.rentalRateHistoryPage = 1;
+        this.rentalRateHistoryHasMore = true;
+        this.isFetchingRentalRateHistory = false;
         this.dataLoaded = {
             marketStallRentalRatesSection: false,
             electricityWaterRatesSection: false,
@@ -122,6 +136,7 @@ class SuperAdminDashboard {
             systemUserManagementSection: false,
             auditTrailsSection: false,
             discountsSurchargesPenaltySection: false,
+            profileSection: false,
         };
         this.listenersInitialized = {
             rentalRates: false,
@@ -162,6 +177,9 @@ class SuperAdminDashboard {
             rentalRatesPagination: document.getElementById(
                 "rentalRatesPagination"
             ),
+            rentalRateHistoryTableBody: document.getElementById("rentalRateHistoryTableBody"),
+            rentalRateHistoryLoader: document.getElementById("rentalRateHistoryLoader"),
+            rentalRateHistoryContainer: document.getElementById("rentalRateHistoryContainer"),
             sectionNavBtns: document.querySelectorAll(".section-nav-btn"),
 
             rentalRatesSearchInput: document.getElementById(
@@ -420,7 +438,12 @@ class SuperAdminDashboard {
             announcementContent: document.getElementById("announcementContent"),
             announcementIsActive: document.getElementById("announcementIsActive"),
             saveAnnouncementBtn: document.getElementById("saveAnnouncementBtn"),
-            announcementsList: document.getElementById("announcementsList"),
+            sentAnnouncementsList: document.getElementById("sentAnnouncementsList"),
+            draftAnnouncementsList: document.getElementById("draftAnnouncementsList"),
+
+            // Settings Elements
+            changePasswordForm: document.getElementById("changePasswordForm"),
+            changePasswordBtn: document.getElementById("changePasswordBtn"),
         };
     }
 
@@ -519,14 +542,58 @@ class SuperAdminDashboard {
         );
 
         this.filterAndRenderRates();
+        
+        // Always render all data on page load (even if empty)
+        // They will show "No data found" or "Loading..." if empty, or display data if available
+        
+        // Utility Rates
         this.renderUtilityRatesTable();
         this.renderUtilityRateHistoryTable();
+        
+        // If utility rates are empty, fetch them
+        if (!this.utilityRates || this.utilityRates.length === 0) {
+            this.fetchUtilityRates();
+        }
+        
+        // If utility rate history is empty, fetch it
+        if (!this.utilityRateHistory || this.utilityRateHistory.length === 0) {
+            this.utilityRateHistory = [];
+            this.utilityRateHistoryPage = 1;
+            this.utilityRateHistoryHasMore = true;
+            this.fetchUtilityRateHistory();
+        }
+        
+        // Meter Reading Schedule
         this.renderMeterReadingSchedule();
         this.renderScheduleHistoryTable();
+        
+        // Billing Date Schedules
         this.renderBillingDateSchedules();
         this.renderBillingDateHistory();
+        
+        // If billing date schedules are empty, fetch them
+        if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
+            this.fetchBillingDateSchedules();
+        }
+        
+        // Billing Settings (Discounts, Surcharges, Penalty)
         this.renderBillingSettingsTables();
         this.renderBillingSettingsHistory();
+        
+        // If billing settings are empty, fetch them
+        if (!this.billingSettings || Object.keys(this.billingSettings).length === 0) {
+            this.fetchBillingSettings();
+        }
+        
+        // Rental Rate History
+        this.renderRentalRateHistory();
+        
+        if (!this.rentalRateHistory || this.rentalRateHistory.length === 0) {
+            this.rentalRateHistory = [];
+            this.rentalRateHistoryPage = 1;
+            this.rentalRateHistoryHasMore = true;
+            this.fetchRentalRateHistory();
+        }
         this.renderNotificationTemplates();
         this.renderSmsSchedulesTable(); // New render call
         this.renderSmsScheduleHistory(); // New render call
@@ -537,7 +604,15 @@ class SuperAdminDashboard {
         if (this.unreadNotificationCount > 0) {
             this.elements.notificationDot.classList.remove("hidden");
         }
-        setInterval(this.fetchUnreadNotifications.bind(this), 7000);
+        // Poll for notifications every 2 seconds for faster updates
+        setInterval(this.fetchUnreadNotifications.bind(this), 2000);
+        
+        // Also fetch immediately when page becomes visible (user switches tabs/windows)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                this.fetchUnreadNotifications();
+            }
+        });
 
         await this.fetchRoles();
 
@@ -784,11 +859,18 @@ class SuperAdminDashboard {
             if (data.success) {
                 this.elements.semaphoreCreditBalance.textContent = data.credit_balance;
             } else {
-                this.elements.semaphoreCreditBalance.textContent = "Error";
+                if (data.rate_limited) {
+                    this.elements.semaphoreCreditBalance.textContent = "Rate Limited";
+                    this.elements.semaphoreCreditBalance.title = "Too many requests. Please wait a few minutes before refreshing.";
+                } else {
+                    this.elements.semaphoreCreditBalance.textContent = "Error";
+                    this.elements.semaphoreCreditBalance.title = data.message || "Failed to fetch credits";
+                }
             }
         } catch (error) {
             console.error("Error fetching Semaphore credits:", error);
             this.elements.semaphoreCreditBalance.textContent = "Error";
+            this.elements.semaphoreCreditBalance.title = "Network error. Please try again later.";
         }
     }
 
@@ -831,6 +913,7 @@ class SuperAdminDashboard {
                 break;
             case "announcementSection":
                 await this.fetchAnnouncements();
+                await this.loadAnnouncementRecipients();
                 break;
             // The 'notificationSection' still needs to fetch SMS settings dynamically
         }
@@ -928,10 +1011,15 @@ class SuperAdminDashboard {
             const response = await fetch("/api/utility-rates");
             if (!response.ok) throw new Error("Network response was not ok");
 
-            // This new code correctly handles a wrapped API response
+            // The API returns an array directly
             const responseData = await response.json();
-            this.utilityRates = responseData.data || responseData;
+            
+            // Ensure utilityRates is always an array
+            this.utilityRates = Array.isArray(responseData) 
+                ? responseData 
+                : [];
 
+            console.log('Utility Rates loaded:', this.utilityRates);
             this.renderUtilityRatesTable();
         } catch (error) {
             console.error("Failed to fetch utility rates:", error);
@@ -956,12 +1044,24 @@ class SuperAdminDashboard {
             if (!response.ok) throw new Error("Network response was not ok");
             const data = await response.json();
 
-            this.utilityRateHistory.push(...data.data);
-            this.utilityRateHistoryHasMore = data.next_page_url !== null;
-            this.utilityRateHistoryPage++;
+            // Handle both paginated and non-paginated responses
+            const historyData = data.data || data;
+            const hasMore = data.has_more !== undefined ? data.has_more : (data.next_page_url !== null);
+            
+            if (historyData && Array.isArray(historyData) && historyData.length > 0) {
+                this.utilityRateHistory.push(...historyData);
+                this.utilityRateHistoryHasMore = hasMore;
+                this.utilityRateHistoryPage++;
+            } else {
+                // No more data
+                this.utilityRateHistoryHasMore = false;
+            }
+            
             this.renderUtilityRateHistoryTable();
         } catch (error) {
-            // ... error handling
+            console.error("Failed to fetch utility rate history:", error);
+            this.showToast("Failed to load utility rate history.", "error");
+            this.renderUtilityRateHistoryTable(); // Still render to show empty state
         } finally {
             this.isFetchingUtilityHistory = false;
             if (this.elements.utilityRateHistoryLoader)
@@ -1110,13 +1210,42 @@ class SuperAdminDashboard {
                 if (this.activeNotificationEditor) {
                     this.insertPlaceholder(
                         this.activeNotificationEditor,
-                        button.textContent
+                        button.textContent.trim()
                     );
                 } else {
                     this.showToast("Please select a text area first.", "info");
                 }
             });
         });
+
+        // Add search functionality for placeholders
+        const placeholderSearch = document.getElementById("placeholderSearch");
+        if (placeholderSearch) {
+            placeholderSearch.addEventListener("input", (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                const categories = document.querySelectorAll(".placeholder-category");
+                
+                categories.forEach((category) => {
+                    const buttons = category.querySelectorAll(".placeholder-btn");
+                    const hasMatch = Array.from(buttons).some((btn) =>
+                        btn.textContent.toLowerCase().includes(searchTerm) ||
+                        btn.getAttribute("title")?.toLowerCase().includes(searchTerm)
+                    );
+                    
+                    if (hasMatch || !searchTerm) {
+                        category.style.display = "block";
+                        buttons.forEach((btn) => {
+                            const matches = 
+                                btn.textContent.toLowerCase().includes(searchTerm) ||
+                                btn.getAttribute("title")?.toLowerCase().includes(searchTerm);
+                            btn.style.display = matches || !searchTerm ? "inline-block" : "none";
+                        });
+                    } else {
+                        category.style.display = "none";
+                    }
+                });
+            });
+        }
 
         // --- New SMS Schedule Listeners ---
         this.elements.editSmsSchedulesBtn.addEventListener("click", () =>
@@ -1177,6 +1306,11 @@ class SuperAdminDashboard {
             overdue_items: "Rent, Electricity",
             new_total_due: "3850.00",
             timestamp: timestamp, // Add the timestamp here
+            bill_month: "September 2025",
+            rent_details: "Original: P1,250.00\nDiscounted: P1,200.00\nDue: September 15, 2025",
+            water_details: "Amount: P550.00\nDue: September 15, 2025",
+            electricity_details: "Calculation: (20.67 kWh) x P30.00 = P620.00\nAmount to Pay: P620.00\nDue: September 15, 2025\nDisconnection: September 25, 2025",
+            website_url: window.location.origin + "/vendor/home",
         };
 
         for (const [key, value] of Object.entries(data)) {
@@ -1196,7 +1330,10 @@ class SuperAdminDashboard {
 
     insertPlaceholder(editorElement, placeholder) {
         editorElement.focus();
-        document.execCommand("insertText", false, placeholder);
+        // Remove @ symbol if present (for display purposes) and ensure proper format
+        const cleanPlaceholder = placeholder.replace(/^@/, '').trim();
+        const formattedPlaceholder = `{{${cleanPlaceholder}}}`;
+        document.execCommand("insertText", false, formattedPlaceholder);
         this.updateCharacterCount(editorElement);
         this.updateLivePreview(editorElement);
     }
@@ -1273,10 +1410,31 @@ class SuperAdminDashboard {
         const { smsScheduleTableBody } = this.elements;
         if (!smsScheduleTableBody) return;
 
-        const scheduleTypes = [
-            "SMS - Billing Statements",
-            "SMS - Payment Reminders",
-            "SMS - Overdue Alerts",
+        const scheduleConfigs = [
+            {
+                type: "SMS - Billing Statements",
+                label: "Billing Statements",
+                dayType: "month", // Day of month (1-31)
+                defaultDay: 1,
+                defaultDays: null,
+                helpText: "Day of month when billing statements are sent (1-31)"
+            },
+            {
+                type: "SMS - Payment Reminders",
+                label: "Payment Reminders",
+                dayType: "before", // Days before due date
+                defaultDay: null,
+                defaultDays: [7, 5, 3, 1],
+                helpText: "Days before due date to send reminders (e.g., 7 = 7 days before)"
+            },
+            {
+                type: "SMS - Overdue Alerts",
+                label: "Overdue Alerts",
+                dayType: "after", // Days after due date (overdue)
+                defaultDay: null,
+                defaultDays: [1, 3, 7, 14, 21, 30],
+                helpText: "Days after due date to send alerts (e.g., 1 = 1 day overdue)"
+            }
         ];
 
         const formatTime12hr = (timeString) => {
@@ -1288,22 +1446,87 @@ class SuperAdminDashboard {
             return `${String(h12).padStart(2, "0")}:${minutes} ${suffix}`;
         };
 
-        smsScheduleTableBody.innerHTML = scheduleTypes
-            .map((type) => {
+        smsScheduleTableBody.innerHTML = scheduleConfigs
+            .map((config) => {
                 const schedule = this.smsSchedules.find(
-                    (s) => s.schedule_type === type
+                    (s) => s.schedule_type === config.type
                 );
-                const currentTime = schedule ? schedule.description : "00:00";
+                const currentTime = schedule ? schedule.description : "08:00";
+                const currentDay = schedule ? (schedule.schedule_day ?? config.defaultDay) : config.defaultDay;
+                const currentDays = schedule && schedule.sms_days 
+                    ? (Array.isArray(schedule.sms_days) ? schedule.sms_days : [])
+                    : (config.defaultDays || []);
+
+                let daysDisplay = "";
+                if (isEditing) {
+                    if (config.dayType === "month") {
+                        // Billing Statements: Single day of month selector
+                        daysDisplay = `
+                            <select class="sms-schedule-day-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${config.type}">
+                                ${Array.from({ length: 31 }, (_, i) => i + 1).map(day => 
+                                    `<option value="${day}" ${currentDay === day ? "selected" : ""}>${day}${day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"}</option>`
+                                ).join("")}
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">${config.helpText}</p>
+                        `;
+                    } else {
+                        // Payment Reminders and Overdue Alerts: Multiple days with add/remove
+                        const daysList = currentDays.length > 0 ? currentDays : [];
+                        const sortedDays = [...daysList].sort((a, b) => a - b);
+                        
+                        daysDisplay = `
+                            <div class="sms-days-container" data-type="${config.type}">
+                                <div class="flex flex-wrap gap-2 mb-2">
+                                    ${sortedDays.map((day, index) => `
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
+                                            ${day} ${config.dayType === "before" ? "days before" : "days overdue"}
+                                            <button type="button" class="ml-2 text-indigo-600 hover:text-indigo-800 remove-day-btn" data-type="${config.type}" data-day="${day}" data-index="${index}">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </span>
+                                    `).join("")}
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="number" 
+                                           class="add-day-input w-24 border border-gray-300 rounded-lg px-2 py-1 text-sm" 
+                                           data-type="${config.type}"
+                                           placeholder="Add day"
+                                           min="0"
+                                           max="365">
+                                    <button type="button" 
+                                            class="add-day-btn bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded-lg text-sm transition-smooth"
+                                            data-type="${config.type}">
+                                        <i class="fas fa-plus text-xs"></i> Add
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">${config.helpText}</p>
+                            </div>
+                        `;
+                    }
+                } else {
+                    // Display mode
+                    if (config.dayType === "month") {
+                        const daySuffix = currentDay === 1 ? "st" : currentDay === 2 ? "nd" : currentDay === 3 ? "rd" : "th";
+                        daysDisplay = `<span>${currentDay || config.defaultDay}${daySuffix} of month</span>`;
+                    } else {
+                        if (currentDays.length > 0) {
+                            const sortedDays = [...currentDays].sort((a, b) => a - b);
+                            daysDisplay = `<span>${sortedDays.join(", ")} ${config.dayType === "before" ? "days before" : "days overdue"}</span>`;
+                        } else {
+                            daysDisplay = `<span class="text-gray-400">Not Set</span>`;
+                        }
+                    }
+                }
 
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
-                    <td data-label="Notification Type" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${type.replace(
-                    "SMS - ",
-                    ""
-                )}</td>
+                    <td data-label="Notification Type" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${config.label}</td>
+                    <td data-label="Scheduled Days" class="border border-gray-200 px-4 py-3 text-gray-700">
+                        ${daysDisplay}
+                    </td>
                     <td data-label="Scheduled Time" class="border border-gray-200 px-4 py-3 text-gray-700">
                         ${isEditing
-                        ? `<input type="time" class="sms-schedule-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${type}" value="${currentTime}">`
+                        ? `<input type="time" class="sms-schedule-time-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${config.type}" value="${currentTime}">`
                         : `<span>${formatTime12hr(currentTime)}</span>`
                     }
                     </td>
@@ -1311,6 +1534,78 @@ class SuperAdminDashboard {
             `;
             })
             .join("");
+
+        // Add event listeners for add/remove day buttons
+        if (isEditing) {
+            this.setupSmsDaysEventListeners();
+        }
+    }
+
+    setupSmsDaysEventListeners() {
+        const { smsScheduleTableBody } = this.elements;
+        if (!smsScheduleTableBody) return;
+
+        // Remove day button
+        smsScheduleTableBody.querySelectorAll(".remove-day-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                const type = e.target.closest(".remove-day-btn").dataset.type;
+                const dayToRemove = parseInt(e.target.closest(".remove-day-btn").dataset.day);
+                
+                const schedule = this.smsSchedules.find(s => s.schedule_type === type);
+                if (schedule && schedule.sms_days) {
+                    schedule.sms_days = schedule.sms_days.filter(d => d !== dayToRemove);
+                    this.renderSmsSchedulesTable(true);
+                }
+            });
+        });
+
+        // Add day button
+        smsScheduleTableBody.querySelectorAll(".add-day-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                const type = e.target.closest(".add-day-btn").dataset.type;
+                const container = smsScheduleTableBody.querySelector(`.sms-days-container[data-type="${type}"]`);
+                const input = container.querySelector(".add-day-input");
+                const dayValue = parseInt(input.value);
+
+                if (isNaN(dayValue) || dayValue < 0 || dayValue > 365) {
+                    this.showToast("Please enter a valid day (0-365)", "error");
+                    return;
+                }
+
+                const schedule = this.smsSchedules.find(s => s.schedule_type === type);
+                if (!schedule) {
+                    this.smsSchedules.push({
+                        schedule_type: type,
+                        description: "08:00",
+                        sms_days: [dayValue]
+                    });
+                } else {
+                    if (!schedule.sms_days) {
+                        schedule.sms_days = [];
+                    }
+                    if (!schedule.sms_days.includes(dayValue)) {
+                        schedule.sms_days.push(dayValue);
+                    } else {
+                        this.showToast("This day is already added", "error");
+                        return;
+                    }
+                }
+
+                input.value = "";
+                this.renderSmsSchedulesTable(true);
+            });
+        });
+
+        // Enter key on add day input
+        smsScheduleTableBody.querySelectorAll(".add-day-input").forEach(input => {
+            input.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    const btn = input.parentElement.querySelector(".add-day-btn");
+                    btn.click();
+                }
+            });
+        });
     }
 
     renderSmsScheduleHistory() {
@@ -1321,18 +1616,18 @@ class SuperAdminDashboard {
             return;
         }
 
-        const formatTime12hr = (timeString) => {
-            if (
-                !timeString ||
-                !timeString.includes(":") ||
-                timeString === "Not Set"
-            )
-                return "Not Set";
-            const [hours, minutes] = timeString.split(":");
-            const h = parseInt(hours, 10);
-            const suffix = h >= 12 ? "PM" : "AM";
-            const h12 = h % 12 || 12;
-            return `${String(h12).padStart(2, "0")}:${minutes} ${suffix}`;
+        const formatValue = (value) => {
+            if (!value || value === "Not Set") return "Not Set";
+            // Check if it's a time format (contains :)
+            if (value.includes(":")) {
+                const [hours, minutes] = value.split(":");
+                const h = parseInt(hours, 10);
+                const suffix = h >= 12 ? "PM" : "AM";
+                const h12 = h % 12 || 12;
+                return `${String(h12).padStart(2, "0")}:${minutes} ${suffix}`;
+            }
+            // Otherwise, it's a day or days value
+            return value;
         };
 
         smsScheduleHistoryTableBody.innerHTML = this.smsScheduleHistory
@@ -1355,10 +1650,10 @@ class SuperAdminDashboard {
                     "SMS - ",
                     ""
                 )}</td>
-                    <td data-label="Old Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formatTime12hr(
+                    <td data-label="Old Value" class="border border-gray-200 px-4 py-3 text-gray-700">${formatValue(
                     log.old_value
                 )}</td>
-                    <td data-label="New Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formatTime12hr(
+                    <td data-label="New Value" class="border border-gray-200 px-4 py-3 text-gray-700">${formatValue(
                     log.new_value
                 )}</td>
                 </tr>
@@ -1381,14 +1676,44 @@ class SuperAdminDashboard {
 
     async saveSmsSchedules() {
         const updatedSchedulesPayload = [];
+        const scheduleTypes = new Set();
+
+        // Collect all schedule types
         this.elements.smsScheduleTableBody
-            .querySelectorAll(".sms-schedule-input")
-            .forEach((input) => {
-                updatedSchedulesPayload.push({
-                    type: input.dataset.type,
-                    time: input.value,
-                });
+            .querySelectorAll(".sms-schedule-time-input, .sms-schedule-day-input, .sms-days-container")
+            .forEach((element) => {
+                const type = element.dataset.type;
+                if (type) scheduleTypes.add(type);
             });
+
+        // Build payload with time, day, and days
+        scheduleTypes.forEach((type) => {
+            const timeInput = this.elements.smsScheduleTableBody.querySelector(
+                `.sms-schedule-time-input[data-type="${type}"]`
+            );
+            const dayInput = this.elements.smsScheduleTableBody.querySelector(
+                `.sms-schedule-day-input[data-type="${type}"]`
+            );
+            const schedule = this.smsSchedules.find(s => s.schedule_type === type);
+
+            if (timeInput) {
+                const payload = {
+                    type: type,
+                    time: timeInput.value,
+                };
+
+                // Billing Statements uses day (schedule_day)
+                if (type === "SMS - Billing Statements" && dayInput) {
+                    payload.day = parseInt(dayInput.value);
+                }
+                // Payment Reminders and Overdue Alerts use days array (sms_days)
+                else if (schedule && schedule.sms_days) {
+                    payload.days = schedule.sms_days;
+                }
+
+                updatedSchedulesPayload.push(payload);
+            }
+        });
 
         // Optimistic UI update
         const oldSchedules = JSON.parse(JSON.stringify(this.smsSchedules));
@@ -1398,11 +1723,24 @@ class SuperAdminDashboard {
             );
             if (schedule) {
                 schedule.description = updated.time;
+                if (updated.day !== undefined) {
+                    schedule.schedule_day = updated.day;
+                }
+                if (updated.days !== undefined) {
+                    schedule.sms_days = updated.days;
+                }
             } else {
-                this.smsSchedules.push({
+                const newSchedule = {
                     schedule_type: updated.type,
                     description: updated.time,
-                });
+                };
+                if (updated.day !== undefined) {
+                    newSchedule.schedule_day = updated.day;
+                }
+                if (updated.days !== undefined) {
+                    newSchedule.sms_days = updated.days;
+                }
+                this.smsSchedules.push(newSchedule);
             }
         });
         this.toggleSmsSchedulesEditMode(false);
@@ -2263,41 +2601,64 @@ class SuperAdminDashboard {
 
     renderUtilityRatesTable(isEditing = false) {
         if (!this.elements.utilityRatesTableBody) return;
+        
+        // Ensure utilityRates is an array
+        if (!Array.isArray(this.utilityRates)) {
+            console.warn('utilityRates is not an array:', this.utilityRates);
+            this.utilityRates = [];
+        }
+        
+        // Debug: Log the utility rates data structure
+        console.log('Utility Rates Data:', this.utilityRates);
+        if (this.utilityRates.length > 0) {
+            console.log('First rate structure:', this.utilityRates[0]);
+            console.log('First rate utility property:', this.utilityRates[0]?.utility);
+        }
+
+        // Ensure we have data, if not, fetch it
+        if (!this.utilityRates || this.utilityRates.length === 0) {
+            this.elements.utilityRatesTableBody.innerHTML = `
+                <tr><td colspan="2" class="text-center py-4 text-gray-500">Loading utility rates...</td></tr>
+            `;
+            this.fetchUtilityRates();
+            return;
+        }
 
         if (isEditing) {
             // Edit mode with styling that matches the view mode
             this.elements.utilityRatesTableBody.innerHTML = this.utilityRates
                 .map(
-                    (rate) => `
-                <tr class="bg-gradient-to-r from-gray-50 to-gray-100" data-id="util-${rate.id
-                        }">
-                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700">${rate.utility
-                        }</td>
+                    (rate) => {
+                        const rateValue = parseFloat(rate.rate) || 0;
+                        return `
+                <tr class="bg-gradient-to-r from-gray-50 to-gray-100" data-id="util-${rate.id || ''}">
+                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700">${rate.utility || 'N/A'}</td>
                     
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700"> 
                         
                         <input type="number" 
                                class="edit-utility-rate no-spinner w-full h-full bg-transparent text-left text-gray-700 focus:outline-none focus:bg-gray-100 rounded-lg px-4 py-1 transition" 
-                               value="${parseFloat(rate.rate)}" 
+                               value="${rateValue}" 
                                min="0" 
                                step="0.01">
                     </td>
-                </tr>`
+                </tr>`;
+                    }
                 )
                 .join("");
         } else {
             // View mode (remains the same)
             this.elements.utilityRatesTableBody.innerHTML = this.utilityRates
                 .map(
-                    (rate) => `
-                <tr class="hover:bg-gray-50 transition-colors" data-id="util-${rate.id
-                        }">
-                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${rate.utility
-                        }</td>
-                    <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${rate.rate.toFixed(
-                            2
-                        )} / ${rate.unit}</td>
-                </tr>`
+                    (rate) => {
+                        const rateValue = parseFloat(rate.rate) || 0;
+                        const unit = rate.unit || (rate.utility === 'Electricity' ? 'kWh' : 'day');
+                        return `
+                <tr class="hover:bg-gray-50 transition-colors" data-id="util-${rate.id || ''}">
+                    <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${rate.utility || 'N/A'}</td>
+                    <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${rateValue.toFixed(2)} / ${unit}</td>
+                </tr>`;
+                    }
                 )
                 .join("");
         }
@@ -2566,25 +2927,112 @@ class SuperAdminDashboard {
     renderBillingDateSchedules(isEditing = false) {
         const tableBody = this.elements.billingDatesTableBody;
         if (!tableBody) return;
-
-        const findSchedule = (type) =>
-            this.billingDateSchedules.find((s) => s.schedule_type === type);
-
-        const createDayDropdown = (schedule, scheduleType, isEnabled) => {
-            let options = '<option value="Not Set">Not Set</option>';
-            for (let i = 1; i <= 31; i++) {
-                options += `<option value="${i}">${i}</option>`;
+        
+        // If no schedules data, show loading message and fetch
+        if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
+            tableBody.innerHTML = `
+                <tr><td colspan="6" class="text-center py-4 text-gray-500">Loading billing schedules...</td></tr>
+            `;
+            if (!isEditing) { // Only fetch if not already in edit mode
+                this.fetchBillingDateSchedules();
             }
-            const select = document.createElement("select");
-            select.innerHTML = options;
-            // Use the schedule's description if it exists, otherwise default to "Not Set"
-            select.value = schedule ? schedule.description : "Not Set";
-            select.disabled = !isEnabled;
-            select.dataset.id = schedule ? schedule.id : "";
-            select.dataset.type = scheduleType; // Always use the explicitly passed scheduleType
-            select.className =
-                "billing-date-select w-full border border-gray-300 rounded-lg px-3 py-2 bg-white";
-            return select.outerHTML;
+            return;
+        }
+
+        // Debug: Log the schedules data when entering edit mode
+        if (isEditing) {
+            console.log("=== EDIT MODE ACTIVATED ===");
+            console.log("Billing Date Schedules Data:", this.billingDateSchedules);
+            console.log("Number of schedules:", this.billingDateSchedules?.length || 0);
+            if (this.billingDateSchedules && this.billingDateSchedules.length > 0) {
+                console.log("Sample schedule structure:", this.billingDateSchedules[0]);
+                console.log("All schedule types:", this.billingDateSchedules.map(s => s.schedule_type));
+            } else {
+                console.error("⚠️ No billing date schedules found! Data might not be loaded.");
+            }
+        }
+
+        const findSchedule = (type) => {
+            if (!this.billingDateSchedules || !Array.isArray(this.billingDateSchedules)) {
+                console.error(`Cannot find schedule - billingDateSchedules is not an array:`, this.billingDateSchedules);
+                return null;
+            }
+            const found = this.billingDateSchedules.find((s) => {
+                // Check both possible field names
+                const scheduleType = s.schedule_type || s.scheduleType;
+                return scheduleType === type;
+            });
+            if (isEditing && !found) {
+                console.warn(`⚠️ Schedule not found for type: "${type}"`);
+            }
+            return found;
+        };
+
+        const createDayDropdown = (schedule, scheduleType, isEnabled, currentValue = null, isEditing = false) => {
+            // Determine the value to use - prioritize currentValue (already processed), then schedule.description
+            let scheduleValue = "Not Set";
+            
+            // Use currentValue if it's valid (this is the processed value from view mode)
+            if (currentValue && currentValue !== "Not Set" && currentValue !== null && currentValue !== undefined && currentValue !== "") {
+                scheduleValue = String(currentValue);
+            } 
+            // Fallback to schedule.description if currentValue is not available
+            else if (schedule && schedule.description !== null && schedule.description !== undefined && schedule.description !== "") {
+                let desc = String(schedule.description).trim();
+                // Convert numeric descriptions to just the number
+                const numValue = parseInt(desc);
+                if (!isNaN(numValue) && desc !== "N/A" && desc !== "End of the month") {
+                    scheduleValue = String(numValue);
+                } else {
+                    scheduleValue = desc; // Keep special values as-is
+                }
+            }
+            
+            // Debug logging
+            if (isEditing) {
+                console.log(`  → Dropdown ${scheduleType}:`, {
+                    currentValue,
+                    scheduleDesc: schedule?.description,
+                    finalValue: scheduleValue,
+                    willSet: scheduleValue !== "Not Set"
+                });
+            }
+            
+            // Determine if this is for Rent based on scheduleType
+            const isRent = scheduleType.includes('Rent');
+            
+            // Build options HTML with selected attribute already in place (like billing settings does)
+            let optionsHTML = "";
+            
+            // "Not Set" option
+            const notSetSelected = scheduleValue === "Not Set" ? " selected" : "";
+            optionsHTML += `<option value="Not Set"${notSetSelected}>Not Set</option>`;
+            
+            // Add special options for Rent
+            if (isRent && scheduleType.includes('Due Date')) {
+                const endOfMonthSelected = scheduleValue === "End of the month" ? " selected" : "";
+                optionsHTML += `<option value="End of the month"${endOfMonthSelected}>End of the month</option>`;
+            }
+            if (isRent && scheduleType.includes('Disconnection')) {
+                const naSelected = scheduleValue === "N/A" ? " selected" : "";
+                optionsHTML += `<option value="N/A"${naSelected}>N/A</option>`;
+            }
+            
+            // Add day options (1-31) with selected attribute
+            for (let i = 1; i <= 31; i++) {
+                const daySelected = scheduleValue === String(i) ? " selected" : "";
+                optionsHTML += `<option value="${i}"${daySelected}>${i}</option>`;
+            }
+            
+            // Return the complete select HTML (like billing settings does)
+            return `
+                <select ${!isEnabled ? 'disabled' : ''} 
+                        data-id="${schedule ? schedule.id : ''}" 
+                        data-type="${scheduleType}"
+                        class="billing-date-select w-full border border-gray-300 rounded-lg px-3 py-2 bg-white">
+                    ${optionsHTML}
+                </select>
+            `;
         };
 
         const formatDay = (day) => {
@@ -2593,10 +3041,23 @@ class SuperAdminDashboard {
             }
             const dayNum = parseInt(day);
             if (isNaN(dayNum)) return `<strong>${day}</strong>`;
-            const suffix =
-                ["th", "st", "nd", "rd"][
-                ((((dayNum + 90) % 100) - 10) % 10) - 1
-                ] || "th";
+            
+            // Correct ordinal suffix logic
+            let suffix = "th";
+            const lastDigit = dayNum % 10;
+            const lastTwoDigits = dayNum % 100;
+            
+            // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
+            if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+                suffix = "th";
+            } else if (lastDigit === 1) {
+                suffix = "st";
+            } else if (lastDigit === 2) {
+                suffix = "nd";
+            } else if (lastDigit === 3) {
+                suffix = "rd";
+            }
+            
             return `<strong>${dayNum}${suffix} day of the month</strong>`;
         };
 
@@ -2613,17 +3074,64 @@ class SuperAdminDashboard {
             let dueDateCell = "";
             let discoDateCell = "";
 
-            if (util === "Rent") {
-                dueDateCell = formatDay("End of the month");
-                discoDateCell = formatDay("N/A");
-            } else {
-                dueDateCell = isEditing
-                    ? createDayDropdown(dueDateSchedule, dueDateType, true)
-                    : formatDay(dueDateSchedule?.description);
-                discoDateCell = isEditing
-                    ? createDayDropdown(discoDateSchedule, discoDateType, true)
-                    : formatDay(discoDateSchedule?.description);
+            // Get description value, handling both string and number formats
+            // Use ONLY what's actually saved in the database - no defaults
+            // Check both possible field names (description or Description)
+            const dueDateDesc = dueDateSchedule?.description ?? dueDateSchedule?.Description ?? null;
+            const discoDateDesc = discoDateSchedule?.description ?? discoDateSchedule?.Description ?? null;
+            
+            // Debug logging for each utility
+            if (isEditing) {
+                console.log(`\n--- ${util} ---`);
+                console.log(`Due Date Schedule:`, dueDateSchedule);
+                console.log(`Due Date Description:`, dueDateDesc, `Type:`, typeof dueDateDesc);
+                console.log(`Disconnection Schedule:`, discoDateSchedule);
+                console.log(`Disconnection Description:`, discoDateDesc, `Type:`, typeof discoDateDesc);
             }
+            
+            // Convert to string, preserving the actual saved value
+            // Handle null, undefined, and empty string as "Not Set"
+            let dueDateValue = "Not Set";
+            if (dueDateDesc !== null && dueDateDesc !== undefined && dueDateDesc !== "") {
+                // Convert to string and trim whitespace
+                dueDateValue = String(dueDateDesc).trim();
+                // If it's a numeric value, convert to just the number string (e.g., "14" not "14.0")
+                const numValue = parseInt(dueDateValue);
+                if (!isNaN(numValue) && dueDateValue !== "N/A" && dueDateValue !== "End of the month") {
+                    dueDateValue = String(numValue);
+                }
+                // Keep special values as-is
+            }
+            
+            let discoDateValue = "Not Set";
+            if (discoDateDesc !== null && discoDateDesc !== undefined && discoDateDesc !== "") {
+                // Convert to string and trim whitespace
+                discoDateValue = String(discoDateDesc).trim();
+                // If it's a numeric value, convert to just the number string
+                const numValue = parseInt(discoDateValue);
+                if (!isNaN(numValue) && discoDateValue !== "N/A" && discoDateValue !== "End of the month") {
+                    discoDateValue = String(numValue);
+                }
+                // Keep special values as-is
+            }
+            
+            if (isEditing) {
+                console.log(`\n✅ ${util} - Final Values:`, {
+                    dueDate: { raw: dueDateDesc, processed: dueDateValue },
+                    disconnection: { raw: discoDateDesc, processed: discoDateValue },
+                    dueDateSchedule: dueDateSchedule,
+                    discoDateSchedule: discoDateSchedule
+                });
+            }
+            
+            // Render cells - editable dropdowns when editing, formatted text when viewing
+            // Pass the current saved value to ensure it's preserved in the dropdown
+            dueDateCell = isEditing
+                ? createDayDropdown(dueDateSchedule, dueDateType, true, dueDateValue, isEditing)
+                : formatDay(dueDateValue);
+            discoDateCell = isEditing
+                ? createDayDropdown(discoDateSchedule, discoDateType, true, discoDateValue, isEditing)
+                : formatDay(discoDateValue);
 
             tableHTML += `
                 <tr class="hover:bg-gray-50 transition-colors">
@@ -2651,10 +3159,23 @@ class SuperAdminDashboard {
             if (day === "Not Set" || !day) return "Not Set";
             const dayNum = parseInt(day);
             if (isNaN(dayNum)) return day; // Should not happen but good practice
-            const suffix =
-                ["th", "st", "nd", "rd"][
-                ((((dayNum + 90) % 100) - 10) % 10) - 1
-                ] || "th";
+            
+            // Correct ordinal suffix logic
+            let suffix = "th";
+            const lastDigit = dayNum % 10;
+            const lastTwoDigits = dayNum % 100;
+            
+            // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
+            if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+                suffix = "th";
+            } else if (lastDigit === 1) {
+                suffix = "st";
+            } else if (lastDigit === 2) {
+                suffix = "nd";
+            } else if (lastDigit === 3) {
+                suffix = "rd";
+            }
+            
             return `${dayNum}${suffix} day`;
         };
 
@@ -2702,6 +3223,26 @@ class SuperAdminDashboard {
     }
 
     toggleBillingDatesEditMode(isEditing) {
+        if (isEditing) {
+            // Ensure data is loaded before entering edit mode
+            if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
+                this.showToast("Loading schedules...", "info");
+                this.fetchBillingDateSchedules().then(() => {
+                    // Store original values when entering edit mode
+                    this.originalBillingDates = JSON.parse(
+                        JSON.stringify(this.billingDateSchedules)
+                    );
+                    this.elements.billingDatesDefaultButtons.classList.add("hidden");
+                    this.elements.billingDatesEditButtons.classList.remove("hidden");
+                    this.renderBillingDateSchedules(true);
+                });
+                return;
+            }
+            // Store original values when entering edit mode
+            this.originalBillingDates = JSON.parse(
+                JSON.stringify(this.billingDateSchedules)
+            );
+        }
         this.elements.billingDatesDefaultButtons.classList.toggle(
             "hidden",
             isEditing
@@ -2718,15 +3259,37 @@ class SuperAdminDashboard {
         const selects = this.elements.billingDatesTableBody.querySelectorAll(
             ".billing-date-select:not([disabled])"
         );
+        
+        // Only include schedules that have actually changed
         selects.forEach((select) => {
-            updatedSchedulesPayload.push({
-                type: select.dataset.type,
-                day: select.value,
-            });
+            const scheduleType = select.dataset.type;
+            const newDay = select.value;
+            
+            // Find original value
+            const originalSchedule = this.originalBillingDates?.find(
+                (s) => s.schedule_type === scheduleType
+            );
+            const oldValue = originalSchedule ? originalSchedule.description : "Not Set";
+            
+            // Only add to payload if value has changed
+            // Convert oldValue to string for proper comparison
+            const oldValueStr = oldValue !== null && oldValue !== undefined ? String(oldValue) : "Not Set";
+            
+            if (oldValueStr !== newDay && !(oldValueStr === null && newDay === "Not Set")) {
+                // Ensure we have valid data
+                if (scheduleType && newDay !== null && newDay !== undefined) {
+                    updatedSchedulesPayload.push({
+                        type: scheduleType,
+                        day: String(newDay),
+                    });
+                }
+            }
         });
 
+        // If nothing changed, just exit edit mode
         if (updatedSchedulesPayload.length === 0) {
             this.toggleBillingDatesEditMode(false);
+            this.showToast("No changes to save.", "info");
             return;
         }
 
@@ -2736,7 +3299,7 @@ class SuperAdminDashboard {
         const oldHistory = JSON.parse(JSON.stringify(this.billingDateHistory));
         const newHistoryLogs = [];
 
-        //  Immediately update local state and create temporary history logs
+        // Immediately update local state and create temporary history logs
         updatedSchedulesPayload.forEach((updated) => {
             const oldSchedule = oldSchedules.find(
                 (s) => s.schedule_type === updated.type
@@ -2765,14 +3328,14 @@ class SuperAdminDashboard {
             }
         });
 
-        //  Immediately update the UI
-        this.toggleBillingDatesEditMode(false); // Re-renders the main table
+        // Immediately update the UI
+        this.toggleBillingDatesEditMode(false);
         if (newHistoryLogs.length > 0) {
             this.billingDateHistory.unshift(...newHistoryLogs);
-            this.renderBillingDateHistory(); // Re-renders the history table
+            this.renderBillingDateHistory();
         }
 
-        // . Save to the server in the background
+        // Save to the server in the background
         try {
             const response = await fetch("/api/schedules/billing-dates", {
                 method: "PUT",
@@ -2793,14 +3356,14 @@ class SuperAdminDashboard {
                 );
             }
 
-            //  On success, show confirmation and silently refresh history
+            // On success, show confirmation and silently refresh history
             this.showToast("Schedules updated successfully!", "success");
             this.billingDateHistory = [];
             this.billingDateHistoryPage = 1;
             this.billingDateHistoryHasMore = true;
             await this.fetchBillingDateHistory();
         } catch (error) {
-            //  On failure, roll back all UI changes
+            // On failure, roll back all UI changes
             this.showToast(error.message, "error");
             this.billingDateSchedules = oldSchedules;
             this.billingDateHistory = oldHistory;
@@ -2808,6 +3371,8 @@ class SuperAdminDashboard {
             this.renderBillingDateHistory();
         }
     }
+
+    // Old bulk save method removed - using saveIndividualSchedule instead
 
     renderMeterReadingSchedule() {
         if (!this.currentSchedule) return;
@@ -3244,6 +3809,12 @@ class SuperAdminDashboard {
             }
 
             this.showToast("Rates updated successfully!", "success");
+            
+            // Refresh rental rate history after successful update
+            this.rentalRateHistory = [];
+            this.rentalRateHistoryPage = 1;
+            this.rentalRateHistoryHasMore = true;
+            await this.fetchRentalRateHistory();
         } catch (error) {
             this.showToast(error.message, "error");
             this.allRentalRates = oldAllRentalRates;
@@ -3443,6 +4014,119 @@ class SuperAdminDashboard {
         }
 
         this.filterAndRenderRates(1);
+    }
+
+    async fetchRentalRateHistory() {
+        console.log("fetchRentalRateHistory called", {
+            isFetching: this.isFetchingRentalRateHistory,
+            hasMore: this.rentalRateHistoryHasMore,
+            page: this.rentalRateHistoryPage
+        });
+        
+        if (this.isFetchingRentalRateHistory || !this.rentalRateHistoryHasMore) {
+            console.log("Skipping fetch - already fetching or no more data");
+            return;
+        }
+        
+        this.isFetchingRentalRateHistory = true;
+        if (this.elements.rentalRateHistoryLoader)
+            this.elements.rentalRateHistoryLoader.style.display = "block";
+
+        try {
+            console.log("Fetching rental rate history from API...");
+            const response = await fetch(
+                `/api/rental-rates/history?page=${this.rentalRateHistoryPage}`
+            );
+            console.log("API Response status:", response.status, response.statusText);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("API Error:", errorData);
+                throw new Error(errorData.message || "Network response was not ok");
+            }
+            const data = await response.json();
+            
+            console.log("Rental Rate History API Response:", data);
+            console.log("History Data:", data.data);
+            console.log("Total Records:", data.total);
+            console.log("Has More:", data.has_more);
+            console.log("Current Page:", data.current_page);
+            
+            // Additional debugging
+            if (!data.data || data.data.length === 0) {
+                console.warn("⚠️ No history data in response. Response structure:", Object.keys(data));
+                if (data.total === 0) {
+                    console.warn("⚠️ Total is 0 - No audit trail records found for Rental Rates module");
+                }
+            }
+
+            // Handle both paginated and non-paginated responses
+            const historyData = data.data || data;
+            const hasMore = data.has_more !== undefined ? data.has_more : (data.next_page_url !== null);
+            
+            if (historyData && Array.isArray(historyData) && historyData.length > 0) {
+                this.rentalRateHistory.push(...historyData);
+                this.rentalRateHistoryHasMore = hasMore;
+                this.rentalRateHistoryPage++;
+                this.renderRentalRateHistory();
+            } else {
+                console.warn("No history data received from API");
+                this.renderRentalRateHistory(); // Still render to show "No history logs found"
+            }
+        } catch (error) {
+            console.error("Failed to fetch rental rate history:", error);
+            this.showToast("Failed to load rental rate history.", "error");
+            // Still render to show empty state
+            this.renderRentalRateHistory();
+        } finally {
+            this.isFetchingRentalRateHistory = false;
+            if (this.elements.rentalRateHistoryLoader)
+                this.elements.rentalRateHistoryLoader.style.display = "none";
+        }
+    }
+
+    renderRentalRateHistory() {
+        const tableBody = this.elements.rentalRateHistoryTableBody;
+        if (!tableBody) return;
+
+        if (this.rentalRateHistory.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
+            return;
+        }
+
+        tableBody.innerHTML = this.rentalRateHistory
+            .map((log) => {
+                const formattedDate = new Date(log.changed_at).toLocaleString(
+                    "en-US",
+                    {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                    }
+                );
+
+                const formatRate = (rate) => {
+                    if (rate === null || rate === undefined) return "N/A";
+                    return `₱${parseFloat(rate).toFixed(2)}`;
+                };
+
+                return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
+                    <td data-label="Action" class="border border-gray-200 px-4 py-3 text-gray-700">${log.action || "N/A"}</td>
+                    <td data-label="Table Number" class="border border-gray-200 px-4 py-3 text-gray-700">${log.table_number || "N/A"}</td>
+                    <td data-label="Section" class="border border-gray-200 px-4 py-3 text-gray-700">${log.section || "N/A"}</td>
+                    <td data-label="Old Daily Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.old_daily_rate)}</td>
+                    <td data-label="New Daily Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.new_daily_rate)}</td>
+                    <td data-label="Old Monthly Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.old_monthly_rate)}</td>
+                    <td data-label="New Monthly Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.new_monthly_rate)}</td>
+                </tr>
+            `;
+            })
+            .join("");
     }
 
     async addNewInlineRow() {
@@ -3699,6 +4383,185 @@ class SuperAdminDashboard {
                 this.handleSectionNavigation(btn)
             )
         );
+
+        // Password change form
+        if (this.elements.changePasswordForm) {
+            this.elements.changePasswordForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                
+                const btn = this.elements.changePasswordBtn;
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Changing...</span>';
+
+                const formData = new FormData(this.elements.changePasswordForm);
+                const data = {
+                    current_password: formData.get("current_password"),
+                    password: formData.get("password"),
+                    password_confirmation: formData.get("password_confirmation"),
+                };
+
+                try {
+                    const response = await fetch("/api/user-settings/change-password", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Accept: "application/json",
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "include",
+                        body: JSON.stringify(data),
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        this.showToast(result.message || "Password changed successfully!", "success");
+                        this.elements.changePasswordForm.reset();
+                    } else {
+                        const errorMsg = result.message || result.errors?.current_password?.[0] || result.errors?.password?.[0] || "Failed to change password";
+                        this.showToast(errorMsg, "error");
+                    }
+                } catch (error) {
+                    console.error("Password change error:", error);
+                    this.showToast("An error occurred. Please try again.", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            });
+        }
+
+        // Profile picture upload
+        const profilePictureInput = document.getElementById("profilePictureInput");
+        const removeProfilePictureBtn = document.getElementById("removeProfilePictureBtn");
+        
+        if (profilePictureInput) {
+            profilePictureInput.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (file.size > 2 * 1024 * 1024) {
+                    this.showToast("Image must be smaller than 2MB", "error");
+                    return;
+                }
+
+                if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
+                    this.showToast("Please select a valid image file (JPEG, PNG, or GIF)", "error");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("profile_picture", file);
+
+                const container = document.getElementById("profilePictureContainer");
+                const placeholder = document.getElementById("profilePicturePlaceholder");
+                const img = document.getElementById("profilePictureImg");
+
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (img) {
+                        img.src = e.target.result;
+                        img.classList.remove("hidden");
+                        if (placeholder) placeholder.classList.add("hidden");
+                    } else {
+                        const newImg = document.createElement("img");
+                        newImg.id = "profilePictureImg";
+                        newImg.src = e.target.result;
+                        newImg.alt = "Profile Picture";
+                        newImg.className = "w-full h-full object-cover";
+                        container.innerHTML = "";
+                        container.appendChild(newImg);
+                    }
+                    if (removeProfilePictureBtn) removeProfilePictureBtn.classList.remove("hidden");
+                };
+                reader.readAsDataURL(file);
+
+                try {
+                    const response = await fetch("/api/user-settings/upload-profile-picture", {
+                        method: "POST",
+                        headers: {
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "include",
+                        body: formData,
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        this.showToast(result.message || "Profile picture uploaded successfully!", "success");
+                        if (img && result.profile_picture_url) {
+                            img.src = result.profile_picture_url;
+                        }
+                        // Update sidebar profile picture
+                        const sidebarImg = document.querySelector('#sidebarProfileImage img');
+                        const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                        if (sidebarImg && result.profile_picture_url) {
+                            sidebarImg.src = result.profile_picture_url;
+                            sidebarImg.classList.remove('hidden');
+                            if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                        }
+                    } else {
+                        this.showToast(result.message || "Failed to upload profile picture", "error");
+                        if (img) img.classList.add("hidden");
+                        if (placeholder) placeholder.classList.remove("hidden");
+                    }
+                } catch (error) {
+                    console.error("Profile picture upload error:", error);
+                    this.showToast("An error occurred. Please try again.", "error");
+                    if (img) img.classList.add("hidden");
+                    if (placeholder) placeholder.classList.remove("hidden");
+                } finally {
+                    profilePictureInput.value = "";
+                }
+            });
+        }
+
+        if (removeProfilePictureBtn) {
+            removeProfilePictureBtn.addEventListener("click", async () => {
+                if (!confirm("Are you sure you want to remove your profile picture?")) return;
+
+                try {
+                    const response = await fetch("/api/user-settings/remove-profile-picture", {
+                        method: "DELETE",
+                        headers: {
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "include",
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        this.showToast(result.message || "Profile picture removed successfully!", "success");
+                        const img = document.getElementById("profilePictureImg");
+                        const placeholder = document.getElementById("profilePicturePlaceholder");
+                        if (img) img.classList.add("hidden");
+                        if (placeholder) placeholder.classList.remove("hidden");
+                        removeProfilePictureBtn.classList.add("hidden");
+                        // Update sidebar
+                        const sidebarImg = document.querySelector('#sidebarProfileImage img');
+                        const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                        if (sidebarImg) sidebarImg.classList.add('hidden');
+                        if (sidebarIcon) sidebarIcon.classList.remove('hidden');
+                    } else {
+                        this.showToast(result.message || "Failed to remove profile picture", "error");
+                    }
+                } catch (error) {
+                    console.error("Remove profile picture error:", error);
+                    this.showToast("An error occurred. Please try again.", "error");
+                }
+            });
+        }
+
         //In-app and SMS Notification//
         const mainContent = document.querySelector(".main-content");
         if (mainContent) {
@@ -3880,6 +4743,20 @@ class SuperAdminDashboard {
         const { rentSettingsTableBody, utilitySettingsTableBody } =
             this.elements;
         if (!rentSettingsTableBody || !utilitySettingsTableBody) return;
+        
+        // If no billing settings data, show loading message and fetch
+        if (!this.billingSettings || Object.keys(this.billingSettings).length === 0) {
+            rentSettingsTableBody.innerHTML = `
+                <tr><td colspan="4" class="text-center py-4 text-gray-500">Loading billing settings...</td></tr>
+            `;
+            utilitySettingsTableBody.innerHTML = `
+                <tr><td colspan="4" class="text-center py-4 text-gray-500">Loading billing settings...</td></tr>
+            `;
+            if (!isEditing) { // Only fetch if not already in edit mode
+                this.fetchBillingSettings();
+            }
+            return;
+        }
 
         const formatDisplay = (value) =>
             parseFloat(value) > 0
@@ -4099,10 +4976,60 @@ class SuperAdminDashboard {
                 e.preventDefault();
                 this.saveAnnouncement();
             });
+
+            // Handle recipient checkbox interactions
+            const allSectionsCheckbox = document.getElementById('recipientAllSections');
+            if (allSectionsCheckbox) {
+                allSectionsCheckbox.addEventListener('change', (e) => {
+                    const wetSection = document.getElementById('recipientWetSection');
+                    const drySection = document.getElementById('recipientDrySection');
+                    const semiWetSection = document.getElementById('recipientSemiWetSection');
+                    
+                    if (e.target.checked) {
+                        // Uncheck and disable specific sections when "All Sections" is checked
+                        if (wetSection) {
+                            wetSection.checked = false;
+                            wetSection.disabled = true;
+                        }
+                        if (drySection) {
+                            drySection.checked = false;
+                            drySection.disabled = true;
+                        }
+                        if (semiWetSection) {
+                            semiWetSection.checked = false;
+                            semiWetSection.disabled = true;
+                        }
+                    } else {
+                        // Enable specific sections when "All Sections" is unchecked
+                        if (wetSection) wetSection.disabled = false;
+                        if (drySection) drySection.disabled = false;
+                        if (semiWetSection) semiWetSection.disabled = false;
+                    }
+                });
+
+                // Handle specific section checkboxes - uncheck "All Sections" when a specific section is selected
+                const specificSections = ['recipientWetSection', 'recipientDrySection', 'recipientSemiWetSection'];
+                specificSections.forEach(id => {
+                    const checkbox = document.getElementById(id);
+                    if (checkbox) {
+                        checkbox.addEventListener('change', (e) => {
+                            if (e.target.checked && allSectionsCheckbox.checked) {
+                                allSectionsCheckbox.checked = false;
+                                // Enable all specific sections
+                                specificSections.forEach(sid => {
+                                    const cb = document.getElementById(sid);
+                                    if (cb) cb.disabled = false;
+                                });
+                            }
+                        });
+                    }
+                });
+            }
         }
 
-        if (this.elements.announcementsList) {
-            this.elements.announcementsList.addEventListener("click", (e) => {
+        // Event listeners for sent announcements
+        if (this.elements.sentAnnouncementsList) {
+            this.elements.sentAnnouncementsList.addEventListener("click", (e) => {
                 const deleteBtn = e.target.closest(".delete-announcement-btn");
                 if (deleteBtn) {
                     const id = deleteBtn.dataset.id;
@@ -4110,46 +5037,85 @@ class SuperAdminDashboard {
                 }
             });
         }
+        
+        // Event listeners for draft announcements
+        if (this.elements.draftAnnouncementsList) {
+            this.elements.draftAnnouncementsList.addEventListener("click", (e) => {
+                const deleteBtn = e.target.closest(".delete-announcement-btn");
+                if (deleteBtn) {
+                    const id = deleteBtn.dataset.id;
+                    this.confirmDeleteAnnouncement(id);
+                }
+                
+                const activateBtn = e.target.closest(".activate-announcement-btn");
+                if (activateBtn) {
+                    const id = activateBtn.dataset.id;
+                    this.activateAnnouncement(id);
+                }
+            });
+        }
     }
 
     async fetchAnnouncements() {
-        if (!this.elements.announcementsList) return;
+        if (!this.elements.sentAnnouncementsList || !this.elements.draftAnnouncementsList) return;
 
         try {
             const response = await fetch("/api/admin/announcements");
             if (!response.ok) throw new Error("Failed to fetch announcements");
 
             const announcements = await response.json();
-            this.renderAnnouncements(announcements);
+            
+            // Separate sent and draft announcements
+            const sentAnnouncements = announcements.filter(a => a.is_active);
+            const draftAnnouncements = announcements.filter(a => !a.is_active);
+            
+            this.renderSentAnnouncements(sentAnnouncements);
+            this.renderDraftAnnouncements(draftAnnouncements);
             this.dataLoaded.announcementSection = true;
         } catch (error) {
             console.error("Error fetching announcements:", error);
-            this.elements.announcementsList.innerHTML = `
+            const errorHtml = `
                 <div class="text-center text-red-500 py-4">
                     <i class="fas fa-exclamation-circle mb-2"></i>
                     <p>Failed to load announcements.</p>
                 </div>`;
+            if (this.elements.sentAnnouncementsList) {
+                this.elements.sentAnnouncementsList.innerHTML = errorHtml;
+            }
+            if (this.elements.draftAnnouncementsList) {
+                this.elements.draftAnnouncementsList.innerHTML = errorHtml;
+            }
         }
     }
 
-    renderAnnouncements(announcements) {
-        if (!this.elements.announcementsList) return;
+    async loadAnnouncementRecipients() {
+        // Sections are now hardcoded in the form, no need to load dynamically
+        // This function is kept for potential future use
+    }
+
+    renderSentAnnouncements(announcements) {
+        if (!this.elements.sentAnnouncementsList) return;
 
         if (announcements.length === 0) {
-            this.elements.announcementsList.innerHTML = `
+            this.elements.sentAnnouncementsList.innerHTML = `
                 <div class="text-center text-gray-500 py-8">
                     <i class="fas fa-bullhorn text-2xl mb-2 opacity-50"></i>
-                    <p>No active announcements.</p>
+                    <p>No sent announcements.</p>
                 </div>`;
             return;
         }
 
-        this.elements.announcementsList.innerHTML = announcements.map(announcement => `
+        this.elements.sentAnnouncementsList.innerHTML = announcements.map(announcement => {
+            const date = new Date(announcement.created_at);
+            const dateStr = date.toLocaleDateString();
+            const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            
+            return `
             <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
                 <div class="flex justify-between items-start mb-2">
                     <h4 class="font-bold text-gray-800">${announcement.title}</h4>
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500">${new Date(announcement.created_at).toLocaleDateString()}</span>
+                        <span class="text-xs text-gray-500">${dateStr} ${timeStr}</span>
                         <button data-id="${announcement.id}" 
                             class="delete-announcement-btn text-red-500 hover:text-red-700 p-1 rounded transition-colors" title="Delete">
                             <i class="fas fa-trash-alt"></i>
@@ -4158,12 +5124,57 @@ class SuperAdminDashboard {
                 </div>
                 <p class="text-gray-600 text-sm whitespace-pre-wrap">${announcement.content}</p>
                 <div class="mt-2 flex items-center gap-2">
-                    <span class="px-2 py-1 rounded-full text-xs font-medium ${announcement.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">
-                        ${announcement.is_active ? 'Active' : 'Draft'}
+                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        Sent
                     </span>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
+    }
+
+    renderDraftAnnouncements(announcements) {
+        if (!this.elements.draftAnnouncementsList) return;
+
+        if (announcements.length === 0) {
+            this.elements.draftAnnouncementsList.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-file-alt text-2xl mb-2 opacity-50"></i>
+                    <p>No draft announcements.</p>
+                </div>`;
+            return;
+        }
+
+        this.elements.draftAnnouncementsList.innerHTML = announcements.map(announcement => {
+            const date = new Date(announcement.created_at);
+            const dateStr = date.toLocaleDateString();
+            const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            
+            return `
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start mb-2">
+                    <h4 class="font-bold text-gray-800">${announcement.title}</h4>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">${dateStr} ${timeStr}</span>
+                        <button data-id="${announcement.id}" 
+                            class="activate-announcement-btn bg-market-primary text-white px-3 py-1 rounded text-xs font-medium hover:bg-market-secondary transition-colors" title="Send">
+                            <i class="fas fa-paper-plane mr-1"></i> Send
+                        </button>
+                        <button data-id="${announcement.id}" 
+                            class="delete-announcement-btn text-red-500 hover:text-red-700 p-1 rounded transition-colors" title="Delete">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-gray-600 text-sm whitespace-pre-wrap">${announcement.content}</p>
+                <div class="mt-2 flex items-center gap-2">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                        Draft
+                    </span>
+                </div>
+            </div>
+        `;
+        }).join('');
     }
 
     async saveAnnouncement() {
@@ -4174,6 +5185,30 @@ class SuperAdminDashboard {
 
         if (!title || !content) {
             this.showToast("Please fill in all required fields.", "error");
+            return;
+        }
+
+        // Collect recipient data
+        const recipients = {
+            staff: document.getElementById('recipientStaff')?.checked || false,
+            all_sections: document.getElementById('recipientAllSections')?.checked || false,
+            sections: []
+        };
+
+        // Get selected specific sections
+        if (document.getElementById('recipientWetSection')?.checked) {
+            recipients.sections.push('Wet Section');
+        }
+        if (document.getElementById('recipientDrySection')?.checked) {
+            recipients.sections.push('Dry Section');
+        }
+        if (document.getElementById('recipientSemiWetSection')?.checked) {
+            recipients.sections.push('Semi-Wet');
+        }
+
+        // Validate that at least one recipient is selected
+        if (!recipients.staff && !recipients.all_sections && recipients.sections.length === 0) {
+            this.showToast("Please select at least one recipient.", "error");
             return;
         }
 
@@ -4191,7 +5226,8 @@ class SuperAdminDashboard {
                 body: JSON.stringify({
                     title,
                     content,
-                    is_active: isActive
+                    is_active: isActive,
+                    recipients: recipients
                 }),
             });
 
@@ -4199,6 +5235,12 @@ class SuperAdminDashboard {
 
             this.showToast("Announcement posted successfully!", "success");
             this.elements.createAnnouncementForm.reset();
+            // Reset recipient checkboxes
+            document.getElementById('recipientStaff').checked = true;
+            document.getElementById('recipientAllSections').checked = true;
+            document.getElementById('recipientWetSection').checked = false;
+            document.getElementById('recipientDrySection').checked = false;
+            document.getElementById('recipientSemiWetSection').checked = false;
             this.fetchAnnouncements(); // Refresh list
 
         } catch (error) {
@@ -4250,6 +5292,29 @@ class SuperAdminDashboard {
         } catch (error) {
             console.error("Error deleting announcement:", error);
             this.showToast("Failed to delete announcement", "error");
+        }
+    }
+
+    async activateAnnouncement(id) {
+        try {
+            const response = await fetch(`/api/admin/announcements/${id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+                },
+                body: JSON.stringify({
+                    is_active: true,
+                }),
+            });
+
+            if (!response.ok) throw new Error("Failed to activate announcement");
+
+            this.showToast("Announcement sent successfully!", "success");
+            this.fetchAnnouncements();
+        } catch (error) {
+            console.error("Error sending announcement:", error);
+            this.showToast("Failed to send announcement", "error");
         }
     }
 }

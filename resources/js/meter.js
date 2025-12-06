@@ -34,9 +34,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const lowercasedSearch = search ? search.toLowerCase() : "";
 
                 const filtered = meterReadings.filter((item) => {
+                    // Case-insensitive section matching with trimmed whitespace
+                    const itemSection = (item.section || '').trim();
+                    const currentSection = (currentRentalSection || '').trim();
                     const sectionMatch =
                         !currentRentalSection ||
-                        item.section === currentRentalSection;
+                        itemSection.toLowerCase() === currentSection.toLowerCase();
                     const searchMatch =
                         !lowercasedSearch ||
                         item.section.toLowerCase().includes(lowercasedSearch) ||
@@ -60,9 +63,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const lowercasedSearch = search ? search.toLowerCase() : "";
 
                 const filtered = meterReadings.filter((item) => {
+                    // Case-insensitive section matching with trimmed whitespace
+                    const itemSection = (item.section || '').trim();
+                    const currentSection = (currentRentalSection || '').trim();
                     const sectionMatch =
                         !currentRentalSection ||
-                        item.section === currentRentalSection;
+                        itemSection.toLowerCase() === currentSection.toLowerCase();
                     const searchMatch =
                         !lowercasedSearch ||
                         item.section.toLowerCase().includes(lowercasedSearch) ||
@@ -928,7 +934,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 // Generate Header HTML
                 const headerHtml = `
-
+            <thead>
                 <tr class="table-header">
                     ${headers
                         .map(
@@ -1350,7 +1356,15 @@ document.addEventListener("DOMContentLoaded", () => {
             setInterval(this.methods.ForStatusUpdates, 5000);
             setInterval(this.methods.ForScheduleUpdate, 5000);
             //In-App and SMS Notification//
-            setInterval(this.methods.fetchNotifications, 7000);
+            // Poll for notifications every 2 seconds for faster updates
+            setInterval(this.methods.fetchNotifications, 2000);
+            
+            // Also fetch immediately when page becomes visible (user switches tabs/windows)
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.methods.fetchNotifications();
+                }
+            });
 
             const hash = window.location.hash.substring(1);
             if (hash && document.getElementById(hash)) {
@@ -1638,6 +1652,185 @@ document.addEventListener("DOMContentLoaded", () => {
                 ?.addEventListener("click", () =>
                     this.methods.closeModal("requestEditModal")
                 );
+
+            // Password change form
+            const passwordForm = document.getElementById("changePasswordForm");
+            if (passwordForm) {
+                passwordForm.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    
+                    const btn = document.getElementById("changePasswordBtn");
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Changing...</span>';
+
+                    const formData = new FormData(passwordForm);
+                    const data = {
+                        current_password: formData.get("current_password"),
+                        password: formData.get("password"),
+                        password_confirmation: formData.get("password_confirmation"),
+                    };
+
+                    try {
+                        const response = await fetch("/api/user-settings/change-password", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Accept: "application/json",
+                                "X-CSRF-TOKEN": document
+                                    .querySelector('meta[name="csrf-token"]')
+                                    .getAttribute("content"),
+                            },
+                            credentials: "include",
+                            body: JSON.stringify(data),
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            this.methods.showNotification(result.message || "Password changed successfully!", "success");
+                            passwordForm.reset();
+                        } else {
+                            const errorMsg = result.message || result.errors?.current_password?.[0] || result.errors?.password?.[0] || "Failed to change password";
+                            this.methods.showNotification(errorMsg, "error");
+                        }
+                    } catch (error) {
+                        console.error("Password change error:", error);
+                        this.methods.showNotification("An error occurred. Please try again.", "error");
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                });
+            }
+
+            // Profile picture upload
+            const profilePictureInput = document.getElementById("profilePictureInput");
+            const removeProfilePictureBtn = document.getElementById("removeProfilePictureBtn");
+            
+            if (profilePictureInput) {
+                profilePictureInput.addEventListener("change", async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    if (file.size > 2 * 1024 * 1024) {
+                        this.methods.showNotification("Image must be smaller than 2MB", "error");
+                        return;
+                    }
+
+                    if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
+                        this.methods.showNotification("Please select a valid image file (JPEG, PNG, or GIF)", "error");
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append("profile_picture", file);
+
+                    const container = document.getElementById("profilePictureContainer");
+                    const placeholder = document.getElementById("profilePicturePlaceholder");
+                    const img = document.getElementById("profilePictureImg");
+
+                    // Show preview
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        if (img) {
+                            img.src = e.target.result;
+                            img.classList.remove("hidden");
+                            if (placeholder) placeholder.classList.add("hidden");
+                        } else {
+                            const newImg = document.createElement("img");
+                            newImg.id = "profilePictureImg";
+                            newImg.src = e.target.result;
+                            newImg.alt = "Profile Picture";
+                            newImg.className = "w-full h-full object-cover";
+                            container.innerHTML = "";
+                            container.appendChild(newImg);
+                        }
+                        if (removeProfilePictureBtn) removeProfilePictureBtn.classList.remove("hidden");
+                    };
+                    reader.readAsDataURL(file);
+
+                    try {
+                        const response = await fetch("/api/user-settings/upload-profile-picture", {
+                            method: "POST",
+                            headers: {
+                                "X-CSRF-TOKEN": document
+                                    .querySelector('meta[name="csrf-token"]')
+                                    .getAttribute("content"),
+                            },
+                            credentials: "include",
+                            body: formData,
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            this.methods.showNotification(result.message || "Profile picture uploaded successfully!", "success");
+                            if (img && result.profile_picture_url) {
+                                img.src = result.profile_picture_url;
+                            }
+                            // Update sidebar profile picture
+                            const sidebarImg = document.getElementById('sidebarProfilePicture');
+                            const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                            if (sidebarImg && result.profile_picture_url) {
+                                sidebarImg.src = result.profile_picture_url;
+                                sidebarImg.classList.remove('hidden');
+                                if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                            }
+                        } else {
+                            this.methods.showNotification(result.message || "Failed to upload profile picture", "error");
+                            if (img) img.classList.add("hidden");
+                            if (placeholder) placeholder.classList.remove("hidden");
+                        }
+                    } catch (error) {
+                        console.error("Profile picture upload error:", error);
+                        this.methods.showNotification("An error occurred. Please try again.", "error");
+                        if (img) img.classList.add("hidden");
+                        if (placeholder) placeholder.classList.remove("hidden");
+                    } finally {
+                        profilePictureInput.value = "";
+                    }
+                });
+            }
+
+            if (removeProfilePictureBtn) {
+                removeProfilePictureBtn.addEventListener("click", async () => {
+                    if (!confirm("Are you sure you want to remove your profile picture?")) return;
+
+                    try {
+                        const response = await fetch("/api/user-settings/remove-profile-picture", {
+                            method: "DELETE",
+                            headers: {
+                                "X-CSRF-TOKEN": document
+                                    .querySelector('meta[name="csrf-token"]')
+                                    .getAttribute("content"),
+                            },
+                            credentials: "include",
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            this.methods.showNotification(result.message || "Profile picture removed successfully!", "success");
+                            const img = document.getElementById("profilePictureImg");
+                            const placeholder = document.getElementById("profilePicturePlaceholder");
+                            if (img) img.classList.add("hidden");
+                            if (placeholder) placeholder.classList.remove("hidden");
+                            removeProfilePictureBtn.classList.add("hidden");
+                            // Update sidebar
+                            const sidebarImg = document.querySelector('#sidebarProfileImage img');
+                            const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                            if (sidebarImg) sidebarImg.classList.add('hidden');
+                            if (sidebarIcon) sidebarIcon.classList.remove('hidden');
+                        } else {
+                            this.methods.showNotification(result.message || "Failed to remove profile picture", "error");
+                        }
+                    } catch (error) {
+                        console.error("Remove profile picture error:", error);
+                        this.methods.showNotification("An error occurred. Please try again.", "error");
+                    }
+                });
+            }
         },
     };
 

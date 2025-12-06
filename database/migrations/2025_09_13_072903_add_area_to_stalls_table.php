@@ -14,7 +14,9 @@ return new class extends Migration
         Schema::table('stalls', function (Blueprint $table) {
             // This adds a decimal column named 'area' after the 'table_number' column.
             // It's nullable because not all sections will have an area.
-            $table->decimal('area', 8, 2)->nullable()->after('table_number');
+            if (!Schema::hasColumn('stalls', 'area')) {
+                $table->decimal('area', 8, 2)->nullable()->after('table_number');
+            }
         });
     }
 

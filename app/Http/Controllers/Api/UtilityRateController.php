@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use App\Services\AuditLogger;
+use App\Services\AnnouncementService;
 
 class UtilityRateController extends Controller
 {
@@ -91,6 +92,21 @@ class UtilityRateController extends Controller
                     'Success',
                     ['rate_id' => $id, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue]
                 );
+
+                // Create draft announcement for rate change
+                try {
+                    $announcementService = new AnnouncementService();
+                    $announcementService->createRateChangeAnnouncement(
+                        $rate->utility_type,
+                        $oldRateValue,
+                        $newRateValue,
+                        $oldMonthlyRateValue,
+                        $newMonthlyRateValue
+                    );
+                } catch (\Exception $e) {
+                    // Log error but don't fail the transaction
+                    \Illuminate\Support\Facades\Log::error('Failed to create rate change announcement: ' . $e->getMessage());
+                }
             }
         });
 
@@ -130,16 +146,22 @@ class UtilityRateController extends Controller
 
                     $oldRateValue = (float) $currentRate->rate;
                     $newRateValue = (float) $rateData['rate'];
+                    $oldMonthlyRateValue = (float) $currentRate->monthly_rate;
+                    $newMonthlyRateValue = isset($rateData['monthlyRate']) ? (float) $rateData['monthlyRate'] : $oldMonthlyRateValue;
 
                     // Only update and log if the rate is different
-                    if ($oldRateValue !== $newRateValue) {
+                    if ($oldRateValue !== $newRateValue || $oldMonthlyRateValue !== $newMonthlyRateValue) {
                         // Update the rate in the main table
+                        $updateData = [
+                            'rate'       => $newRateValue,
+                            'updated_at' => now(),
+                        ];
+                        if (isset($rateData['monthlyRate'])) {
+                            $updateData['monthly_rate'] = $newMonthlyRateValue;
+                        }
                         DB::table('rates')
                             ->where('id', $rateData['id'])
-                            ->update([
-                                'rate'       => $newRateValue,
-                                'updated_at' => now(),
-                            ]);
+                            ->update($updateData);
 
                         // Add a new entry to the history table
                         DB::table('rate_histories')->insert([
@@ -149,6 +171,21 @@ class UtilityRateController extends Controller
                             'changed_by' => $loggedInUserId,
                             'changed_at' => now(),
                         ]);
+
+                        // Create draft announcement for rate change
+                        try {
+                            $announcementService = new AnnouncementService();
+                            $announcementService->createRateChangeAnnouncement(
+                                $currentRate->utility_type,
+                                $oldRateValue,
+                                $newRateValue,
+                                $oldMonthlyRateValue,
+                                $newMonthlyRateValue
+                            );
+                        } catch (\Exception $e) {
+                            // Log error but don't fail the transaction
+                            \Illuminate\Support\Facades\Log::error('Failed to create rate change announcement: ' . $e->getMessage());
+                        }
                     }
                 }
 

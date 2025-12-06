@@ -56,8 +56,6 @@
                     <th class="px-4 py-2 text-center">Period Covered</th>
                     <th class="px-4 py-2 text-center">Bill Amount</th>
                     <th class="px-4 py-2 text-center">Due Date</th>
-                    <th class="px-4 py-2 text-center">Amount After Due</th>
-                    <th class="px-4 py-2 text-center">Disconnection Date</th>
                     <th class="px-4 py-2 text-center">Payment Status</th>
                 </tr>
             </thead>

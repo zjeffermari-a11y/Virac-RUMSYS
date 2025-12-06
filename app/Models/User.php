@@ -185,17 +185,36 @@ class User extends Authenticatable
         // Tinatanggal ang lahat ng non-digit characters
         $digits = preg_replace('/\D+/', '', $this->contact_number);
         
-        // Kung nagsisimula sa '63' at may 12 digits, kino-convert sa '09...' format
+        // Convert to international format (63...) for Semaphore API
+        // Semaphore API prefers international format based on response logs
+        
+        // If starts with '63' and has 12 digits, return as is (already international)
         if (substr($digits, 0, 2) === '63' && strlen($digits) === 12) {
-            return '0' . substr($digits, 2);
+            return $digits;
         }
         
-        // Kung nasa tamang '09' format na at 11 digits, ibalik ito
+        // If starts with '09' and has 11 digits, convert to international format (63...)
         if (substr($digits, 0, 2) === '09' && strlen($digits) === 11) {
-            return $digits;
+            return '63' . substr($digits, 1); // Remove leading 0, add 63
+        }
+
+        // If 10 digits (without leading 0), assume it's a local number and add 63
+        if (strlen($digits) === 10 && substr($digits, 0, 1) !== '0') {
+            return '63' . $digits;
         }
 
         // Kung hindi makilala ang format, ibalik ang null para hindi mag-send
         return null;
+    }
+
+    /**
+     * Get the profile picture URL
+     */
+    public function getProfilePictureUrlAttribute(): ?string
+    {
+        if (!$this->profile_picture) {
+            return null;
+        }
+        return \Illuminate\Support\Facades\Storage::url($this->profile_picture);
     }
 }

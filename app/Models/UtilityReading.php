@@ -29,7 +29,6 @@ class UtilityReading extends Model
         'reading_date',
         'current_reading',
         'previous_reading',
-        'consumption',
     ];
 
     /**

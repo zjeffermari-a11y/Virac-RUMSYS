@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Schedule;
 use Illuminate\Support\Facades\Cache;
 use App\Services\AuditLogger;
+use App\Services\AnnouncementService;
 
 class ScheduleController extends Controller
 {
@@ -124,7 +125,14 @@ class ScheduleController extends Controller
             
             $schedules = DB::table('schedules')
                 ->whereIn('schedule_type', $scheduleTypes)
-                ->get();
+                ->get()
+                ->map(function ($schedule) {
+                    // Ensure description is converted to string if it's numeric
+                    if (isset($schedule->description) && is_numeric($schedule->description)) {
+                        $schedule->description = (string) $schedule->description;
+                    }
+                    return $schedule;
+                });
 
             return response()->json($schedules);
         });
@@ -135,7 +143,7 @@ class ScheduleController extends Controller
         $validator = Validator::make($request->all(), [
             'schedules' => 'required|array|min:1',
             'schedules.*.type' => 'required|string',
-            'schedules.*.day' => 'required|string|max:15',
+            'schedules.*.day' => 'required|string|max:20', // Increased to accommodate "End of the month" (18 chars)
         ]);
 
         if ($validator->fails()) {
@@ -182,6 +190,25 @@ class ScheduleController extends Controller
                             'Success',
                             ['type' => $type, 'old_value' => $oldDay, 'new_value' => $newDay]
                         );
+
+                        // Create draft announcement for date schedule change (only for Due Date and Disconnection)
+                        if (str_contains($type, 'Due Date') || str_contains($type, 'Disconnection')) {
+                            try {
+                                // Extract utility type from schedule type (e.g., "Due Date - Electricity" -> "Electricity")
+                                $utilityType = str_replace(['Due Date - ', 'Disconnection - '], '', $type);
+                                
+                                $announcementService = new AnnouncementService();
+                                $announcementService->createDateScheduleChangeAnnouncement(
+                                    $type,
+                                    $utilityType,
+                                    $oldDay,
+                                    $newDay
+                                );
+                            } catch (\Exception $e) {
+                                // Log error but don't fail the transaction
+                                \Illuminate\Support\Facades\Log::error('Failed to create date schedule change announcement: ' . $e->getMessage());
+                            }
+                        }
                     }
                 }
             });
@@ -238,7 +265,15 @@ class ScheduleController extends Controller
             ];
             $schedules = DB::table('schedules')
                 ->whereIn('schedule_type', $scheduleTypes)
-                ->get();
+                ->select('id', 'schedule_type', 'description', 'schedule_day', 'sms_days')
+                ->get()
+                ->map(function ($schedule) {
+                    // Decode JSON if it exists
+                    if ($schedule->sms_days) {
+                        $schedule->sms_days = json_decode($schedule->sms_days, true);
+                    }
+                    return $schedule;
+                });
 
             return response()->json($schedules);
         });
@@ -253,6 +288,9 @@ class ScheduleController extends Controller
             'schedules' => 'required|array|min:1',
             'schedules.*.type' => 'required|string',
             'schedules.*.time' => 'required|date_format:H:i',
+            'schedules.*.day' => 'nullable|integer|min:1|max:31', // For Billing Statements (day of month)
+            'schedules.*.days' => 'nullable|array', // For Payment Reminders and Overdue Alerts (array of days)
+            'schedules.*.days.*' => 'integer|min:0|max:365',
         ]);
 
         if ($validator->fails()) {
@@ -264,29 +302,95 @@ class ScheduleController extends Controller
                 foreach ($request->input('schedules') as $scheduleData) {
                     $type = $scheduleData['type'];
                     $newTime = $scheduleData['time'];
+                    $newDay = isset($scheduleData['day']) ? (int)$scheduleData['day'] : null;
+                    $newDays = isset($scheduleData['days']) && is_array($scheduleData['days']) 
+                        ? array_map('intval', $scheduleData['days']) 
+                        : null;
 
                     $existingSchedule = Schedule::where('schedule_type', $type)->first();
                     $oldTime = $existingSchedule ? $existingSchedule->description : 'Not Set';
+                    $oldDay = $existingSchedule ? $existingSchedule->schedule_day : null;
+                    $oldDays = $existingSchedule && $existingSchedule->sms_days 
+                        ? $existingSchedule->sms_days 
+                        : null;
 
-                    if ($oldTime != $newTime) {
+                    $updateData = ['description' => $newTime];
+                    $timeChanged = $oldTime != $newTime;
+                    $dayChanged = false;
+                    $daysChanged = false;
+
+                    // Handle Billing Statements (uses schedule_day)
+                    if ($type === 'SMS - Billing Statements') {
+                        if ($newDay !== null) {
+                            $updateData['schedule_day'] = $newDay;
+                            $dayChanged = $oldDay != $newDay;
+                        }
+                    }
+                    // Handle Payment Reminders and Overdue Alerts (uses sms_days array)
+                    else {
+                        if ($newDays !== null) {
+                            // Sort days array
+                            sort($newDays);
+                            $updateData['sms_days'] = $newDays;
+                            $daysChanged = json_encode($oldDays) !== json_encode($newDays);
+                        }
+                    }
+
+                    if ($timeChanged || $dayChanged || $daysChanged) {
                         $schedule = Schedule::updateOrCreate(
                             ['schedule_type' => $type],
-                            ['description' => $newTime]
+                            $updateData
                         );
 
-                        DB::table('schedule_histories')->insert([
-                            'schedule_id' => $schedule->id,
-                            'field_changed' => $schedule->schedule_type,
-                            'old_value' => $oldTime,
-                            'new_value' => $newTime,
-                            'changed_by' => Auth::id() ?? 1,
-                        ]);
+                        // Log time change
+                        if ($timeChanged) {
+                            DB::table('schedule_histories')->insert([
+                                'schedule_id' => $schedule->id,
+                                'field_changed' => $schedule->schedule_type . ' - Time',
+                                'old_value' => $oldTime,
+                                'new_value' => $newTime,
+                                'changed_by' => Auth::id() ?? 1,
+                            ]);
+                        }
+
+                        // Log day change (for Billing Statements)
+                        if ($dayChanged) {
+                            DB::table('schedule_histories')->insert([
+                                'schedule_id' => $schedule->id,
+                                'field_changed' => $schedule->schedule_type . ' - Day',
+                                'old_value' => $oldDay ?? 'Not Set',
+                                'new_value' => (string)$newDay,
+                                'changed_by' => Auth::id() ?? 1,
+                            ]);
+                        }
+
+                        // Log days change (for Payment Reminders and Overdue Alerts)
+                        if ($daysChanged) {
+                            $oldDaysStr = $oldDays ? implode(', ', $oldDays) : 'Not Set';
+                            $newDaysStr = implode(', ', $newDays);
+                            
+                            DB::table('schedule_histories')->insert([
+                                'schedule_id' => $schedule->id,
+                                'field_changed' => $schedule->schedule_type . ' - Days',
+                                'old_value' => $oldDaysStr,
+                                'new_value' => $newDaysStr,
+                                'changed_by' => Auth::id() ?? 1,
+                            ]);
+                        }
 
                         AuditLogger::log(
                             'Updated SMS Schedule',
                             'Schedules',
                             'Success',
-                            ['type' => $type, 'old_value' => $oldTime, 'new_value' => $newTime]
+                            [
+                                'type' => $type,
+                                'old_time' => $oldTime,
+                                'new_time' => $newTime,
+                                'old_day' => $oldDay,
+                                'new_day' => $newDay,
+                                'old_days' => $oldDays,
+                                'new_days' => $newDays
+                            ]
                         );
                     }
                 }

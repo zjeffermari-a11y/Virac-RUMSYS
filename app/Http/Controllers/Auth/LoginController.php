@@ -17,9 +17,8 @@ class LoginController extends Controller
         ]);
 
         $credentials = $request->only('username', 'password');
-        $remember = $request->filled('remember');
 
-        if (Auth::attempt($credentials, $remember)) {
+        if (Auth::attempt($credentials)) {
             $user = Auth::user();
             $user->last_login = Carbon::now(); // Record the login time
             $user->save(); // Save the user

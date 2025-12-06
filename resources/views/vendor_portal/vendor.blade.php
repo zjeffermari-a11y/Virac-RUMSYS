@@ -16,8 +16,8 @@
 @section('navigation')
     <a href="#homeSection" data-section="homeSection"
         class="nav-link active text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
-        <i class="fas fa-home"></i>
-        <span>Home</span>
+        <i class="fas fa-wallet"></i>
+        <span>Outstanding Balance</span>
     </a>
     <a href="#profileSection" data-section="profileSection"
         class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
@@ -28,6 +28,16 @@
         class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
         <i class="fas fa-history"></i>
         <span>Payment History</span>
+    </a>
+    <a href="#analyticsSection" data-section="analyticsSection"
+        class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+        <i class="fas fa-chart-line"></i>
+        <span>Analytics</span>
+    </a>
+    <a href="#notificationsSection" data-section="notificationsSection"
+        class="nav-link text-black font-medium rounded-xl p-3 mb-3 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-center space-x-3">
+        <i class="fas fa-bell"></i>
+        <span>Notifications</span>
     </a>
 @endsection
 
@@ -40,9 +50,12 @@
         const utilityRatesData = @json($utilityRates);
         const stallData = @json($stallData);
         const billingSettingsData = @json($billingSettings);
+        const paymentHistoryInitialData = @json($paymentHistoryInitial ?? ['data' => [], 'total' => 0, 'has_more' => false]);
     </script>
 
     <div id="toastContainer" class="fixed top-4 right-4 z-[100] space-y-2"></div>
+
+    {{-- Announcement banner removed - announcements now appear as notifications in the bell dropdown --}}
 
     {{-- Success/Info Messages --}}
     @if (session('success'))
@@ -71,19 +84,40 @@
     @endif
 
     {{-- =================================================================== --}}
-    {{-- HOME SECTION --}}
+    {{-- OUTSTANDING BALANCE SECTION --}}
     {{-- =================================================================== --}}
     <div id="homeSection" class="dashboard-section active">
         <div id="homeContent">
             <div
-                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
                 <div
                     class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
                 </div>
                 <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16"></div>
+                <div class="flex items-center justify-between relative z-10">
                 <div class="flex items-center gap-2">
                     <i class="fa-sharp fa-solid fa-coins"></i>
-                    <h2 class="text-3xl font-semibold relative z-10">Outstanding Balance</h2>
+                        <h2 class="text-3xl font-semibold">Outstanding Balance</h2>
+                    </div>
+                    {{-- Notification Bell --}}
+                    <div class="notificationBell relative">
+                        <button
+                            class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                            <i class="fas fa-bell text-2xl"></i>
+                            <span
+                                class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                        </button>
+                        {{-- Notification Dropdown Panel --}}
+                        <div
+                            class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                            <div class="p-3 font-semibold text-gray-800 border-b">
+                                Notifications
+                            </div>
+                            <div class="notificationList max-h-96 overflow-y-auto">
+                                {{-- Notification items will be inserted here by JS --}}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -226,38 +260,47 @@
 
         <div id="profileContent">
             <div
-                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-4 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-4 md:p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
                 <div
                     class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
                 </div>
                 <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16"></div>
-                <h2 class="text-3xl font-semibold relative z-10">Hello, {{ $vendor->name }}</h2>
+                <div class="flex items-center justify-between relative z-10">
+                    <h2 class="text-3xl font-semibold">Hello, {{ $vendor->name }}</h2>
+                    {{-- Notification Bell --}}
+                    <div class="notificationBell relative">
+                        <button
+                            class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                            <i class="fas fa-bell text-2xl"></i>
+                            <span
+                                class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                        </button>
+                        {{-- Notification Dropdown Panel --}}
+                        <div
+                            class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                            <div class="p-3 font-semibold text-gray-800 border-b">
+                                Notifications
+                            </div>
+                            <div class="notificationList max-h-96 overflow-y-auto">
+                                {{-- Notification items will be inserted here by JS --}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="flex flex-col lg:flex-row gap-8 items-center">
                 {{-- Profile Image --}}
-                @php
-                    $profilePictureUrl = null;
-                    if ($vendor->profile_picture) {
-                        if (str_starts_with($vendor->profile_picture, 'data:')) {
-                            // Legacy base64 data
-                            $profilePictureUrl = $vendor->profile_picture;
-                        } else {
-                            // B2 path - generate temporary signed URL
-                            $profilePictureUrl = Storage::disk('b2')->temporaryUrl(
-                                $vendor->profile_picture,
-                                now()->addDays(7)
-                            );
-                        }
-                    }
-                @endphp
-                <div
-                    class="w-72 h-72 rounded-2xl shadow-inner overflow-hidden bg-gray-200 relative flex items-center justify-center flex-shrink-0">
-                    @if($profilePictureUrl)
-                        <img id="profileSectionImg" src="{{ $profilePictureUrl }}" alt="Profile" class="w-full h-full object-cover">
-                    @else
-                        <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">
-                        <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400"></i>
-                    @endif
+                <div class="relative">
+                    <div
+                        class="w-72 h-72 rounded-2xl shadow-inner overflow-hidden bg-gray-200 relative flex items-center justify-center flex-shrink-0">
+                        @if($vendor->profile_picture)
+                            <img id="profileSectionImg" src="{{ Storage::url($vendor->profile_picture) }}" alt="Profile" class="w-full h-full object-cover">
+                            <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400 hidden"></i>
+                        @else
+                            <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">
+                            <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400"></i>
+                        @endif
+                    </div>
                 </div>
                 {{-- Profile Details --}}
                 <div class="flex-1 card-gradient p-8 rounded-2xl shadow-soft">
@@ -295,6 +338,38 @@
                     </div>
                 </div>
             </div>
+
+            {{-- Change Password --}}
+            <div class="mt-8 bg-white rounded-2xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-key text-market-primary"></i>
+                    Change Password
+                </h3>
+                <form id="changePasswordForm">
+                    @csrf
+                    <div class="mb-4">
+                        <label for="currentPassword" class="block text-gray-700 font-medium mb-2">Current Password</label>
+                        <input type="password" id="currentPassword" name="current_password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <div class="mb-4">
+                        <label for="newPassword" class="block text-gray-700 font-medium mb-2">New Password</label>
+                        <input type="password" id="newPassword" name="password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Must be at least 8 characters with letters, numbers, symbols, and mixed case</p>
+                    </div>
+                    <div class="mb-6">
+                        <label for="confirmPassword" class="block text-gray-700 font-medium mb-2">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" name="password_confirmation" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <button type="submit" id="changePasswordBtn"
+                        class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-key"></i>
+                        <span>Change Password</span>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -305,12 +380,33 @@
 
         <div id="paymentHistoryContent">
             <div
-                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-8 rounded-2xl mb-8 shadow-lg relative overflow-hidden">
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
                 <div
                     class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
                 </div>
                 <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16"></div>
-                <h2 class="text-3xl font-semibold relative z-10">Payment History</h2>
+                <div class="flex items-center justify-between relative z-10">
+                    <h2 class="text-3xl font-semibold">Payment History</h2>
+                    {{-- Notification Bell --}}
+                    <div class="notificationBell relative">
+                        <button
+                            class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                            <i class="fas fa-bell text-2xl"></i>
+                            <span
+                                class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                        </button>
+                        {{-- Notification Dropdown Panel --}}
+                        <div
+                            class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                            <div class="p-3 font-semibold text-gray-800 border-b">
+                                Notifications
+                            </div>
+                            <div class="notificationList max-h-96 overflow-y-auto">
+                                {{-- Notification items will be inserted here by JS --}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="card-table p-8 rounded-2xl shadow-soft">
                 {{-- Filters --}}
@@ -350,11 +446,6 @@
                                 </th>
                                 <th class="px-6 py-4 text-center text-sm font-medium uppercase tracking-wider">DUE DATE
                                 </th>
-                                <th class="px-6 py-4 text-center text-sm font-medium uppercase tracking-wider">AMOUNT AFTER
-                                    DUE
-                                    DATE</th>
-                                <th class="px-6 py-4 text-center text-sm font-medium uppercase tracking-wider">
-                                    DISCONNECTION DATE</th>
                                 <th class="px-6 py-4 text-center text-sm font-medium uppercase tracking-wider">PAYMENT
                                     STATUS
                                 </th>
@@ -459,5 +550,134 @@
             </div>
         </div>
     </div>
+
+    {{-- =================================================================== --}}
+    {{-- ANALYTICS SECTION --}}
+    {{-- =================================================================== --}}
+    <div id="analyticsSection" class="dashboard-section">
+        <div id="analyticsContent">
+            <div
+                class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-8 rounded-2xl mb-8 shadow-lg relative overflow-visible">
+                <div
+                    class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full transform translate-x-32 -translate-y-32">
+                </div>
+                <div class="absolute bottom-0 right-16 w-32 h-32 bg-white/10 rounded-full transform translate-y-16"></div>
+                <div class="flex items-center justify-between relative z-10">
+                    <h2 class="text-3xl font-semibold">Analytics & Insights</h2>
+                    {{-- Notification Bell --}}
+                    <div class="notificationBell relative">
+                        <button
+                            class="relative text-white hover:text-gray-200 focus:outline-none transition-transform transform hover:scale-110">
+                            <i class="fas fa-bell text-2xl"></i>
+                            <span
+                                class="notificationDot absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white hidden animate-pulse"></span>
+                        </button>
+                        {{-- Notification Dropdown Panel --}}
+                        <div
+                            class="notificationDropdown hidden absolute top-full right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999]">
+                            <div class="p-3 font-semibold text-gray-800 border-b">
+                                Notifications
+                            </div>
+                            <div class="notificationList max-h-96 overflow-y-auto">
+                                {{-- Notification items will be inserted here by JS --}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Electricity Consumption Chart --}}
+            <div class="card-table p-8 rounded-2xl shadow-soft mb-8">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-3">
+                    <i class="fas fa-bolt text-yellow-500"></i>
+                    Electricity Consumption Trend
+                </h3>
+                <div class="relative h-96">
+                    <canvas id="electricityConsumptionChart"></canvas>
+                </div>
+                <p class="text-sm text-gray-500 mt-4 text-center">
+                    <i class="fas fa-info-circle"></i>
+                    Shows your monthly electricity consumption in kWh over the past 12 months
+                </p>
+            </div>
+
+            {{-- Payment Tracking Charts --}}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                {{-- Payment Status Pie Chart --}}
+                <div class="card-table p-8 rounded-2xl shadow-soft">
+                    <h3 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-3">
+                        <i class="fas fa-chart-pie text-blue-500"></i>
+                        Payment Performance
+                    </h3>
+                    <div class="relative h-80">
+                        <canvas id="paymentStatusChart"></canvas>
+                    </div>
+                    <div id="paymentStats" class="mt-4 text-center space-y-2">
+                        <p class="text-sm text-gray-600">
+                            <span class="font-semibold text-green-600" id="onTimeCount">0</span> payments on time
+                        </p>
+                        <p class="text-sm text-gray-600">
+                            <span class="font-semibold text-red-600" id="lateCount">0</span> late payments
+                        </p>
+                    </div>
+                </div>
+
+                {{-- Payment Timeline Chart --}}
+                <div class="card-table p-8 rounded-2xl shadow-soft">
+                    <h3 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-3">
+                        <i class="fas fa-calendar-alt text-purple-500"></i>
+                        Payment Timeline
+                    </h3>
+                    <div class="relative h-80">
+                        <canvas id="paymentTimelineChart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-4 text-center">
+                        <i class="fas fa-info-circle"></i>
+                        Monthly breakdown of on-time vs late payments
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Notifications Section --}}
+    <div id="notificationsSection" class="dashboard-section">
+        <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-4 md:p-6 rounded-2xl mb-4 shadow-lg relative overflow-hidden">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-semibold">Notifications</h2>
+                    <p class="text-base md:text-lg mt-1">View all your notifications</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-table p-4 md:p-6 rounded-2xl shadow-soft">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+                <div class="flex items-center gap-4">
+                    <button id="markAllAsReadBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg transition-smooth flex items-center gap-2">
+                        <i class="fas fa-check-double"></i>
+                        <span>Mark All as Read</span>
+                    </button>
+                    <span id="unreadCountBadge" class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hidden">
+                        <span id="unreadCountText">0</span> unread
+                    </span>
+                </div>
+            </div>
+
+            <div id="notificationsLoader" class="text-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin mr-2"></i>Loading notifications...
+            </div>
+
+            <div id="notificationsList" class="space-y-3 hidden">
+                {{-- Notifications will be populated by JavaScript --}}
+            </div>
+
+            <div id="noNotificationsMessage" class="text-center py-8 text-gray-500 hidden">
+                <i class="fas fa-bell-slash text-4xl mb-4 text-gray-400"></i>
+                <p class="text-lg">You have no notifications.</p>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer" class="fixed top-4 right-4 z-[100] space-y-2"></div>
 @endsection

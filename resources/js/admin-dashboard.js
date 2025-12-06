@@ -385,6 +385,19 @@ class AdminDashboard {
             ? data.map((d) => d.vendor_count)
             : [];
 
+        // Define colors for each section for easy distinction
+        const sectionColors = {
+            'Wet Section': '#7c3aed',      // Purple
+            'Dry Section': '#06b6d4',      // Cyan/Teal (changed from purple for better distinction)
+            'Semi-Wet': '#f59e0b',         // Orange
+            'Semi-Wet Section': '#f59e0b', // Orange (alternative name)
+        };
+
+        // Map colors based on section names
+        const backgroundColor = labels.map((label) => {
+            return sectionColors[label] || '#6b7280'; // Default gray for unknown sections
+        });
+
         this.charts.vendorDistribution = new Chart(ctx, {
             type: "doughnut",
             data: {
@@ -393,13 +406,7 @@ class AdminDashboard {
                     {
                         label: "Vendor Count",
                         data: values,
-                        backgroundColor: [
-                            "#4f46e5",
-                            "#7c3aed",
-                            "#f59e0b",
-                            "#10b981",
-                            "#3b82f6",
-                        ],
+                        backgroundColor: backgroundColor,
                         hoverOffset: 4,
                     },
                 ],

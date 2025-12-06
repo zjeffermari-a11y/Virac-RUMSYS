@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Spatie\Browsershot\Browsershot;
 use App\Models\User;
 use App\Models\Payment;
 use App\Models\Billing;
@@ -22,6 +23,37 @@ class ReportController extends Controller
         
         $notes = $request->input('notes', '');
 
+        // Read Chart.js directly from node_modules
+        $chartJsPath = base_path('node_modules/chart.js/dist/chart.umd.js');
+        $chartJsContent = '';
+        
+        if (file_exists($chartJsPath)) {
+            $chartJsContent = file_get_contents($chartJsPath);
+        } else {
+            // Fallback: try to find it in a different location
+            $altPath = base_path('node_modules/chart.js/dist/chart.js');
+            if (file_exists($altPath)) {
+                $chartJsContent = file_get_contents($altPath);
+            }
+        }
+
+        // Render a dedicated Blade view for the PDF content
+        $html = view('printing.report', [
+            'data' => $data, 
+            'notes' => $notes,
+            'chartJsContent' => $chartJsContent
+        ])->render();
+
+        // Use Browsershot to generate the PDF from the rendered HTML
+        // Added delay to ensure Chart.js is loaded before rendering
+        $pdf = Browsershot::html($html)
+            ->format('Letter')
+            ->showBrowserHeaderAndFooter(false)
+            ->waitUntilNetworkIdle()
+            ->delay(3000) // Increase to 3 seconds to ensure charts render
+            ->setOption('args', ['--no-sandbox'])
+            ->pdf();
+
         // Create a filename based on the report period
         $filename = 'Monthly_Report_' . str_replace(' ', '_', $data['report_period']) . '.pdf';
 
@@ -34,12 +66,10 @@ class ReportController extends Controller
             'created_at' => now(),
         ]);
 
-        // Return the view directly for client-side PDF generation
-        return view('printing.report', [
-            'data' => $data, 
-            'notes' => $notes,
-            'filename' => $filename,
-        ]);
+        // Return the generated PDF as a download
+        return response($pdf)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
     }
 
     /**

@@ -186,6 +186,23 @@ public function getCollectionTrends(Request $request)
     {
         $year = $request->input('year', Carbon::now()->year);
 
+        // Get vendor IDs that need support (have overdue bills) to exclude them
+        // Apply section filter if provided
+        $vendorsNeedingSupportQuery = User::whereHas('role', fn ($q) => $q->where('name', 'Vendor'))
+            ->whereHas('billings', function ($query) use ($year) {
+                $query->whereYear('period_start', $year)
+                    ->where('status', 'unpaid')
+                    ->where('due_date', '<', now());
+            });
+
+        // Apply section filter to exclusion query if provided
+        if ($request->filled('section') && $request->section !== 'All') {
+            $sectionName = $request->section;
+            $vendorsNeedingSupportQuery->whereHas('stall.section', fn($q) => $q->where('name', $sectionName));
+        }
+
+        $vendorsNeedingSupportIds = $vendorsNeedingSupportQuery->pluck('id')->toArray();
+
         // Start building the query
         $query = DB::table('users')
             ->join('stalls', 'users.id', '=', 'stalls.vendor_id')
@@ -194,6 +211,11 @@ public function getCollectionTrends(Request $request)
             ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
             ->where('billing.status', 'paid')
             ->whereYear('billing.period_start', $year);
+
+        // Exclude vendors that need support
+        if (!empty($vendorsNeedingSupportIds)) {
+            $query->whereNotIn('users.id', $vendorsNeedingSupportIds);
+        }
 
         // ✅ **FIX APPLIED HERE**
         // This block checks if a section filter was provided in the request.
@@ -234,54 +256,66 @@ public function getCollectionTrends(Request $request)
 
     /**
      * ✅ OPTIMIZED VERSION: Fetch top 5 vendors with the most overdue bills, with section filtering.
+     * Note: No need to exclude top performers here since top performers already exclude vendors with overdue bills.
      */
     public function getVendorsNeedingSupport(Request $request)
 {
     // Add year variable
     $year = $request->input('year', Carbon::now()->year);
 
-    $query = User::whereHas('role', fn ($q) => $q->where('name', 'Vendor'))
-        ->whereHas('billings', function ($query) use ($year) {
-            $query->whereYear('period_start', $year)
-                ->where('status', 'unpaid')
-                ->where('due_date', '<', now());
-        })
-        ->with(['stall:id,vendor_id,table_number', 'billings' => function ($query) use ($year) {
-            // Apply year filter
-            $query->whereYear('period_start', $year)
-                  ->where('status', 'unpaid')
-                  ->where('due_date', '<', now())
-                  ->select('stall_id', 'utility_type', 'period_start', 'amount');
-        }])
-        ->withCount(['billings as overdue_bills_count' => function ($query) use ($year) {
-            // Apply year filter
-            $query->whereYear('period_start', $year)->where('status', 'unpaid')->where('due_date', '<', now());
-        }]);
+    // Use direct DB query to avoid hasManyThrough relationship issues
+    $query = DB::table('users')
+        ->join('roles', 'users.role_id', '=', 'roles.id')
+        ->join('stalls', 'users.id', '=', 'stalls.vendor_id')
+        ->join('billing', 'stalls.id', '=', 'billing.stall_id')
+        ->where('roles.name', 'Vendor')
+        ->whereYear('billing.period_start', $year)
+        ->where('billing.status', 'unpaid')
+        ->where('billing.due_date', '<', now());
 
+    // Apply section filter if provided
     if ($request->filled('section') && $request->section !== 'All') {
-        $sectionName = $request->section;
-        $query->whereHas('stall.section', fn($q) => $q->where('name', $sectionName));
+        $query->join('sections', 'stalls.section_id', '=', 'sections.id')
+              ->where('sections.name', $request->section);
     }
 
-    $paginatedVendors = $query
-            ->orderByDesc('overdue_bills_count')
-            ->paginate(15);
+    // Get vendors with overdue bills count
+    $vendorStats = $query->select(
+            'users.id',
+            'users.name',
+            'stalls.table_number',
+            DB::raw('COUNT(billing.id) as overdue_bills_count')
+        )
+        ->groupBy('users.id', 'users.name', 'stalls.table_number')
+        ->orderByDesc('overdue_bills_count')
+        ->limit(5)
+        ->get();
 
-    $paginatedVendors->getCollection()->transform(function ($vendor) {
-        $overdueDetails = $vendor->billings->map(function ($bill) {
+    // Get detailed overdue bills for each vendor
+    $formattedVendors = $vendorStats->map(function ($vendor) use ($year) {
+        $overdueBills = DB::table('billing')
+            ->join('stalls', 'billing.stall_id', '=', 'stalls.id')
+            ->where('stalls.vendor_id', $vendor->id)
+            ->whereYear('billing.period_start', $year)
+            ->where('billing.status', 'unpaid')
+            ->where('billing.due_date', '<', now())
+            ->select('billing.utility_type', 'billing.period_start')
+            ->get();
+
+        $overdueDetails = $overdueBills->map(function ($bill) {
             return $bill->utility_type . ' - ' . \Carbon\Carbon::parse($bill->period_start)->format('F Y');
         });
 
         return [
             'id' => $vendor->id,
             'name' => $vendor->name,
-            'stall_number' => $vendor->stall->table_number ?? 'N/A',
+            'stall_number' => $vendor->table_number ?? 'N/A',
             'metric' => $vendor->overdue_bills_count . ' Overdue Bill(s)',
-            'overdue_bills_details' => $overdueDetails,
+            'overdue_bills_details' => $overdueDetails->toArray(),
         ];
     });
 
-    return response()->json($paginatedVendors);
+    return response()->json($formattedVendors);
     }
     
 }

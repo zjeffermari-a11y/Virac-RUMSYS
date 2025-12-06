@@ -63,6 +63,7 @@ class SuperAdminController extends Controller
 
         // Fetch data for all other sections, passing the $request object
         $rentalRates = $rentalRateController->index($request)->getData(true);
+        $rentalRateHistory = $rentalRateController->history($request)->getData(true);
         $utilityRates = $utilityRateController->index($request)->getData(true);
         $utilityRateHistory = $utilityRateController->history($request)->getData(true);
         $meterReadingSchedule = $scheduleController->show($request)->getData(true);
@@ -90,7 +91,7 @@ class SuperAdminController extends Controller
             'utilityConsumption' => $utilityConsumption,
             'vendorPulse' => [
                 'topPerformers' => $topPerformers,
-                'needsSupport' => $vendorsNeedingSupport['data'],
+                'needsSupport' => $vendorsNeedingSupport,
             ],
             'filterData' => [
                 'years' => $years,
@@ -98,6 +99,7 @@ class SuperAdminController extends Controller
             ],
             // Add all the new data to the initial state
             'rentalRates' => $rentalRates,
+            'rentalRateHistory' => $rentalRateHistory,
             'utilityRates' => $utilityRates,
             'utilityRateHistory' => $utilityRateHistory,
             'meterReadingSchedule' => $meterReadingSchedule,

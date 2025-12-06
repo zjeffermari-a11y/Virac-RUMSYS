@@ -10,6 +10,8 @@ use App\Models\Billing;
 use App\Models\Rate;
 use App\Models\Stall;
 use App\Models\BillingSetting;
+use App\Models\UtilityReading;
+use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use App\Models\User;
@@ -25,29 +27,29 @@ class VendorController extends Controller
         }
 
         if (!$vendor || !$vendor->stall) {
-            // Instead of aborting 404, show a friendly "No Stall Assigned" page
-            return view('vendor_portal.no-stall');
+            abort(404, 'Vendor or stall not found.');
         }
 
         $vendor->load('stall.section');
 
         $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
-            ->where(function ($query) {
-                $query->where('status', 'unpaid')
-                      ->orWhere(function ($subQuery) {
-                          $subQuery->where('status', 'paid')
-                                   ->whereHas('payment', function ($paymentQuery) {
-                                       $paymentQuery->whereMonth('payment_date', Carbon::now()->month)
-                                                    ->whereYear('payment_date', Carbon::now()->year);
-                                   });
-                      });
-            })
-            ->with('payment')
+            ->where('status', 'unpaid')
+            ->with('payment:id,billing_id,amount_paid,payment_date')
+            ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
             ->orderBy('due_date', 'desc')
             ->get();
 
-        $billingSettings = BillingSetting::all()->keyBy('utility_type');
+        // Cache billing settings (rarely changes)
+        $billingSettings = cache()->remember('billing_settings', 3600, function () {
+            return BillingSetting::all()->keyBy('utility_type');
+        });
+        
         $today = Carbon::today();
+
+        // Pre-parse dates to avoid repeated parsing
+        $today = Carbon::today();
+        $todayDay = $today->day;
+        $currentMonth = $today->format('Y-m');
 
         foreach ($outstandingBills as $bill) {
             $bill->original_amount = (float) $bill->amount;
@@ -96,9 +98,8 @@ class VendorController extends Controller
                     $bill->display_amount_due = $bill->original_amount;
 
                     // Check for early payment discount
-                    if ($today->day <= 15) {
+                    if ($todayDay <= 15) {
                         $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
-                        $currentMonth = $today->format('Y-m');
                         if ($billMonth === $currentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
                             $discountAmount = $bill->original_amount * (float)$settings->discount_rate;
                             $bill->display_amount_due = $bill->original_amount - $discountAmount;
@@ -119,16 +120,29 @@ class VendorController extends Controller
             }
         }
 
+        // Optimize grouping by pre-parsing dates
         $groupedBills = $outstandingBills->groupBy(function ($bill) {
             $periodDate = Carbon::parse($bill->period_start);
             if (in_array($bill->utility_type, ['Water', 'Electricity'])) {
-                return $periodDate->addMonth()->format('F Y');
+                return $periodDate->copy()->addMonth()->format('F Y');
             }
             return $periodDate->format('F Y');
         });
         
-        $utilityRates = Rate::whereIn('utility_type', ['Electricity', 'Water'])->get()->keyBy('utility_type');
+        // Cache utility rates (rarely changes)
+        $utilityRates = cache()->remember('utility_rates', 3600, function () {
+            return Rate::whereIn('utility_type', ['Electricity', 'Water'])
+                ->select('id', 'utility_type', 'rate', 'monthly_rate')
+                ->get()
+                ->keyBy('utility_type');
+        });
+        
         $stallData = $vendor->stall;
+        
+        // Pre-load current month's payment history for instant display
+        $currentYear = Carbon::now()->year;
+        $currentMonth = Carbon::now()->month;
+        $paymentHistoryInitial = $this->getPaymentHistoryData($vendor, $currentYear, $currentMonth, null, 1, 20);
 
         return view('vendor_portal.vendor', [
             'vendor' => $vendor,
@@ -137,6 +151,7 @@ class VendorController extends Controller
             'utilityRates' => $utilityRates,
             'stallData' => $stallData,
             'billingSettings' => $billingSettings,
+            'paymentHistoryInitial' => $paymentHistoryInitial,
             'isStaffView' => !Auth::user()->isVendor()
         ]);
     }
@@ -154,22 +169,22 @@ class VendorController extends Controller
     $vendor->load('stall.section');
 
     $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
-        ->where(function ($query) {
-            $query->where('status', 'unpaid')
-                  ->orWhere(function ($subQuery) {
-                      $subQuery->where('status', 'paid')
-                               ->whereHas('payment', function ($paymentQuery) {
-                                   $paymentQuery->whereMonth('payment_date', Carbon::now()->month)
-                                                ->whereYear('payment_date', Carbon::now()->year);
-                               });
-                  });
-        })
-        ->with('payment')
+        ->where('status', 'unpaid')
+        ->with('payment:id,billing_id,amount_paid,payment_date')
+        ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
         ->orderBy('due_date', 'desc')
         ->get();
 
-    $billingSettings = BillingSetting::all()->keyBy('utility_type');
+    // Cache billing settings (rarely changes)
+    $billingSettings = cache()->remember('billing_settings', 3600, function () {
+        return BillingSetting::all()->keyBy('utility_type');
+    });
+    
     $today = Carbon::today();
+
+    // Pre-calculate today values
+    $todayDay = $today->day;
+    $currentMonth = $today->format('Y-m');
 
     foreach ($outstandingBills as $bill) {
         $bill->original_amount = (float) $bill->amount;
@@ -208,9 +223,8 @@ class VendorController extends Controller
                 }
                 $current_total_due += $penaltyAmount;
                 $bill->penalty_applied = $penaltyAmount;
-            } else if ($today->day <= 15) {
+            } else if ($todayDay <= 15) {
                 $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
-                $currentMonth = $today->format('Y-m');
 
                 if ($billMonth === $currentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
                     $discountAmount = $bill->original_amount * (float)$settings->discount_rate;
@@ -229,37 +243,164 @@ class VendorController extends Controller
     ]);
     }
 
+    private function getPaymentHistoryData($vendor, $year = null, $month = null, $search = null, $page = 1, $perPage = 20)
+    {
+        if (!$vendor || !$vendor->stall) {
+            return ['data' => [], 'total' => 0, 'has_more' => false];
+        }
+
+        // Build cache key for this query
+        $cacheKey = "payment_history_vendor_{$vendor->stall->id}_y{$year}_m{$month}_s{$search}_p{$page}";
+        
+        // Cache results for 5 minutes (short cache for search results)
+        $cachedResult = cache()->get($cacheKey);
+        if ($cachedResult && !$search) { // Don't cache search results
+            return $cachedResult;
+        }
+
+        // Optimized query: Start from payments table for better index usage
+        $baseQuery = DB::table('payments')
+            ->join('billing', 'payments.billing_id', '=', 'billing.id')
+            ->where('billing.stall_id', $vendor->stall->id)
+            ->where('billing.status', 'paid');
+
+        // Use date range instead of whereYear/whereMonth for better index usage
+        if ($year) {
+            $startDate = Carbon::create($year, 1, 1)->startOfYear();
+            $endDate = Carbon::create($year, 12, 31)->endOfYear();
+            
+            if ($month && $month !== "all") {
+                $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+                $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+            }
+            
+            $baseQuery->whereBetween('payments.payment_date', [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
+        } elseif ($month && $month !== "all") {
+            // If only month is provided without year, use current year
+            $year = Carbon::now()->year;
+            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+            $baseQuery->whereBetween('payments.payment_date', [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
+        }
+
+        if ($search) {
+            $baseQuery->where('billing.utility_type', 'like', '%' . $search . '%');
+        }
+
+        // Get total count (clone query to avoid affecting main query)
+        $total = (clone $baseQuery)->count();
+        
+        // Get paginated results
+        $bills = (clone $baseQuery)
+            ->select(
+                'billing.id',
+                'billing.stall_id',
+                'billing.utility_type',
+                'billing.period_start',
+                'billing.period_end',
+                'billing.amount',
+                'billing.due_date',
+                'billing.disconnection_date',
+                'billing.status',
+                'payments.amount_paid',
+                'payments.payment_date'
+            )
+            ->orderBy('payments.payment_date', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
+
+        // Get billing settings for recalculation
+        $billingSettings = BillingSetting::all()->keyBy('utility_type');
+        
+        // Format response to match expected structure
+        $formattedBills = $bills->map(function ($bill) use ($billingSettings) {
+            $originalAmount = (float) $bill->amount;
+            $paymentDate = Carbon::parse($bill->payment_date);
+            $dueDate = Carbon::parse($bill->due_date);
+            $finalAmount = $originalAmount;
+            $settings = $billingSettings->get($bill->utility_type);
+            
+            // Recalculate the correct amount based on payment date
+            if ($paymentDate->gt($dueDate)) {
+                // Payment was LATE, calculate penalties
+                if ($bill->utility_type === 'Rent' && $settings) {
+                    $interest_months = (int) floor($dueDate->floatDiffInMonths($paymentDate));
+                    $surcharge = $originalAmount * (float)($settings->surcharge_rate ?? 0);
+                    $interest = $originalAmount * (float)($settings->monthly_interest_rate ?? 0) * $interest_months;
+                    $finalAmount = $originalAmount + $surcharge + $interest;
+                } else if ($settings) {
+                    $penalty = $originalAmount * (float)($settings->penalty_rate ?? 0);
+                    $finalAmount = $originalAmount + $penalty;
+                }
+            } else if ($paymentDate->day <= 15) {
+                // Payment was ON TIME (before due date and within discount period), check for discount
+                $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
+                $paymentMonth = $paymentDate->format('Y-m');
+
+                if ($billMonth === $paymentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
+                    $discountAmount = $originalAmount * (float)$settings->discount_rate;
+                    $finalAmount = $originalAmount - $discountAmount;
+                }
+            }
+            
+            return (object) [
+                'id' => $bill->id,
+                'stall_id' => $bill->stall_id,
+                'utility_type' => $bill->utility_type,
+                'period_start' => $bill->period_start,
+                'period_end' => $bill->period_end,
+                'amount' => $bill->amount,
+                'due_date' => $bill->due_date,
+                'disconnection_date' => $bill->disconnection_date,
+                'status' => $bill->status,
+                'payment' => (object) [
+                    'amount_paid' => $finalAmount, // Use recalculated amount
+                    'payment_date' => $bill->payment_date,
+                ],
+            ];
+        });
+
+        $lastPage = (int) ceil($total / $perPage);
+
+        $response = [
+            'data' => $formattedBills,
+            'current_page' => (int) $page,
+            'last_page' => $lastPage,
+            'per_page' => $perPage,
+            'total' => $total,
+            'has_more' => $page < $lastPage,
+        ];
+        
+        // Cache result for 5 minutes (only if no search, as search results change frequently)
+        if (!$search) {
+            cache()->put($cacheKey, $response, 300); // 5 minutes
+        }
+
+        return $response;
+    }
+
     public function paymentHistoryApi(Request $request)
     {
         $vendor = Auth::user();
         if (!$vendor->stall) {
             return response()->json(['error' => 'User not assigned to a stall.'], 403);
         }
+        
         $year = $request->get('year');
         $month = $request->get('month');
         $search = $request->get('search');
+        $page = $request->get('page', 1);
+        
+        $result = $this->getPaymentHistoryData($vendor, $year, $month, $search, $page, 20);
 
-        $query = Billing::with('payment')
-            ->join('payments', 'billing.id', '=', 'payments.billing_id')
-            ->where('billing.stall_id', $vendor->stall->id)
-            ->where('billing.status', 'paid')
-            ->whereDate('payments.payment_date', '<', Carbon::now()->startOfMonth());
-
-        if ($year) { 
-            $query->whereYear('payments.payment_date', $year);
-        }
-
-        if ($month && $month !== "all") {
-            $query->whereMonth('payments.payment_date', $month);
-        }
-
-        if ($search) {
-            $query->where('billing.utility_type', 'like', '%' . $search . '%');
-        }
-
-        $bills = $query->orderBy('payments.payment_date', 'desc')->select('billing.*')->get();
-
-        return response()->json($bills);
+        return response()->json($result);
     }
 
     public function paymentYearsApi()
@@ -269,16 +410,25 @@ class VendorController extends Controller
             return response()->json(['error' => 'User not assigned to a stall.'], 403);
         }
 
-        $years = Billing::join('payments', 'billing.id', '=', 'payments.billing_id')
+        // Cache years list (changes infrequently)
+        $cacheKey = "payment_years_vendor_{$vendor->stall->id}";
+        $years = cache()->remember($cacheKey, 3600, function () use ($vendor) {
+            // Optimized: Direct query on payments table
+            $years = DB::table('payments')
+                ->join('billing', 'payments.billing_id', '=', 'billing.id')
             ->where('billing.stall_id', $vendor->stall->id)
-            ->select(DB::raw('EXTRACT(YEAR FROM payments.payment_date) as year'))
-            ->distinct()
+                ->where('billing.status', 'paid')
+                ->select(DB::raw('DISTINCT YEAR(payments.payment_date) as year'))
             ->orderBy('year', 'desc')
-            ->pluck('year');
+                ->pluck('year')
+                ->toArray();
 
-        if ($years->isEmpty()) {
-            $years->push(now()->year);
+            if (empty($years)) {
+                $years = [now()->year];
         }
+
+            return $years;
+        });
 
         return response()->json($years);
     }
@@ -355,5 +505,132 @@ class VendorController extends Controller
 
         return redirect()->route('vendor.dashboard')
             ->with('success', $message);
+    }
+
+    public function analytics(?User $vendor = null)
+    {
+        if (is_null($vendor) && Auth::user()->isVendor()) {
+            $vendor = Auth::user();
+        }
+
+        if (!$vendor || !$vendor->stall) {
+            return response()->json(['error' => 'Vendor or stall not found.'], 404);
+        }
+
+        $stallId = $vendor->stall->id;
+
+        // Get electricity consumption data (last 12 months)
+        $electricityReadings = UtilityReading::where('stall_id', $stallId)
+            ->where('utility_type', 'Electricity')
+            ->orderBy('reading_date', 'desc')
+            ->limit(12)
+            ->get()
+            ->reverse();
+
+        $consumptionData = [];
+        $consumptionLabels = [];
+        
+        foreach ($electricityReadings as $index => $reading) {
+            if ($index > 0) {
+                $previousReading = $electricityReadings[$index - 1];
+                $consumption = $reading->current_reading - $previousReading->current_reading;
+                $consumptionData[] = max(0, $consumption); // Ensure non-negative
+                $consumptionLabels[] = Carbon::parse($reading->reading_date)->format('M Y');
+            }
+        }
+
+        // Get payment tracking data (on-time vs late payments)
+        // Optimize: Only get billings that are paid or overdue (skip future unpaid bills)
+        $billings = Billing::where('stall_id', $stallId)
+            ->where(function ($query) {
+                $query->where('status', 'paid')
+                      ->orWhere(function ($q) {
+                          $q->where('status', 'unpaid')
+                            ->where('due_date', '<=', Carbon::today());
+                      });
+            })
+            ->with('payment:id,billing_id,payment_date')
+            ->select('id', 'stall_id', 'utility_type', 'due_date', 'status')
+            ->orderBy('due_date', 'desc')
+            ->get();
+
+        $today = Carbon::today();
+        $onTimeCount = 0;
+        $lateCount = 0;
+        $paymentTimeline = [];
+
+        foreach ($billings as $billing) {
+            $dueDate = Carbon::parse($billing->due_date)->startOfDay();
+            $isOnTime = false;
+            $recordDate = null;
+            
+            if ($billing->status === 'paid' && $billing->payment) {
+                // For paid bills: check if payment was made on or before due date
+                $paymentDate = Carbon::parse($billing->payment->payment_date)->startOfDay();
+                $isOnTime = $paymentDate->lte($dueDate);
+                $recordDate = $paymentDate;
+            } else {
+                // For unpaid bills: check if due date has passed
+                if ($today->gt($dueDate)) {
+                    // Unpaid and past due date = late
+                    $isOnTime = false;
+                    $recordDate = $dueDate; // Use due date for timeline grouping
+                } else {
+                    // Unpaid but not yet due = not counted (not late, not on-time yet)
+                    continue; // Skip bills that aren't due yet
+                }
+            }
+            
+            if ($isOnTime) {
+                $onTimeCount++;
+            } else {
+                $lateCount++;
+            }
+
+            // Add to timeline for trend analysis
+            if ($recordDate) {
+                $paymentTimeline[] = [
+                    'date' => $recordDate->format('Y-m'),
+                    'on_time' => $isOnTime ? 1 : 0,
+                    'late' => $isOnTime ? 0 : 1,
+                ];
+            }
+        }
+
+        // Group timeline by month
+        $timelineGrouped = [];
+        foreach ($paymentTimeline as $item) {
+            $month = $item['date'];
+            if (!isset($timelineGrouped[$month])) {
+                $timelineGrouped[$month] = ['on_time' => 0, 'late' => 0];
+            }
+            $timelineGrouped[$month]['on_time'] += $item['on_time'];
+            $timelineGrouped[$month]['late'] += $item['late'];
+        }
+
+        // Sort by date and get last 12 months
+        ksort($timelineGrouped);
+        $timelineGrouped = array_slice($timelineGrouped, -12, 12, true);
+
+        $timelineLabels = array_keys($timelineGrouped);
+        $timelineOnTime = array_column($timelineGrouped, 'on_time');
+        $timelineLate = array_column($timelineGrouped, 'late');
+
+        return response()->json([
+            'electricity' => [
+                'labels' => $consumptionLabels,
+                'data' => $consumptionData,
+            ],
+            'paymentTracking' => [
+                'onTime' => $onTimeCount,
+                'late' => $lateCount,
+                'total' => $onTimeCount + $lateCount,
+            ],
+            'paymentTimeline' => [
+                'labels' => $timelineLabels,
+                'onTime' => $timelineOnTime,
+                'late' => $timelineLate,
+            ],
+        ]);
     }
 }

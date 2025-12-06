@@ -1,6 +1,7 @@
 <script>
-    // Make billing settings globally available for the modal calculation script
+    // Make billing settings and utility rates globally available for the modal calculation script
     window.BILLING_SETTINGS = @json($billingSettings);
+    window.UTILITY_RATES = @json($utilityRates);
 </script>
 
 

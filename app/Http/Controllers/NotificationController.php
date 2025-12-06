@@ -22,16 +22,9 @@ class NotificationController extends Controller
 
         foreach ($users as $u) {
             $allBillsForPeriod = $u->billings()
-                ->where(function ($query) use ($today) {
-                    $query->where('status', 'unpaid')
-                          ->orWhere(function ($subQuery) use ($today) {
-                              $subQuery->where('status', 'paid')
-                                       ->whereHas('payment', function ($paymentQuery) use ($today) {
-                                           $paymentQuery->whereMonth('payment_date', $today->month)
-                                                        ->whereYear('payment_date', $today->year);
-                                       });
-                          });
-                })->with('payment')->get();
+                ->where('status', 'unpaid')
+                ->with('payment')
+                ->get();
     
             foreach ($allBillsForPeriod as $bill) {
                 $bill->original_amount = $bill->amount;
@@ -179,6 +172,45 @@ class NotificationController extends Controller
     }
 
     /**
+     * Fetch all notifications for the current user (for notifications page)
+     */
+    public function fetchAll(Request $request)
+    {
+        $user = Auth::user();
+
+        // Optimize: Use single query with subquery for unread count
+        $unreadCount = DB::table('notifications')
+            ->where('recipient_id', $user->id)
+            ->where('channel', 'in_app')
+            ->whereNull('read_at')
+            ->count();
+
+        // Optimize: Use select with COALESCE for sender name to avoid leftJoin overhead
+        $notifications = DB::table('notifications')
+            ->leftJoin('users as senders', 'notifications.sender_id', '=', 'senders.id')
+            ->where('notifications.recipient_id', $user->id)
+            ->where('notifications.channel', 'in_app')
+            ->select(
+                'notifications.id',
+                'notifications.title',
+                'notifications.message',
+                'notifications.status',
+                'notifications.read_at',
+                'notifications.created_at',
+                'notifications.sent_at',
+                DB::raw('COALESCE(senders.name, NULL) as sender_name')
+            )
+            ->orderBy('notifications.created_at', 'desc')
+            ->limit(100) // Limit to most recent 100 notifications for performance
+            ->get();
+
+        return response()->json([
+            'notifications' => $notifications,
+            'unread_count' => $unreadCount,
+        ]);
+    }
+
+    /**
      * Mark all pending notifications for the user as 'read'.
      */
     public function markAsRead(Request $request)
@@ -191,5 +223,25 @@ class NotificationController extends Controller
             ->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Notifications marked as read.']);
+    }
+
+    /**
+     * Mark a single notification as read
+     */
+    public function markNotificationAsRead(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        $updated = DB::table('notifications')
+            ->where('id', $id)
+            ->where('recipient_id', $user->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        if ($updated) {
+            return response()->json(['message' => 'Notification marked as read.']);
+        }
+
+        return response()->json(['message' => 'Notification not found or already read.'], 404);
     }
 }

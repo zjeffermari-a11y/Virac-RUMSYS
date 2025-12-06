@@ -15,7 +15,7 @@ const MarketApp = {
             search: "",
         },
         sort: {
-            key: "vendorName",
+            key: "stallNumber",
             direction: "asc",
         },
         currentVendorId: null,
@@ -24,18 +24,23 @@ const MarketApp = {
         isLoading: true,
         vendorDashboardData: null,
         isLoadingModal: false,
-        dataLoaded: {
-            homeSection: false,
-            vendorManagementSection: false,
-            stallAssignmentSection: false,
-            dashboardSection: false,
-            reportsSection: false,
-        },
+        allNotifications: [],
+            dataLoaded: {
+                homeSection: false,
+                vendorManagementSection: false,
+                stallAssignmentSection: false,
+                dashboardSection: false,
+                reportsSection: false,
+                profileSection: false,
+                notificationsSection: false,
+            },
         isOutstandingModalOpen: false,
         modalBills: [],
         unassignedVendors: [],
         availableStalls: [],
         charts: {},
+        notifications: [],
+        unreadCount: 0,
     },
 
     dashboardInstance: null,
@@ -63,7 +68,16 @@ const MarketApp = {
                 if (!response.ok)
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 const result = await response.json();
-                return result.data || result; // Handle paginated or array response
+                // Handle paginated response - Laravel pagination returns { data: [...], current_page: ..., etc }
+                if (result.data && Array.isArray(result.data)) {
+                    return result.data;
+                }
+                // Handle array response
+                if (Array.isArray(result)) {
+                    return result;
+                }
+                // Fallback
+                return [];
             } catch (error) {
                 console.error("Failed to fetch vendors:", error);
                 return [];
@@ -190,31 +204,6 @@ const MarketApp = {
                 return { success: false, message: error.message };
             }
         },
-        async uploadProfilePicture(vendorId, file) {
-            try {
-                const formData = new FormData();
-                formData.append("vendor_id", vendorId);
-                formData.append("profile_picture", file);
-
-                const response = await fetch("/api/staff/upload-profile-picture", {
-                    method: "POST",
-                    headers: {
-                        "X-CSRF-TOKEN": document
-                            .querySelector('meta[name="csrf-token"]')
-                            .getAttribute("content"),
-                    },
-                    body: formData,
-                    credentials: "include",
-                });
-                const result = await response.json();
-                if (!response.ok)
-                    throw new Error(result.message || "Upload failed");
-                return { success: true, ...result };
-            } catch (error) {
-                console.error("Profile picture upload error:", error);
-                return { success: false, message: error.message };
-            }
-        },
     },
 
     elements: {},
@@ -240,11 +229,23 @@ const MarketApp = {
             const { key, direction } = state.sort;
             if (key) {
                 filtered.sort((a, b) => {
-                    const valA = a[key] ? a[key].toString().toLowerCase() : "";
-                    const valB = b[key] ? b[key].toString().toLowerCase() : "";
-                    if (valA < valB) return direction === "asc" ? -1 : 1;
-                    if (valA > valB) return direction === "asc" ? 1 : -1;
-                    return 0;
+                    let valA = a[key] ? a[key].toString() : "";
+                    let valB = b[key] ? b[key].toString() : "";
+                    
+                    // Use natural sort for stall numbers (handles alphanumeric like "MS-06", "L1")
+                    if (key === "stallNumber") {
+                        valA = valA.toUpperCase();
+                        valB = valB.toUpperCase();
+                        const comparison = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+                        return direction === "asc" ? comparison : -comparison;
+                    } else {
+                        // Regular string comparison for other fields
+                        valA = valA.toLowerCase();
+                        valB = valB.toLowerCase();
+                        if (valA < valB) return direction === "asc" ? -1 : 1;
+                        if (valA > valB) return direction === "asc" ? 1 : -1;
+                        return 0;
+                    }
                 });
             }
             return filtered;
@@ -324,6 +325,10 @@ const MarketApp = {
             }
 
             MarketApp.render.updateDashboardView();
+            // Update notifications when section changes
+            MarketApp.methods.renderNotificationDropdown();
+            // Fetch fresh notifications when section changes
+            MarketApp.methods.fetchNotifications();
             // Call the new initializer method every time the section changes
             MarketApp.methods.initializeSection(MarketApp.state.activeSection);
         },
@@ -358,6 +363,10 @@ const MarketApp = {
                         }
                         MarketApp.methods.setupStallAssignmentEventListeners();
                         await MarketApp.methods.loadStallAssignmentData();
+                        break;
+                    case "notificationsSection":
+                        await MarketApp.methods.loadAllNotifications();
+                        MarketApp.methods.setupNotificationsEventListeners();
                         break;
                 }
                 // Mark MarketApp section as loaded so we don't run setup again
@@ -526,6 +535,399 @@ const MarketApp = {
             }
         },
 
+        // Announcements are now shown as notifications in the bell dropdown
+        // No need to display announcement banners
+
+        async fetchNotifications() {
+            try {
+                const response = await fetch("/notifications/fetch");
+                if (!response.ok) return;
+
+                const data = await response.json();
+                MarketApp.state.notifications = data.notifications || [];
+                MarketApp.state.unreadCount = data.unread_count || 0;
+                MarketApp.methods.renderNotificationDropdown();
+            } catch (error) {
+                console.error("Error fetching notifications:", error);
+            }
+        },
+
+        renderNotificationDropdown() {
+            // Find notification elements in the active section
+            const activeSection = document.querySelector(".dashboard-section.active");
+            if (!activeSection) return;
+
+            const notificationList = activeSection.querySelector(".notificationList");
+            const notificationDot = activeSection.querySelector(".notificationDot");
+
+            if (!notificationList || !notificationDot) return;
+
+            // Show/hide notification dot
+            notificationDot.classList.toggle("hidden", MarketApp.state.unreadCount === 0);
+
+            if (MarketApp.state.notifications.length === 0) {
+                notificationList.innerHTML = `<p class="text-center text-gray-500 p-4">You have no new notifications.</p>`;
+                return;
+            }
+
+            notificationList.innerHTML = MarketApp.state.notifications
+                .map((notification) => {
+                    // Try to parse message as JSON, fallback to plain text
+                    let notificationText = notification.title || "Notification";
+                    try {
+                        if (notification.message) {
+                            const data = JSON.parse(notification.message);
+                            notificationText = data.text || data.message || notification.title || notificationText;
+                        }
+                    } catch (e) {
+                        // If not JSON, use message as plain text
+                        notificationText = notification.message || notification.title || notificationText;
+                    }
+                    
+                    const isUnread = notification.read_at === null;
+                    const timeAgo = MarketApp.methods.formatTimeAgo(notification.created_at);
+
+                    return `
+                        <div class="block p-3 transition-colors hover:bg-gray-100 ${isUnread ? "bg-blue-50" : ""}">
+                            <div class="flex items-start">
+                                ${isUnread ? '<div class="w-2 h-2 bg-blue-500 rounded-full mt-1.5 mr-3 flex-shrink-0"></div>' : '<div class="w-2 h-2 mr-3"></div>'}
+                                <div class="flex-grow">
+                                    <p class="text-sm text-gray-800">${MarketApp.methods.escapeHtml(notificationText)}</p>
+                                    <p class="text-xs text-blue-600 font-semibold mt-1">${timeAgo}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                })
+                .join("");
+        },
+
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        formatTimeAgo(dateString) {
+            const date = new Date(dateString);
+            const seconds = Math.floor((new Date() - date) / 1000);
+
+            let interval = seconds / 31536000;
+            if (interval >= 1) {
+                const value = Math.floor(interval);
+                return value === 1 ? `${value} year ago` : `${value} years ago`;
+            }
+            interval = seconds / 2592000;
+            if (interval >= 1) {
+                const value = Math.floor(interval);
+                return value === 1 ? `${value} month ago` : `${value} months ago`;
+            }
+            interval = seconds / 86400;
+            if (interval >= 1) {
+                const value = Math.floor(interval);
+                return value === 1 ? `${value} day ago` : `${value} days ago`;
+            }
+            interval = seconds / 3600;
+            if (interval >= 1) {
+                const value = Math.floor(interval);
+                return value === 1 ? `${value} hour ago` : `${value} hours ago`;
+            }
+            interval = seconds / 60;
+            if (interval >= 1) {
+                const value = Math.floor(interval);
+                return value === 1 ? `${value} minute ago` : `${value} minutes ago`;
+            }
+            return "Just now";
+        },
+
+        async markNotificationsAsRead() {
+            if (MarketApp.state.unreadCount === 0) return;
+
+            // Optimistic update
+            const now = new Date().toISOString();
+            MarketApp.state.notifications = MarketApp.state.notifications.map((notification) => {
+                if (notification.read_at === null) {
+                    return { ...notification, read_at: now };
+                }
+                return notification;
+            });
+            MarketApp.state.unreadCount = 0;
+            MarketApp.methods.renderNotificationDropdown();
+
+            try {
+                await fetch("/notifications/mark-as-read", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content"),
+                    },
+                });
+            } catch (error) {
+                console.error("Failed to mark notifications as read:", error);
+            }
+        },
+
+        async loadAllNotifications() {
+            const loader = document.getElementById("notificationsLoader");
+            const list = document.getElementById("notificationsList");
+            const noMessage = document.getElementById("noNotificationsMessage");
+
+            if (loader) loader.classList.remove("hidden");
+            if (list) list.classList.add("hidden");
+            if (noMessage) noMessage.classList.add("hidden");
+
+            try {
+                // Fetch both notifications and announcements in parallel with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+                const [notificationsResponse, announcementsResponse] = await Promise.all([
+                    fetch("/notifications/fetch-all", {
+                        signal: controller.signal,
+                        credentials: "include",
+                    }),
+                    fetch("/api/announcements/all-for-user", {
+                        headers: {
+                            "Accept": "application/json",
+                            "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+                        },
+                        credentials: "include",
+                        signal: controller.signal,
+                    }).catch(() => ({ ok: false, json: async () => [] })) // Gracefully handle announcements failure
+                ]);
+
+                clearTimeout(timeoutId);
+
+                if (!notificationsResponse.ok) throw new Error("Failed to fetch notifications");
+
+                const notificationsData = await notificationsResponse.json();
+                const announcements = announcementsResponse.ok ? await announcementsResponse.json() : [];
+
+                // Combine notifications and announcements
+                const allItems = [];
+                
+                // Add regular notifications
+                (notificationsData.notifications || []).forEach(notif => {
+                    allItems.push({
+                        ...notif,
+                        type: 'notification',
+                    });
+                });
+
+                // Add announcements (convert to notification-like format)
+                if (Array.isArray(announcements)) {
+                    announcements.forEach(announcement => {
+                        allItems.push({
+                            id: `announcement_${announcement.id}`,
+                            title: announcement.title,
+                            message: announcement.content,
+                            created_at: announcement.created_at,
+                            read_at: announcement.is_dismissed ? announcement.created_at : null, // Treat dismissed as read
+                            sender_name: null,
+                            type: 'announcement',
+                            announcement_id: announcement.id,
+                            is_dismissed: announcement.is_dismissed,
+                        });
+                    });
+                }
+
+                // Sort by created_at descending (newest first)
+                allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+                MarketApp.state.allNotifications = allItems;
+                MarketApp.state.unreadCount = notificationsData.unread_count || 0;
+
+                MarketApp.methods.renderNotificationsList();
+            } catch (error) {
+                console.error("Error loading notifications:", error);
+                if (error.name === 'AbortError') {
+                    MarketApp.methods.showToast("Request timed out. Please try again.", "error");
+                } else {
+                    MarketApp.methods.showToast("Failed to load notifications", "error");
+                }
+                // Show empty state on error
+                if (noMessage) {
+                    noMessage.classList.remove("hidden");
+                    noMessage.innerHTML = `
+                        <i class="fas fa-exclamation-triangle text-4xl mb-4 text-yellow-400"></i>
+                        <p class="text-lg">Failed to load notifications.</p>
+                        <button onclick="location.reload()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg">
+                            Retry
+                        </button>
+                    `;
+                }
+            } finally {
+                if (loader) loader.classList.add("hidden");
+            }
+        },
+
+        renderNotificationsList() {
+            const list = document.getElementById("notificationsList");
+            const noMessage = document.getElementById("noNotificationsMessage");
+            const unreadBadge = document.getElementById("unreadCountBadge");
+            const unreadText = document.getElementById("unreadCountText");
+
+            if (!list || !noMessage) return;
+
+            const notifications = MarketApp.state.allNotifications || [];
+
+            if (notifications.length === 0) {
+                list.classList.add("hidden");
+                noMessage.classList.remove("hidden");
+                if (unreadBadge) unreadBadge.classList.add("hidden");
+                return;
+            }
+
+            list.classList.remove("hidden");
+            noMessage.classList.add("hidden");
+
+            // Update unread badge
+            if (unreadBadge && MarketApp.state.unreadCount > 0) {
+                unreadBadge.classList.remove("hidden");
+                if (unreadText) unreadText.textContent = MarketApp.state.unreadCount;
+            } else if (unreadBadge) {
+                unreadBadge.classList.add("hidden");
+            }
+
+            list.innerHTML = notifications.map((notification) => {
+                const isUnread = !notification.read_at;
+                const isAnnouncement = notification.type === 'announcement';
+                const isDismissed = notification.is_dismissed;
+                const timeAgo = MarketApp.methods.formatTimeAgo(notification.created_at);
+                const formattedDate = new Date(notification.created_at).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                // Parse message if it's JSON
+                let messageText = notification.message || notification.title || "Notification";
+                try {
+                    const parsed = JSON.parse(notification.message);
+                    messageText = parsed.text || parsed.message || notification.title || messageText;
+                } catch (e) {
+                    // Not JSON, use as is
+                }
+
+                // Determine background color
+                let bgColor = 'bg-white';
+                if (isUnread && !isDismissed) {
+                    bgColor = 'bg-blue-50 border-blue-200';
+                } else if (isDismissed) {
+                    bgColor = 'bg-gray-50 border-gray-300';
+                }
+
+                return `
+                    <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow ${bgColor}">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-start gap-3">
+                                    ${isUnread && !isDismissed ? '<div class="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>' : ''}
+                                    ${isDismissed ? '<div class="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>' : ''}
+                                    ${!isUnread && !isDismissed ? '<div class="w-2 h-2 mr-3"></div>' : ''}
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            ${isAnnouncement ? '<span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-indigo-100 text-indigo-800"><i class="fas fa-bullhorn mr-1"></i>Announcement</span>' : ''}
+                                            ${isDismissed ? '<span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-gray-200 text-gray-600"><i class="fas fa-check-circle mr-1"></i>Dismissed</span>' : ''}
+                                        </div>
+                                        <h3 class="font-semibold text-gray-800 mb-1">${MarketApp.methods.escapeHtml(notification.title || 'Notification')}</h3>
+                                        <p class="text-sm text-gray-600 mb-2">${MarketApp.methods.escapeHtml(messageText)}</p>
+                                        <div class="flex items-center gap-4 text-xs text-gray-500">
+                                            <span><i class="fas fa-clock mr-1"></i>${timeAgo}</span>
+                                            <span><i class="fas fa-calendar mr-1"></i>${formattedDate}</span>
+                                            ${notification.sender_name ? `<span><i class="fas fa-user mr-1"></i>From: ${MarketApp.methods.escapeHtml(notification.sender_name)}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            ${isUnread && !isAnnouncement ? `
+                                <button class="mark-notification-read-btn ml-4 text-indigo-600 hover:text-indigo-800 transition-colors" 
+                                        data-id="${notification.id}" 
+                                        title="Mark as read">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            // Attach event listeners to mark as read buttons
+            list.querySelectorAll(".mark-notification-read-btn").forEach(btn => {
+                btn.addEventListener("click", async (e) => {
+                    const notificationId = e.currentTarget.dataset.id;
+                    await MarketApp.methods.markSingleNotificationAsRead(notificationId);
+                });
+            });
+        },
+
+        async markSingleNotificationAsRead(notificationId) {
+            try {
+                const response = await fetch(`/notifications/${notificationId}/mark-as-read`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content"),
+                    },
+                });
+
+                if (response.ok) {
+                    // Update local state
+                    MarketApp.state.allNotifications = MarketApp.state.allNotifications.map(n => {
+                        if (n.id == notificationId) {
+                            return { ...n, read_at: new Date().toISOString() };
+                        }
+                        return n;
+                    });
+                    MarketApp.state.unreadCount = Math.max(0, MarketApp.state.unreadCount - 1);
+                    MarketApp.methods.renderNotificationsList();
+                }
+            } catch (error) {
+                console.error("Failed to mark notification as read:", error);
+            }
+        },
+
+        setupNotificationsEventListeners() {
+            const markAllBtn = document.getElementById("markAllAsReadBtn");
+            if (markAllBtn && !markAllBtn.dataset.listenerAttached) {
+                markAllBtn.dataset.listenerAttached = "true";
+                markAllBtn.addEventListener("click", async () => {
+                    if (MarketApp.state.unreadCount === 0) {
+                        MarketApp.methods.showToast("All notifications are already read", "info");
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch("/notifications/mark-as-read", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content"),
+                            },
+                        });
+
+                        if (response.ok) {
+                            // Update all notifications to read
+                            MarketApp.state.allNotifications = MarketApp.state.allNotifications.map(n => ({
+                                ...n,
+                                read_at: n.read_at || new Date().toISOString()
+                            }));
+                            MarketApp.state.unreadCount = 0;
+                            MarketApp.methods.renderNotificationsList();
+                            MarketApp.methods.showToast("All notifications marked as read", "success");
+                        }
+                    } catch (error) {
+                        console.error("Failed to mark all as read:", error);
+                        MarketApp.methods.showToast("Failed to mark all as read", "error");
+                    }
+                });
+            }
+        },
+
+        // Announcement banner removed - announcements now appear as notifications in the bell dropdown
+
         showToast(message, type = "success") {
             const toastContainer = document.getElementById("toastContainer");
             if (!toastContainer) {
@@ -551,6 +953,254 @@ const MarketApp = {
                 toast.classList.add("translate-x-full");
                 toast.addEventListener("transitionend", () => toast.remove());
             }, 5000);
+        },
+
+        setupPasswordChangeForm() {
+            const form = document.getElementById("changePasswordForm");
+            if (!form) return;
+
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                
+                const btn = document.getElementById("changePasswordBtn");
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Changing...</span>';
+
+                const formData = new FormData(form);
+                const data = {
+                    current_password: formData.get("current_password"),
+                    password: formData.get("password"),
+                    password_confirmation: formData.get("password_confirmation"),
+                };
+
+                try {
+                    const response = await fetch("/api/user-settings/change-password", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Accept: "application/json",
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "include",
+                        body: JSON.stringify(data),
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        MarketApp.methods.showToast(result.message || "Password changed successfully!", "success");
+                        form.reset();
+                    } else {
+                        const errorMsg = result.message || result.errors?.current_password?.[0] || result.errors?.password?.[0] || "Failed to change password";
+                        MarketApp.methods.showToast(errorMsg, "error");
+                    }
+                } catch (error) {
+                    console.error("Password change error:", error);
+                    MarketApp.methods.showToast("An error occurred. Please try again.", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            });
+        },
+
+        setupProfilePictureUpload() {
+            const input = document.getElementById("profilePictureInput");
+            const removeBtn = document.getElementById("removeProfilePictureBtn");
+            if (!input) return;
+
+            input.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file size (2MB max)
+                if (file.size > 2 * 1024 * 1024) {
+                    MarketApp.methods.showToast("Image must be smaller than 2MB", "error");
+                    return;
+                }
+
+                // Validate file type
+                if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
+                    MarketApp.methods.showToast("Please select a valid image file (JPEG, PNG, or GIF)", "error");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("profile_picture", file);
+
+                const container = document.getElementById("profilePictureContainer");
+                const placeholder = document.getElementById("profilePicturePlaceholder");
+                const img = document.getElementById("profilePictureImg");
+
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (img) {
+                        img.src = e.target.result;
+                        img.classList.remove("hidden");
+                        if (placeholder) placeholder.classList.add("hidden");
+                    } else {
+                        const newImg = document.createElement("img");
+                        newImg.id = "profilePictureImg";
+                        newImg.src = e.target.result;
+                        newImg.alt = "Profile Picture";
+                        newImg.className = "w-full h-full object-cover";
+                        container.innerHTML = "";
+                        container.appendChild(newImg);
+                    }
+                    if (removeBtn) removeBtn.classList.remove("hidden");
+                };
+                reader.readAsDataURL(file);
+
+                try {
+                    const response = await fetch("/api/user-settings/upload-profile-picture", {
+                        method: "POST",
+                        headers: {
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "include",
+                        body: formData,
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        MarketApp.methods.showToast(result.message || "Profile picture uploaded successfully!", "success");
+                        // Update image source to the server URL
+                        if (result.profile_picture_url) {
+                            console.log('Profile picture URL received:', result.profile_picture_url);
+                            // Get or create the image element
+                            let profileImg = document.getElementById("profilePictureImg");
+                            const container = document.getElementById("profilePictureContainer");
+                            const placeholder = document.getElementById("profilePicturePlaceholder");
+                            
+                            console.log('Profile image element exists:', !!profileImg);
+                            console.log('Container exists:', !!container);
+                            console.log('Placeholder exists:', !!placeholder);
+                            
+                            if (!profileImg) {
+                                // Create image element if it doesn't exist (when placeholder was showing)
+                                profileImg = document.createElement("img");
+                                profileImg.id = "profilePictureImg";
+                                profileImg.alt = "Profile Picture";
+                                profileImg.className = "w-full h-full object-cover";
+                                if (container) {
+                                    // Remove placeholder if it exists
+                                    if (placeholder && placeholder.parentNode === container) {
+                                        container.removeChild(placeholder);
+                                    }
+                                    container.appendChild(profileImg);
+                                }
+                            }
+                            
+                            // Update image source with cache busting to force reload
+                            const imageUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                            
+                            // Set up error handler before changing src
+                            profileImg.onerror = function() {
+                                console.error('Failed to load profile picture:', imageUrl);
+                                console.error('Original URL:', result.profile_picture_url);
+                                // Try without cache busting
+                                profileImg.src = result.profile_picture_url;
+                                
+                                // If still fails, show helpful message
+                                profileImg.onerror = function() {
+                                    console.error('Profile picture failed to load. Storage link may be missing.');
+                                    MarketApp.methods.showToast(
+                                        'Image uploaded but cannot display. Please ensure storage link is created (run: php artisan storage:link)',
+                                        'error'
+                                    );
+                                };
+                            };
+                            
+                            // Update the image source
+                            profileImg.src = imageUrl;
+                            profileImg.classList.remove("hidden");
+                            
+                            // Hide placeholder if it still exists
+                            if (placeholder && placeholder.parentNode) {
+                                placeholder.classList.add("hidden");
+                            }
+                            
+                            // Show remove button
+                            if (removeBtn) removeBtn.classList.remove("hidden");
+                        }
+                        // Update sidebar profile picture
+                        const sidebarImg = document.getElementById('sidebarProfilePicture');
+                        const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                        if (sidebarImg && result.profile_picture_url) {
+                            const sidebarImageUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                            sidebarImg.src = sidebarImageUrl;
+                            sidebarImg.classList.remove('hidden');
+                            if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                            
+                            // Handle sidebar image load error
+                            sidebarImg.onerror = function() {
+                                console.error('Failed to load sidebar profile picture');
+                                sidebarImg.src = result.profile_picture_url; // Try without cache busting
+                            };
+                        }
+                    } else {
+                        MarketApp.methods.showToast(result.message || "Failed to upload profile picture", "error");
+                        // Revert preview on error
+                        if (img) img.classList.add("hidden");
+                        if (placeholder) placeholder.classList.remove("hidden");
+                    }
+                } catch (error) {
+                    console.error("Profile picture upload error:", error);
+                    MarketApp.methods.showToast("An error occurred. Please try again.", "error");
+                    // Revert preview on error
+                    if (img) img.classList.add("hidden");
+                    if (placeholder) placeholder.classList.remove("hidden");
+                } finally {
+                    // Reset input
+                    input.value = "";
+                }
+            });
+
+            if (removeBtn) {
+                removeBtn.addEventListener("click", async () => {
+                    if (!confirm("Are you sure you want to remove your profile picture?")) return;
+
+                    try {
+                        const response = await fetch("/api/user-settings/remove-profile-picture", {
+                            method: "DELETE",
+                            headers: {
+                                "X-CSRF-TOKEN": document
+                                    .querySelector('meta[name="csrf-token"]')
+                                    .getAttribute("content"),
+                            },
+                            credentials: "include",
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            MarketApp.methods.showToast(result.message || "Profile picture removed successfully!", "success");
+                            const img = document.getElementById("profilePictureImg");
+                            const placeholder = document.getElementById("profilePicturePlaceholder");
+                            if (img) img.classList.add("hidden");
+                            if (placeholder) placeholder.classList.remove("hidden");
+                            removeBtn.classList.add("hidden");
+                            // Update sidebar
+                            const sidebarImg = document.getElementById('sidebarProfilePicture');
+                            const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                            if (sidebarImg) sidebarImg.classList.add('hidden');
+                            if (sidebarIcon) sidebarIcon.classList.remove('hidden');
+                        } else {
+                            MarketApp.methods.showToast(result.message || "Failed to remove profile picture", "error");
+                        }
+                    } catch (error) {
+                        console.error("Remove profile picture error:", error);
+                        MarketApp.methods.showToast("An error occurred. Please try again.", "error");
+                    }
+                });
+            }
         },
 
         toggleModal: function (modalId, show) {
@@ -662,7 +1312,7 @@ const MarketApp = {
             const query = new URLSearchParams({ year, month, search });
             const url = `/api/staff/vendors/${vendor.id}/payment-history-filtered?${query}`;
 
-            tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-indigo-500"></i></td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-indigo-500"></i></td></tr>`;
             noResultsEl.classList.add("hidden");
 
             try {
@@ -671,9 +1321,12 @@ const MarketApp = {
                     throw new Error("Failed to fetch payment history");
                 }
 
-                const payments = await response.json();
+                const responseData = await response.json();
+                
+                // Handle paginated response
+                const payments = responseData.data || responseData;
 
-                if (payments.length === 0) {
+                if (!payments || payments.length === 0) {
                     tableBody.innerHTML = "";
                     noResultsEl.classList.remove("hidden");
                     return;
@@ -712,17 +1365,11 @@ const MarketApp = {
                                 bill.period_start,
                                 bill.period_end
                             )}</td>
-                        <td data-label="Amount Due" class="px-4 py-2 text-center">₱${parseFloat(
+                        <td data-label="Bill Amount" class="px-4 py-2 text-center">₱${parseFloat(
                                 bill.payment.amount_paid
                             ).toFixed(2)}</td>
                         <td data-label="Due Date" class="px-4 py-2 text-center">${formatShortDate(
                                 bill.due_date
-                            )}</td>
-                        <td data-label="Amount After Due" class="px-4 py-2 text-center">₱${parseFloat(
-                                bill.amount_after_due
-                            ).toFixed(2)}</td>
-                        <td data-label="Disconnection Date" class="px-4 py-2 text-center">${formatShortDate(
-                                bill.disconnection_date
                             )}</td>
                         <td data-label="Payment Status" class="px-4 py-2 text-center">
                             <span class="whitespace-nowrap px-4 py-1.5 text-xs font-semibold text-white bg-gray-800 rounded-full">
@@ -737,7 +1384,7 @@ const MarketApp = {
                     .join("");
             } catch (error) {
                 console.error("Failed to fetch payment history:", error);
-                tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-500">Error loading data.</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading data.</td></tr>`;
                 MarketApp.methods.showToast(
                     "Failed to load payment history.",
                     "error"
@@ -1207,27 +1854,64 @@ const MarketApp = {
                                 const daysInMonth = new Date(
                                     bill.period_end
                                 ).getDate();
-                                const waterRate = 5.0;
-                                const calculatedAmount =
-                                    waterRate * daysInMonth;
+                                // Get rate from database, or calculate backwards from stored amount
+                                let waterRate = window.UTILITY_RATES?.Water?.rate || 0;
+                                if (waterRate === 0 && originalAmount > 0 && daysInMonth > 0) {
+                                    // Calculate rate backwards from stored amount
+                                    waterRate = originalAmount / daysInMonth;
+                                }
+                                const calculatedAmount = waterRate * daysInMonth;
                                 baseAmountForCalc = calculatedAmount;
+                                // Always display as formula: rate x days = amount
                                 detailsHtml = `${formatCurrency(
                                     waterRate
                                 )} x ${daysInMonth} days = <strong>${formatCurrency(
                                     calculatedAmount
                                 )}</strong>`;
-                            } else if (
-                                bill.utility_type === "Electricity" &&
-                                bill.consumption
-                            ) {
-                                const consumption =
-                                    parseFloat(bill.consumption) || 0;
+                            } else if (bill.utility_type === "Electricity") {
+                                // Priority 1: Use bill.consumption if available (most accurate)
+                                // Priority 2: Calculate from current_reading - previous_reading
+                                // Priority 3: Only calculate backwards if both are missing
+                                let consumption = null;
+                                if (bill.consumption !== null && bill.consumption !== undefined && !isNaN(parseFloat(bill.consumption))) {
+                                    consumption = parseFloat(bill.consumption);
+                                } else if (bill.current_reading !== null && bill.previous_reading !== null) {
+                                    consumption = (parseFloat(bill.current_reading) || 0) - (parseFloat(bill.previous_reading) || 0);
+                                } else {
+                                    consumption = 0;
+                                }
+                                
+                                // Get rate: Priority 1: bill.rate, Priority 2: database rate
+                                let electricityRate = bill.rate || window.UTILITY_RATES?.Electricity?.rate || 0;
+                                
+                                // Only calculate backwards if we're missing actual data
+                                if (consumption === 0 && originalAmount > 0) {
+                                    // If we have a rate, calculate consumption from amount
+                                    if (electricityRate > 0) {
+                                        consumption = originalAmount / electricityRate;
+                                    } else {
+                                        // If no rate, try to get it from database
+                                        electricityRate = window.UTILITY_RATES?.Electricity?.rate || 0;
+                                        if (electricityRate > 0) {
+                                            consumption = originalAmount / electricityRate;
+                                        }
+                                    }
+                                } else if (electricityRate === 0 && originalAmount > 0 && consumption > 0) {
+                                    // If we have consumption but no rate, calculate rate from amount
+                                    electricityRate = originalAmount / consumption;
+                                }
+                                
+                                // Calculate amount from consumption × rate
+                                const calculatedAmount = consumption * electricityRate;
+                                baseAmountForCalc = calculatedAmount > 0 ? calculatedAmount : originalAmount;
+                                
+                                // Always display as formula: (consumption kWh) x rate = amount
                                 detailsHtml = `(${consumption.toFixed(
                                     2
                                 )} kWh) x ${formatCurrency(
-                                    bill.rate || 0
+                                    electricityRate
                                 )} = <strong>${formatCurrency(
-                                    originalAmount
+                                    calculatedAmount > 0 ? calculatedAmount : originalAmount
                                 )}</strong>`;
                             }
 
@@ -1478,7 +2162,12 @@ const MarketApp = {
             }
 
             dailyCollectionsTableBody.innerHTML = "";
-            const collections = MarketApp.state.dailyCollections;
+            // Sort collections alphabetically by stall/table number
+            const collections = [...MarketApp.state.dailyCollections].sort((a, b) => {
+                const stallA = (a.stallNumber || '').toString().toUpperCase();
+                const stallB = (b.stallNumber || '').toString().toUpperCase();
+                return stallA.localeCompare(stallB, undefined, { numeric: true, sensitivity: 'base' });
+            });
             const selected = MarketApp.state.selectedCollections;
 
             if (collections.length > 0) {
@@ -1547,19 +2236,25 @@ const MarketApp = {
                 return;
             }
 
-            // Load profile picture if available
-            const profilePicturePreview = document.getElementById("profilePicturePreview");
-            const profilePictureIcon = document.getElementById("profilePictureIcon");
-
-            if (profilePicturePreview && profilePictureIcon) {
-                if (vendor.profile_picture_url) {
-                    profilePicturePreview.src = vendor.profile_picture_url;
-                    profilePicturePreview.classList.remove("hidden");
-                    profilePictureIcon.classList.add("hidden");
-                } else {
-                    profilePicturePreview.src = "";
-                    profilePicturePreview.classList.add("hidden");
-                    profilePictureIcon.classList.remove("hidden");
+            // Update profile picture
+            const profilePicturePreview = document.getElementById('profilePicturePreview');
+            const profilePictureIcon = document.getElementById('profilePictureIcon');
+            
+            if (vendor.profile_picture) {
+                if (profilePicturePreview) {
+                    profilePicturePreview.src = vendor.profile_picture;
+                    profilePicturePreview.classList.remove('hidden');
+                }
+                if (profilePictureIcon) {
+                    profilePictureIcon.classList.add('hidden');
+                }
+            } else {
+                if (profilePicturePreview) {
+                    profilePicturePreview.classList.add('hidden');
+                    profilePicturePreview.src = '';
+                }
+                if (profilePictureIcon) {
+                    profilePictureIcon.classList.remove('hidden');
                 }
             }
 
@@ -1588,6 +2283,106 @@ const MarketApp = {
                         span.textContent = "N/A";
                     }
                 });
+
+            // Setup vendor profile picture upload handler
+            this.setupVendorProfilePictureUpload(vendor.id);
+        },
+
+        setupVendorProfilePictureUpload(vendorId) {
+            const input = document.getElementById("profilePictureInput");
+            if (!input) return;
+
+            // Remove existing listeners by cloning the element
+            const newInput = input.cloneNode(true);
+            input.parentNode.replaceChild(newInput, input);
+
+            newInput.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file size (2MB max)
+                if (file.size > 2 * 1024 * 1024) {
+                    MarketApp.methods.showToast("Image must be smaller than 2MB", "error");
+                    return;
+                }
+
+                // Validate file type
+                if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
+                    MarketApp.methods.showToast("Please select a valid image file (JPEG, PNG, or GIF)", "error");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("profile_picture", file);
+
+                const profilePicturePreview = document.getElementById('profilePicturePreview');
+                const profilePictureIcon = document.getElementById('profilePictureIcon');
+
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (profilePicturePreview) {
+                        profilePicturePreview.src = e.target.result;
+                        profilePicturePreview.classList.remove('hidden');
+                    }
+                    if (profilePictureIcon) {
+                        profilePictureIcon.classList.add('hidden');
+                    }
+                };
+                reader.readAsDataURL(file);
+
+                try {
+                    const response = await fetch(`/api/staff/vendors/${vendorId}/upload-profile-picture`, {
+                        method: "POST",
+                        headers: {
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "include",
+                        body: formData,
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        MarketApp.methods.showToast(result.message || "Vendor profile picture uploaded successfully!", "success");
+                        // Update image source to the server URL
+                        if (profilePicturePreview && result.profile_picture_url) {
+                            const imageUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                            profilePicturePreview.src = imageUrl;
+                            profilePicturePreview.classList.remove('hidden');
+                            if (profilePictureIcon) profilePictureIcon.classList.add('hidden');
+                        }
+                        // Update vendor data in state
+                        const vendor = MarketApp.getters.currentVendor(MarketApp.state);
+                        if (vendor) {
+                            vendor.profile_picture = result.profile_picture_url;
+                        }
+                    } else {
+                        MarketApp.methods.showToast(result.message || "Failed to upload vendor profile picture", "error");
+                        // Revert preview on error
+                        if (profilePicturePreview) {
+                            profilePicturePreview.classList.add('hidden');
+                            profilePicturePreview.src = '';
+                        }
+                        if (profilePictureIcon) profilePictureIcon.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error("Vendor profile picture upload error:", error);
+                    const errorMessage = error.message || "An error occurred. Please try again.";
+                    MarketApp.methods.showToast(errorMessage, "error");
+                    // Revert preview on error
+                    if (profilePicturePreview) {
+                        profilePicturePreview.classList.add('hidden');
+                        profilePicturePreview.src = '';
+                    }
+                    if (profilePictureIcon) profilePictureIcon.classList.remove('hidden');
+                } finally {
+                    // Reset input
+                    newInput.value = "";
+                }
+            });
         },
 
         populateSectionDropdown(sections) {
@@ -1997,6 +2792,14 @@ const MarketApp = {
             ),
             stallSectionFilter: document.getElementById("stallSectionFilter"),
             assignStallBtn: document.getElementById("assignStallBtn"),
+
+            //--Notifications--//
+            notificationsLoader: document.getElementById("notificationsLoader"),
+            notificationsList: document.getElementById("notificationsList"),
+            noNotificationsMessage: document.getElementById("noNotificationsMessage"),
+            markAllAsReadBtn: document.getElementById("markAllAsReadBtn"),
+            unreadCountBadge: document.getElementById("unreadCountBadge"),
+            unreadCountText: document.getElementById("unreadCountText"),
         };
     },
 
@@ -2030,6 +2833,36 @@ const MarketApp = {
                 );
             }
         });
+
+        // Notification bell click handler
+        document.addEventListener("click", (e) => {
+            const bellButton = e.target.closest(".notificationBell button");
+            if (bellButton) {
+                e.stopPropagation();
+                // Find the dropdown in the active section
+                const activeSection = document.querySelector(".dashboard-section.active");
+                if (activeSection) {
+                    const dropdown = activeSection.querySelector(".notificationDropdown");
+                    if (dropdown) {
+                        const isHidden = dropdown.classList.toggle("hidden");
+                        if (!isHidden && MarketApp.state.unreadCount > 0) {
+                            methods.markNotificationsAsRead();
+                        }
+                    }
+                }
+            }
+
+            // Close dropdown when clicking outside
+            const activeSection = document.querySelector(".dashboard-section.active");
+            if (activeSection) {
+                const dropdown = activeSection.querySelector(".notificationDropdown");
+                const bell = activeSection.querySelector(".notificationBell");
+                if (dropdown && !dropdown.classList.contains("hidden") && bell && !bell.contains(e.target)) {
+                    dropdown.classList.add("hidden");
+                }
+            }
+        });
+
         elements.bulkPrintBtn?.addEventListener(
             "click",
             methods.printBulkReceipts
@@ -2091,62 +2924,6 @@ const MarketApp = {
         );
         elements.editModal?.addEventListener("click", (e) => {
             if (e.target === elements.editModal) methods.closeEditModal();
-        });
-
-        // Profile Picture Upload Handler
-        const profilePictureInput = document.getElementById("profilePictureInput");
-        profilePictureInput?.addEventListener("change", async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const vendor = MarketApp.getters.currentVendor(MarketApp.state);
-            if (!vendor) return;
-
-            // Show loading state on the image container
-            const preview = document.getElementById("profilePicturePreview");
-            const icon = document.getElementById("profilePictureIcon");
-            const container = preview?.parentElement;
-
-            if (container) {
-                container.innerHTML = `<div class="flex items-center justify-center w-full h-full">
-                    <i class="fas fa-spinner fa-spin text-4xl text-indigo-500"></i>
-                </div>`;
-            }
-
-            const result = await MarketApp.database.uploadProfilePicture(vendor.id, file);
-
-            if (result.success) {
-                // Update the preview with the new image
-                if (container) {
-                    container.innerHTML = `
-                        <img id="profilePicturePreview" src="${result.profile_picture_url}" alt="Vendor's Profile Picture" class="w-full h-full object-cover">
-                    `;
-                }
-                // Update the vendor data in state
-                const vendorIndex = MarketApp.state.allVendors.findIndex(v => v.id === vendor.id);
-                if (vendorIndex !== -1) {
-                    MarketApp.state.allVendors[vendorIndex].profile_picture_url = result.profile_picture_url;
-                }
-                MarketApp.methods.showToast("Profile picture updated!", "success");
-            } else {
-                // Restore the original state
-                if (container) {
-                    if (vendor.profile_picture_url) {
-                        container.innerHTML = `
-                            <img id="profilePicturePreview" src="${vendor.profile_picture_url}" alt="Vendor's Profile Picture" class="w-full h-full object-cover">
-                        `;
-                    } else {
-                        container.innerHTML = `
-                            <img id="profilePicturePreview" src="" alt="Vendor's Profile Picture" class="w-full h-full object-cover hidden">
-                            <i id="profilePictureIcon" class="fas fa-user text-6xl text-gray-400"></i>
-                        `;
-                    }
-                }
-                MarketApp.methods.showToast(`Failed: ${result.message}`, "error");
-            }
-
-            // Clear the input so the same file can be selected again
-            e.target.value = "";
         });
 
         MarketApp.elements.outstandingBalanceLink?.addEventListener(
@@ -2250,16 +3027,51 @@ const MarketApp = {
         MarketApp.render.renderDailyCollectionsTable();
 
         try {
+            // Use initial state from server if available, otherwise fetch from API
+            const initialState = window.STAFF_PORTAL_STATE || {};
+            const initialVendors = initialState.vendors || [];
+            const initialSections = initialState.sections || [];
+
             const [collections, vendors, sections] = await Promise.all([
                 MarketApp.database.fetchDailyCollections(),
-                MarketApp.database.fetchVendors(),
-                MarketApp.database.fetchSections(),
+                initialVendors.length > 0 
+                    ? Promise.resolve(initialVendors) 
+                    : MarketApp.database.fetchVendors(),
+                initialSections.length > 0 
+                    ? Promise.resolve(initialSections) 
+                    : MarketApp.database.fetchSections(),
             ]);
 
             MarketApp.state.dailyCollections = collections;
-            MarketApp.state.allVendors = vendors;
+            MarketApp.state.allVendors = Array.isArray(vendors) ? vendors : (vendors.data || []);
             MarketApp.state.allMarketSections = sections;
             MarketApp.methods.setSectionFromHash();
+            
+            // Load announcements
+            // Announcements are now shown as notifications in the bell dropdown
+            
+            // Load notifications
+            await MarketApp.methods.fetchNotifications();
+            
+            // Setup announcement close button
+            // Announcement banner removed
+            
+            // Poll for notifications every 7 seconds
+            // Poll for notifications every 2 seconds for faster updates
+            setInterval(() => MarketApp.methods.fetchNotifications(), 2000);
+            
+            // Also fetch immediately when page becomes visible (user switches tabs/windows)
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    MarketApp.methods.fetchNotifications();
+                }
+            });
+            
+            // Setup password change form
+            MarketApp.methods.setupPasswordChangeForm();
+            
+            // Setup profile picture upload
+            MarketApp.methods.setupProfilePictureUpload();
         } catch (error) {
             console.error("Failed to initialize the application:", error);
             MarketApp.methods.showToast(

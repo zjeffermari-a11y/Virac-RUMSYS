@@ -16,127 +16,90 @@
     use App\Http\Controllers\ReportController;
     use App\Http\Controllers\Api\SystemUserController;
     use App\Http\Controllers\Api\RoleController;
+    use Illuminate\Support\Facades\Storage;
+    use Illuminate\Support\Facades\Response;
     //--For CRON JOBS--//
-    use App\Console\Commands\GenerateMonthlyBills;
-    use App\Console\Commands\SendBillingStatements;
-    use App\Console\Commands\SendOverdueAlerts;
-    use App\Console\Commands\SendPaymentReminders;
-    use Illuminate\Support\Facades\Artisan;
-
-    Route::get('/admin/run-command/{command}', function ($command) {
-        // Security check
-        if (request()->input('secret') !== env('ADMIN_SECRET')) {
-            abort(403, 'Unauthorized - Invalid secret key!');
-        }
-        
-        $result = ['success' => false, 'message' => ''];
-        
-        try {
-            switch ($command) {
-                case 'billing:generate':
-                case 'sms:send-billing-statements':
-                case 'sms:send-overdue-alerts':
-                case 'sms:send-payment-reminders':
-                    Artisan::call($command);
-                    $output = Artisan::output();
-                    $result = [
-                        'success' => true,
-                        'message' => "Command '{$command}' executed successfully!",
-                        'output' => $output
-                    ];
-                    break;
-                    
-                default:
-                    $result = [
-                        'success' => false,
-                        'message' => 'Unknown command: ' . $command
-                    ];
-            }
-        } catch (\Exception $e) {
-            $result = [
-                'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
-            ];
-        }
-        
-        return response()->json($result);
-    })->name('admin.run-command');
+    // Secured admin command routes - moved to controller with improved security
+    use App\Http\Controllers\AdminCommandController;
     
-    // Run multiple commands at once (for monthly tasks)
-    Route::get('/admin/run-monthly-tasks', function () {
-        // Security check
-        if (request()->input('secret') !== env('ADMIN_SECRET')) {
-            abort(403, 'Unauthorized - Invalid secret key!');
+    // Serve storage files (fallback if symbolic link doesn't exist)
+    Route::get('/storage/{path}', function ($path) {
+        $filePath = storage_path('app/public/' . $path);
+        if (file_exists($filePath) && is_file($filePath)) {
+            return Response::file($filePath);
         }
-        
-        $results = [];
-        
-        try {
-            // 1. Generate monthly bills
-            Artisan::call('billing:generate');
-            $results[] = [
-                'command' => 'Generate Monthly Bills',
-                'success' => true,
-                'output' => Artisan::output()
-            ];
-            
-            // Small delay to ensure bills are generated before sending statements
-            sleep(2);
-            
-            // 2. Send billing statements
-            Artisan::call('sms:send-billing-statements');
-            $results[] = [
-                'command' => 'Send Billing Statements',
-                'success' => true,
-                'message' => 'Statements sent',
-                'output' => Artisan::output()
-            ];
-            
-            // 3. Send overdue alerts (for existing unpaid bills)
-            Artisan::call('sms:send-overdue-alerts');
-            $results[] = [
-                'command' => 'Send Overdue Alerts',
-                'success' => true,
-                'message' => 'Overdue alerts sent',
-                'output' => Artisan::output()
-            ];
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'All monthly tasks completed successfully!',
-                'results' => $results
-            ]);
-            
-        } catch (\Exception $e) {
+        abort(404);
+    })->where('path', '.*')->name('storage.serve');
+    
+    // POST routes (secret in body, not URL) with rate limiting
+    Route::post('/admin/run-command/{command}', [AdminCommandController::class, 'runCommand'])
+        ->name('admin.run-command');
+    
+    Route::post('/admin/run-monthly-tasks', [AdminCommandController::class, 'runMonthlyTasks'])
+        ->name('admin.run-monthly-tasks');
+    
+    // Legacy GET routes (deprecated - will be removed in future version)
+    // Kept for backward compatibility but should use POST instead
+    Route::get('/admin/run-command/{command}', function ($command) {
+        \Log::warning('Deprecated GET route used for admin command', [
+            'command' => $command,
+            'ip' => request()->ip()
+        ]);
+        return response()->json([
+                        'success' => false,
+            'message' => 'This route is deprecated. Please use POST method instead.'
+        ], 400);
+    });
+    
+    Route::get('/admin/run-monthly-tasks', function () {
+        \Log::warning('Deprecated GET route used for monthly tasks', [
+            'ip' => request()->ip()
+        ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error during monthly tasks: ' . $e->getMessage(),
-                'results' => $results
-            ]);
-        }
-    })->name('admin.run-monthly-tasks');
+            'message' => 'This route is deprecated. Please use POST method instead.'
+        ], 400);
+    });
     
     // Dashboard to show all available commands (optional - for convenience)
+    // Note: Commands should be executed via POST with secret in request body
     Route::get('/admin/commands-dashboard', function () {
         // Security check
         if (request()->input('secret') !== env('ADMIN_SECRET')) {
             abort(403, 'Unauthorized - Invalid secret key!');
         }
         
-        $secret = request()->input('secret');
-        $baseUrl = url('/admin/run-command');
-        
         return response()->json([
             'message' => 'Available Commands',
-            'commands' => [
-                // ✅ FIX: These keys must match the 'case' statements in the route above
-                'Run All Monthly Tasks (Recommended for Nov 1)' => url('/admin/run-monthly-tasks') . "?secret={$secret}",
-                'Generate Monthly Bills Only' => "{$baseUrl}/billing:generate?secret={$secret}",
-                'Send Billing Statements Only' => "{$baseUrl}/sms:send-billing-statements?secret={$secret}",
-                'Send Overdue Alerts Only' => "{$baseUrl}/sms:send-overdue-alerts?secret={$secret}",
-                'Send Payment Reminders' => "{$baseUrl}/sms:send-payment-reminders?secret={$secret}",
+            'note' => 'Use POST method to execute commands. Secret should be in request body, not URL.',
+            'endpoints' => [
+                'Run All Monthly Tasks' => [
+                    'method' => 'POST',
+                    'url' => url('/admin/run-monthly-tasks'),
+                    'body' => ['secret' => 'YOUR_SECRET_KEY']
+                ],
+                'Generate Monthly Bills' => [
+                    'method' => 'POST',
+                    'url' => url('/admin/run-command/billing:generate'),
+                    'body' => ['secret' => 'YOUR_SECRET_KEY']
+                ],
+                'Send Billing Statements' => [
+                    'method' => 'POST',
+                    'url' => url('/admin/run-command/sms:send-billing-statements'),
+                    'body' => ['secret' => 'YOUR_SECRET_KEY']
+                ],
+                'Send Overdue Alerts' => [
+                    'method' => 'POST',
+                    'url' => url('/admin/run-command/sms:send-overdue-alerts'),
+                    'body' => ['secret' => 'YOUR_SECRET_KEY']
+                ],
+                'Send Payment Reminders' => [
+                    'method' => 'POST',
+                    'url' => url('/admin/run-command/sms:send-payment-reminders'),
+                    'body' => ['secret' => 'YOUR_SECRET_KEY']
+                ],
             ],
-            'note' => 'Click any URL to execute that command'
+            'security_note' => 'GET routes are deprecated and will return an error. Use POST with secret in request body.'
         ]);
     })->name('admin.commands-dashboard');
 
@@ -176,6 +139,7 @@
         Route::get('/payments', [VendorController::class, 'paymentHistoryApi'])->name('api.vendor.payments');
         Route::get('/payment-years', [VendorController::class, 'paymentYearsApi'])->name('api.vendor.payment_years');
         Route::get('/dashboard-data', [VendorController::class, 'getDashboardData'])->name('api.vendor.dashboard_data');
+        Route::get('/analytics', [VendorController::class, 'analytics'])->name('api.vendor.analytics');
     });
 
     Route::get('/meter', [MeterReaderController::class, 'index'])
@@ -223,7 +187,9 @@
     //In-App and SMS Notification
     Route::middleware(['auth'])->group(function () {
         Route::get('/notifications/fetch', [NotificationController::class, 'fetch'])->name('notifications.fetch');
+        Route::get('/notifications/fetch-all', [NotificationController::class, 'fetchAll'])->name('notifications.fetchAll');
         Route::post('/notifications/mark-as-read', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+        Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markNotificationAsRead'])->name('notifications.markNotificationAsRead');
     });
 
     Route::get('/login', function () {
@@ -249,9 +215,14 @@
     Route::post('reset-password', [ResetPasswordController::class, 'reset'])
         ->name('password.update');
 
-
-
-
+    Route::get('/db-test', function () {
+        try {
+            DB::connection()->getPdo();
+            return "✅ Connected to MySQL! Database: " . DB::connection()->getDatabaseName();
+        } catch (\Exception $e) {
+            return "❌ Database connection failed: " . $e->getMessage();
+        }
+    });
 
     Route::get('/send-sms', [VendorController::class, 'sendSms']);
 
@@ -259,21 +230,3 @@
         Route::apiResource('/system-users', SystemUserController::class);
         Route::get('/roles', [RoleController::class, 'index']);
     });
-
-    Route::get('/nuclear-reset', function () {
-    // 1. Generate a fresh, valid Bcrypt hash for 'password'
-    $newPassword = \Illuminate\Support\Facades\Hash::make('password');
-
-    // 2. Direct SQL Update (Bypassing User Model)
-    $affected = \Illuminate\Support\Facades\DB::table('users')
-        ->where('username', 'admin')
-        ->update(['password' => $newPassword]);
-
-    // 3. Also reset Beyonce just in case
-    $newBeyoncePass = \Illuminate\Support\Facades\Hash::make('D3ch@vez');
-    \Illuminate\Support\Facades\DB::table('users')
-        ->where('username', 'beyonce')
-        ->update(['password' => $newBeyoncePass]);
-
-    return "Reset Complete. Rows affected: $affected. <br>You can now login with 'admin' / 'password' <br>or 'beyonce' / 'D3ch@vez'. <br><a href='/login'>Go to Login</a>";
-});

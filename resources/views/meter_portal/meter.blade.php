@@ -1,5 +1,9 @@
 @extends('layouts.app') {{-- Extends the newly created master layout --}}
 
+@php
+    use Illuminate\Support\Facades\Storage;
+@endphp
+
 @section('title', 'Virac Public Market - Meter Reader Clerk Dashboard') {{-- Sets the specific page title --}}
 
 @vite('resources/js/meter.js')
@@ -28,8 +32,8 @@
     <div class="flex-grow">
         <a href="#homeSection" data-section="homeSection"
             class="nav-link active text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer flex items-center space-x-3">
-            <i class="fas fa-home"></i>
-            <span>Home</span>
+            <i class="fas fa-tasks"></i>
+            <span>Pending Tasks</span>
         </a>
         <a href="#electricitySection" data-section="electricitySection"
             class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer flex items-center space-x-3">
@@ -46,6 +50,11 @@
             class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer flex items-center space-x-3">
             <i class="fas fa-archive"></i>
             <span>Archived Readings</span>
+        </a>
+        <a href="#profileSection" data-section="profileSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer flex items-center space-x-3">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
         </a>
 
     </div>
@@ -70,12 +79,9 @@
                 <h3 class="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
                     <i class="fas fa-tasks"></i> Pending Tasks
                 </h3>
-                <div class="status-badge status-pending text-xs md:text-sm mt-2 md:mt-0">Today's
-                    Assignments
-                </div>
             </div>
 
-            <p>Please refer to the tables below for today's Assignments and
+            <p>Please refer to the tables below for pending tasks and
                 upcoming schedules for electricity readings</p>
 
             <div>
@@ -353,6 +359,98 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Profile Section --}}
+    <div id="profileSection" class="dashboard-section">
+        @include('layouts.partials.content-header', ['title' => 'User Profile'])
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {{-- Profile Picture & Information --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                {{-- Profile Picture Section --}}
+                <div class="mb-6 text-center">
+                    <div class="relative inline-block">
+                        <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
+                            @if(auth()->user()->profile_picture)
+                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
+                                     alt="Profile Picture" class="w-full h-full object-cover">
+                            @else
+                                <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">
+                                    <i class="fas fa-user text-6xl text-gray-400"></i>
+                                </div>
+                            @endif
+                        </div>
+                        <label for="profilePictureInput" class="absolute bottom-0 right-0 bg-market-primary text-white rounded-full p-2 cursor-pointer hover:bg-market-secondary transition-colors shadow-lg">
+                            <i class="fas fa-camera"></i>
+                            <input type="file" id="profilePictureInput" accept="image/*" class="hidden">
+                        </label>
+                    </div>
+                    <button id="removeProfilePictureBtn" class="text-sm text-red-600 hover:text-red-800 {{ auth()->user()->profile_picture ? '' : 'hidden' }}">
+                        <i class="fas fa-trash"></i> Remove Picture
+                    </button>
+                </div>
+
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-user text-market-primary"></i>
+                    Profile Information
+                </h3>
+                <div class="space-y-4">
+                    @php
+                        $user = auth()->user();
+                        $profileDetails = [
+                            ['icon' => 'fa-user', 'label' => 'Name', 'value' => $user->name],
+                            ['icon' => 'fa-at', 'label' => 'Username', 'value' => $user->username],
+                            ['icon' => 'fa-user-tag', 'label' => 'Role', 'value' => $user->role->name ?? 'N/A'],
+                            ['icon' => 'fa-phone', 'label' => 'Contact Number', 'value' => $user->contact_number ?? 'Not set'],
+                            ['icon' => 'fa-calendar', 'label' => 'Last Login', 'value' => $user->last_login ? \Carbon\Carbon::parse($user->last_login)->format('F j, Y g:i A') : 'Never'],
+                            ['icon' => 'fa-info-circle', 'label' => 'Status', 'value' => ucfirst($user->status ?? 'active')],
+                        ];
+                    @endphp
+                    @foreach ($profileDetails as $detail)
+                        <div class="flex items-center p-3 bg-gray-50 rounded-lg">
+                            <i class="fas {{ $detail['icon'] }} text-market-primary w-8 text-center"></i>
+                            <div class="flex-1 ml-4">
+                                <span class="text-sm text-gray-600">{{ $detail['label'] }}</span>
+                                <p class="font-semibold text-gray-800">{{ $detail['value'] }}</p>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Change Password --}}
+            <div class="bg-white rounded-2xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <i class="fas fa-key text-market-primary"></i>
+                    Change Password
+                </h3>
+                <form id="changePasswordForm">
+                    @csrf
+                    <div class="mb-4">
+                        <label for="currentPassword" class="block text-gray-700 font-medium mb-2">Current Password</label>
+                        <input type="password" id="currentPassword" name="current_password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <div class="mb-4">
+                        <label for="newPassword" class="block text-gray-700 font-medium mb-2">New Password</label>
+                        <input type="password" id="newPassword" name="password" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Must be at least 8 characters with letters, numbers, symbols, and mixed case</p>
+                    </div>
+                    <div class="mb-6">
+                        <label for="confirmPassword" class="block text-gray-700 font-medium mb-2">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" name="password_confirmation" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    </div>
+                    <button type="submit" id="changePasswordBtn"
+                        class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-key"></i>
+                        <span>Change Password</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>

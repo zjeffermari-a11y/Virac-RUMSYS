@@ -14,9 +14,11 @@ use App\Models\Billing;
 use App\Models\Payment;
 use App\Models\BillingSetting;
 use App\Models\Rate;
+use App\Models\UtilityReading;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth; // <-- Import the Auth facade
+use Illuminate\Support\Facades\Storage;
 use App\Services\AuditLogger;
 
 class StaffController extends Controller
@@ -24,33 +26,19 @@ class StaffController extends Controller
     public function getVendors()
     {
         // Fixed N+1 by eager loading with lean selects
-        // Removed pagination to return all vendors for the Vendor Management section
-        $vendors = User::select('id', 'name', 'contact_number', 'application_date', 'profile_picture')
+        $vendors = User::select('users.id', 'users.name', 'users.contact_number', 'users.application_date', 'users.profile_picture')
             ->with(['role:id,name', 'stall:id,vendor_id,table_number,daily_rate,area,section_id', 'stall.section:id,name'])
+            ->leftJoin('stalls', 'users.id', '=', 'stalls.vendor_id')
             ->whereHas('role', function ($query) {
                 $query->where('name', 'Vendor');
             })
-            ->get()
-            ->map(function ($user) {
+            ->orderBy('stalls.table_number', 'asc') // Sort alphabetically by stall/table number
+            ->groupBy('users.id', 'users.name', 'users.contact_number', 'users.application_date', 'users.profile_picture')
+            ->paginate(15) // Replaced get() with paginate()
+            ->through(function ($user) {
                 $appDate = $user->application_date 
                 ? $user->application_date->format('Y-m-d') 
                 : null;
-                
-                // Generate profile picture URL (handles base64, B2 path, or null)
-                $profilePictureUrl = null;
-                if ($user->profile_picture) {
-                    if (str_starts_with($user->profile_picture, 'data:')) {
-                        // Legacy base64 data
-                        $profilePictureUrl = $user->profile_picture;
-                    } else {
-                        // B2 path - generate temporary signed URL (valid for 7 days)
-                        $profilePictureUrl = \Storage::disk('b2')->temporaryUrl(
-                            $user->profile_picture,
-                            now()->addDays(7)
-                        );
-                    }
-                }
-                
                 return [
                     'id' => $user->id,
                     'vendorName' => $user->name,
@@ -60,7 +48,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture_url' => $profilePictureUrl,
+                    'profile_picture' => $user->profile_picture ? Storage::url($user->profile_picture) : null,
                 ];
             });
     
@@ -85,6 +73,7 @@ class StaffController extends Controller
                       });
             })
             ->with('vendor:id,name')
+            ->orderBy('table_number', 'asc') // Sort alphabetically by stall/table number
             ->paginate(15) // Replaced get() with paginate()
             ->through(function ($stall) {
                 return [
@@ -216,34 +205,149 @@ class StaffController extends Controller
         $year = $request->get('year');
         $month = $request->get('month');
         $search = $request->get('search');
+        $page = $request->get('page', 1);
+        $perPage = 20;
 
         $stallId = DB::table('stalls')->where('vendor_id', $user->id)->value('id');
 
         if (!$stallId) {
-            return response()->json([]);
+            return response()->json(['data' => [], 'total' => 0, 'has_more' => false]);
         }
 
-        $query = Billing::with('payment')
-            ->join('payments', 'billing.id', '=', 'payments.billing_id')
-            ->where('billing.stall_id', $stallId)
-            ->where('billing.status', 'paid')
-            ->whereDate('payments.payment_date', '<', Carbon::now()->startOfMonth());
+        // Build cache key
+        $cacheKey = "payment_history_staff_vendor_{$user->id}_y{$year}_m{$month}_s{$search}_p{$page}";
         
-        if ($year) {
-            $query->whereYear('payments.payment_date', $year);
+        // Cache results for 5 minutes (short cache for search results)
+        $cachedResult = cache()->get($cacheKey);
+        if ($cachedResult && !$search) {
+            return response()->json($cachedResult);
         }
 
-        if ($month && $month !== "all") {
-            $query->whereMonth('payments.payment_date', $month);
+        // Optimized query: Start from payments table for better index usage
+        $baseQuery = DB::table('payments')
+            ->join('billing', 'payments.billing_id', '=', 'billing.id')
+            ->where('billing.stall_id', $stallId)
+            ->where('billing.status', 'paid');
+        
+        // Use date range instead of whereYear/whereMonth for better index usage
+        if ($year) {
+            $startDate = Carbon::create($year, 1, 1)->startOfYear();
+            $endDate = Carbon::create($year, 12, 31)->endOfYear();
+            
+            if ($month && $month !== "all") {
+                $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+                $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+            }
+            
+            $baseQuery->whereBetween('payments.payment_date', [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
+        } elseif ($month && $month !== "all") {
+            $year = Carbon::now()->year;
+            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+            $baseQuery->whereBetween('payments.payment_date', [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ]);
         }
 
         if ($search) {
-            $query->where('billing.utility_type', 'like', '%' . $search . '%');
+            $baseQuery->where('billing.utility_type', 'like', '%' . $search . '%');
         }
 
-        $bills = $query->orderBy('payments.payment_date', 'desc')->select('billing.*')->get();
+        // Get total count
+        $total = (clone $baseQuery)->count();
         
-        return response()->json($bills);
+        // Get paginated results
+        $bills = (clone $baseQuery)
+            ->select(
+                'billing.id',
+                'billing.stall_id',
+                'billing.utility_type',
+                'billing.period_start',
+                'billing.period_end',
+                'billing.amount',
+                'billing.due_date',
+                'billing.disconnection_date',
+                'billing.status',
+                'payments.amount_paid',
+                'payments.payment_date'
+            )
+            ->orderBy('payments.payment_date', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
+
+        // Get billing settings for recalculation
+        $billingSettings = \App\Models\BillingSetting::all()->keyBy('utility_type');
+        
+        // Format response
+        $formattedBills = $bills->map(function ($bill) use ($billingSettings) {
+            $originalAmount = (float) $bill->amount;
+            $paymentDate = Carbon::parse($bill->payment_date);
+            $dueDate = Carbon::parse($bill->due_date);
+            $finalAmount = $originalAmount;
+            $settings = $billingSettings->get($bill->utility_type);
+            
+            // Recalculate the correct amount based on payment date
+            if ($paymentDate->gt($dueDate)) {
+                // Payment was LATE, calculate penalties
+                if ($bill->utility_type === 'Rent' && $settings) {
+                    $interest_months = (int) floor($dueDate->floatDiffInMonths($paymentDate));
+                    $surcharge = $originalAmount * (float)($settings->surcharge_rate ?? 0);
+                    $interest = $originalAmount * (float)($settings->monthly_interest_rate ?? 0) * $interest_months;
+                    $finalAmount = $originalAmount + $surcharge + $interest;
+                } else if ($settings) {
+                    $penalty = $originalAmount * (float)($settings->penalty_rate ?? 0);
+                    $finalAmount = $originalAmount + $penalty;
+                }
+            } else if ($paymentDate->day <= 15) {
+                // Payment was ON TIME (before due date and within discount period), check for discount
+                $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
+                $paymentMonth = $paymentDate->format('Y-m');
+
+                if ($billMonth === $paymentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
+                    $discountAmount = $originalAmount * (float)$settings->discount_rate;
+                    $finalAmount = $originalAmount - $discountAmount;
+                }
+            }
+            
+            return (object) [
+                'id' => $bill->id,
+                'stall_id' => $bill->stall_id,
+                'utility_type' => $bill->utility_type,
+                'period_start' => $bill->period_start,
+                'period_end' => $bill->period_end,
+                'amount' => $bill->amount,
+                'due_date' => $bill->due_date,
+                'disconnection_date' => $bill->disconnection_date,
+                'status' => $bill->status,
+                'payment' => (object) [
+                    'amount_paid' => $finalAmount, // Use recalculated amount
+                    'payment_date' => $bill->payment_date,
+                ],
+            ];
+        });
+
+        $lastPage = (int) ceil($total / $perPage);
+        
+        $response = [
+            'data' => $formattedBills,
+            'current_page' => (int) $page,
+            'last_page' => $lastPage,
+            'per_page' => $perPage,
+            'total' => $total,
+            'has_more' => $page < $lastPage,
+        ];
+        
+        // Cache result for 5 minutes (only if no search)
+        if (!$search) {
+            cache()->put($cacheKey, $response, 300);
+        }
+        
+        return response()->json($response);
     }
 
     public function markAsPaid(Request $request, $billingId)
@@ -395,16 +499,7 @@ class StaffController extends Controller
         $vendor->load('stall.section');
 
         $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
-            ->where(function ($query) {
-                $query->where('status', 'unpaid')
-                      ->orWhere(function ($subQuery) {
-                          $subQuery->where('status', 'paid')
-                                   ->whereHas('payment', function ($paymentQuery) {
-                                       $paymentQuery->whereMonth('payment_date', Carbon::now()->month)
-                                                    ->whereYear('payment_date', Carbon::now()->year);
-                                   });
-                      });
-            })
+            ->where('status', 'unpaid')
             ->with('payment')
             ->orderBy('due_date', 'desc')
             ->get();
@@ -434,6 +529,121 @@ class StaffController extends Controller
         
         return response()->json([
             'outstandingBills' => $outstandingBills,
+        ]);
+    }
+
+    public function getVendorAnalytics(User $user)
+    {
+        if (!$user->stall) {
+            return response()->json(['error' => 'Vendor or stall not found.'], 404);
+        }
+
+        $stallId = $user->stall->id;
+
+        // Get electricity consumption data (last 12 months)
+        $electricityReadings = UtilityReading::where('stall_id', $stallId)
+            ->where('utility_type', 'Electricity')
+            ->orderBy('reading_date', 'desc')
+            ->limit(12)
+            ->get()
+            ->reverse();
+
+        $consumptionData = [];
+        $consumptionLabels = [];
+        
+        foreach ($electricityReadings as $index => $reading) {
+            if ($index > 0) {
+                $previousReading = $electricityReadings[$index - 1];
+                $consumption = $reading->current_reading - $previousReading->current_reading;
+                $consumptionData[] = max(0, $consumption); // Ensure non-negative
+                $consumptionLabels[] = Carbon::parse($reading->reading_date)->format('M Y');
+            }
+        }
+
+        // Get payment tracking data (on-time vs late payments)
+        // Get ALL billings for this stall (both paid and unpaid)
+        $billings = Billing::where('stall_id', $stallId)
+            ->with('payment')
+            ->orderBy('due_date', 'desc')
+            ->get();
+
+        $today = Carbon::today();
+        $onTimeCount = 0;
+        $lateCount = 0;
+        $paymentTimeline = [];
+
+        foreach ($billings as $billing) {
+            $dueDate = Carbon::parse($billing->due_date)->startOfDay();
+            $isOnTime = false;
+            $recordDate = null;
+            
+            if ($billing->status === 'paid' && $billing->payment) {
+                // For paid bills: check if payment was made on or before due date
+                $paymentDate = Carbon::parse($billing->payment->payment_date)->startOfDay();
+                $isOnTime = $paymentDate->lte($dueDate);
+                $recordDate = $paymentDate;
+            } else {
+                // For unpaid bills: check if due date has passed
+                if ($today->gt($dueDate)) {
+                    // Unpaid and past due date = late
+                    $isOnTime = false;
+                    $recordDate = $dueDate; // Use due date for timeline grouping
+                } else {
+                    // Unpaid but not yet due = not counted (not late, not on-time yet)
+                    continue; // Skip bills that aren't due yet
+                }
+            }
+            
+            if ($isOnTime) {
+                $onTimeCount++;
+            } else {
+                $lateCount++;
+            }
+
+            // Add to timeline for trend analysis
+            if ($recordDate) {
+                $paymentTimeline[] = [
+                    'date' => $recordDate->format('Y-m'),
+                    'on_time' => $isOnTime ? 1 : 0,
+                    'late' => $isOnTime ? 0 : 1,
+                ];
+            }
+        }
+
+        // Group timeline by month
+        $timelineGrouped = [];
+        foreach ($paymentTimeline as $item) {
+            $month = $item['date'];
+            if (!isset($timelineGrouped[$month])) {
+                $timelineGrouped[$month] = ['on_time' => 0, 'late' => 0];
+            }
+            $timelineGrouped[$month]['on_time'] += $item['on_time'];
+            $timelineGrouped[$month]['late'] += $item['late'];
+        }
+
+        // Sort by date and get last 12 months
+        ksort($timelineGrouped);
+        $timelineGrouped = array_slice($timelineGrouped, -12, 12, true);
+
+        $timelineLabels = array_keys($timelineGrouped);
+        $timelineOnTime = array_column($timelineGrouped, 'on_time');
+        $timelineLate = array_column($timelineGrouped, 'late');
+
+        return response()->json([
+            'electricity' => [
+                'labels' => $consumptionLabels,
+                'data' => $consumptionData,
+            ],
+            'paymentTracking' => [
+                'onTime' => $onTimeCount,
+                'late' => $lateCount,
+                'total' => $onTimeCount + $lateCount,
+            ],
+            'paymentTimeline' => [
+                'labels' => $timelineLabels,
+                'onTime' => $timelineOnTime,
+                'late' => $timelineLate,
+            ],
         ]);
     }
     
@@ -508,7 +718,6 @@ class StaffController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Stall assignment failed: ' . $e->getMessage());
-            Log::error($e->getTraceAsString()); // Log trace for more details
 
              // <-- START: Audit Trail for Failed Assignment -->
              // <-- START: Audit Trail for Failed Assignment -->
@@ -521,70 +730,106 @@ class StaffController extends Controller
             // <-- END: Audit Trail -->
             // <-- END: Audit Trail -->
             
-            // Return the actual error message for debugging
-            return response()->json(['message' => 'Stall assignment error: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'An error occurred during stall assignment.'], 500);
         }
     }
 
     /**
-     * Upload a profile picture for a vendor.
-     * Stores the image in Backblaze B2 object storage.
+     * Upload profile picture for a vendor (staff only)
      */
-    public function uploadProfilePicture(Request $request)
+    public function uploadVendorProfilePicture(Request $request, $vendorId)
     {
-        $validator = Validator::make($request->all(), [
-            'vendor_id' => 'required|integer|exists:users,id',
-            'profile_picture' => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:5120', // 5MB max
+        $vendor = User::with('role')->findOrFail($vendorId);
+        
+        // Ensure the user is a vendor
+        if (!$vendor->role || $vendor->role->name !== 'Vendor') {
+            Log::warning('Attempted to upload profile picture for non-vendor user', [
+                'user_id' => $vendorId,
+                'role' => $vendor->role ? $vendor->role->name : 'No role'
+            ]);
+            return response()->json(['message' => 'User is not a vendor.'], 403);
+        }
+
+        $validated = $request->validate([
+            'profile_picture' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', // 2MB max
+        ], [
+            'profile_picture.required' => 'Please select an image to upload.',
+            'profile_picture.image' => 'The file must be an image.',
+            'profile_picture.mimes' => 'The image must be a jpeg, png, jpg, or gif file.',
+            'profile_picture.max' => 'The image must not be larger than 2MB.',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['message' => $validator->errors()->first()], 422);
-        }
-
         try {
-            $vendor = User::findOrFail($request->vendor_id);
-            
-            // Delete old profile picture from B2 if exists (and it's a path, not base64)
-            if ($vendor->profile_picture && !str_starts_with($vendor->profile_picture, 'data:')) {
-                // Check if file exists before deleting to avoid errors
-                if (\Storage::disk('b2')->exists($vendor->profile_picture)) {
-                    \Storage::disk('b2')->delete($vendor->profile_picture);
-                }
+            // Delete old profile picture if exists
+            if ($vendor->profile_picture) {
+                Storage::disk('public')->delete($vendor->profile_picture);
             }
 
-            // Store new profile picture in B2
-            $file = $request->file('profile_picture');
-            $filename = 'profile_pictures/vendor_' . $vendor->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            
-            // Store the file in B2 (visibility doesn't matter for private buckets, but good practice)
-            \Storage::disk('b2')->put($filename, file_get_contents($file->getRealPath()));
-            
-            // Get a temporary signed URL (valid for 7 days)
-            $url = \Storage::disk('b2')->temporaryUrl(
-                $filename,
-                now()->addDays(7)
-            );
+            // Store the image
+            $image = $request->file('profile_picture');
+            $filename = 'profile_' . $vendor->id . '_' . time() . '.' . $image->getClientOriginalExtension();
+            $path = $image->storeAs('profile-pictures', $filename, 'public');
 
-            // Update user record with the B2 path
-            $vendor->profile_picture = $filename;
+            // Update vendor record
+            $vendor->profile_picture = $path;
             $vendor->save();
 
-            // Log the action
             AuditLogger::log(
-                'Updated profile picture',
+                'Uploaded Vendor Profile Picture',
                 'Vendor Management',
                 'Success',
-                ['vendor_id' => $vendor->id, 'vendor_name' => $vendor->name]
+                ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
             );
 
+            // Generate absolute URL for the profile picture
+            $url = Storage::disk('public')->url($path);
+            // Ensure it's an absolute URL
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                $url = asset($url);
+            }
+            
             return response()->json([
-                'message' => 'Profile picture uploaded successfully!',
-                'profile_picture_url' => $url,
+                'message' => 'Vendor profile picture uploaded successfully.',
+                'profile_picture_url' => $url
             ]);
-
         } catch (\Exception $e) {
-            Log::error('Profile picture upload failed: ' . $e->getMessage());
-            return response()->json(['message' => 'Failed to upload profile picture: ' . $e->getMessage()], 500);
+            Log::error('Vendor profile picture upload failed: ' . $e->getMessage(), [
+                'vendor_id' => $vendorId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Failed to upload vendor profile picture: ' . $e->getMessage()
+            ], 500);
         }
+    }
+
+    /**
+     * Remove profile picture for a vendor (staff only)
+     */
+    public function removeVendorProfilePicture(Request $request, $vendorId)
+    {
+        $vendor = User::findOrFail($vendorId);
+        
+        // Ensure the user is a vendor
+        if (!$vendor->role || $vendor->role->name !== 'Vendor') {
+            return response()->json(['message' => 'User is not a vendor.'], 403);
+        }
+        
+        if ($vendor->profile_picture) {
+            Storage::disk('public')->delete($vendor->profile_picture);
+            $vendor->profile_picture = null;
+            $vendor->save();
+
+            AuditLogger::log(
+                'Removed Vendor Profile Picture',
+                'Vendor Management',
+                'Success',
+                ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
+            );
+
+            return response()->json(['message' => 'Vendor profile picture removed successfully.']);
+        }
+
+        return response()->json(['message' => 'No profile picture to remove.'], 400);
     }
 }

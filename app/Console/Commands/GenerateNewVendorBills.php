@@ -111,13 +111,7 @@ class GenerateNewVendorBills extends Command
         // --- 1. Rent Bill (Current Month) ---
         Billing::updateOrCreate(
             ['stall_id' => $stall->id, 'utility_type' => 'Rent', 'period_start' => $rentPeriodStart->toDateString()],
-            [
-                'period_end' => $rentPeriodEnd->toDateString(), 
-                'amount' => $stall->monthly_rate ?? 0, // Default to 0 if null
-                'due_date' => $this->getDueDate('Rent', $rentPeriodStart, $schedules), 
-                'disconnection_date' => $this->getDisconnectionDate('Rent', $rentPeriodStart, $schedules), 
-                'status' => 'unpaid'
-            ]
+            ['period_end' => $rentPeriodEnd->toDateString(), 'amount' => $stall->monthly_rate, 'due_date' => $this->getDueDate('Rent', $rentPeriodStart, $schedules), 'disconnection_date' => $this->getDisconnectionDate('Rent', $rentPeriodStart, $schedules), 'status' => 'unpaid']
         );
         $this->info("  ✓ Rent bill for current month processed.");
 
@@ -154,7 +148,7 @@ class GenerateNewVendorBills extends Command
                     // Use a consistent date for the reading record, e.g., the end of the current month.
                     'reading_date' => $rentPeriodEnd->toDateString() 
                 ],
-                ['previous_reading' => 0, 'current_reading' => 0, 'consumption' => 0]
+                ['previous_reading' => 0, 'current_reading' => 0]
             );
             $this->info("  ✓ Initial Electricity reading record for current month processed.");
         }
@@ -166,36 +160,14 @@ class GenerateNewVendorBills extends Command
             return $billingPeriod->copy()->endOfMonth()->toDateString();
         }
         $key = "Due Date - {$type}";
-        // Safe access using optional() or check existence
-        $scheduleItem = $schedules->get($key);
-        $day = $scheduleItem ? $scheduleItem->description : null;
-        
-        // Fallback to end of month if schedule is missing or invalid
-        if (!is_numeric($day)) {
-            return $billingPeriod->copy()->endOfMonth()->toDateString();
-        }
-        
-        // Handle cases where day might be greater than days in month (e.g. 31st in Feb)
-        try {
-            return $billingPeriod->copy()->day((int)$day)->toDateString();
-        } catch (\Exception $e) {
-             return $billingPeriod->copy()->endOfMonth()->toDateString();
-        }
+        $day = $schedules->get($key)->description ?? null;
+        return is_numeric($day) ? $billingPeriod->copy()->day((int)$day)->toDateString() : null;
     }
 
     private function getDisconnectionDate($type, Carbon $billingPeriod, $schedules)
     {
         $key = "Disconnection - {$type}";
-        $scheduleItem = $schedules->get($key);
-        $day = $scheduleItem ? $scheduleItem->description : null;
-        
-        if (is_numeric($day)) {
-             try {
-                return $billingPeriod->copy()->day((int)$day)->toDateString();
-             } catch (\Exception $e) {
-                return null;
-             }
-        }
-        return null;
+        $day = $schedules->get($key)->description ?? null;
+        return is_numeric($day) ? $billingPeriod->copy()->day((int)$day)->toDateString() : null;
     }
 }

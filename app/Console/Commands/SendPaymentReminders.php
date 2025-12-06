@@ -20,10 +20,22 @@ class SendPaymentReminders extends Command
 
     $today = Carbon::today();
     
-    // ✅ START OF FIX: Define the specific days before the due date to send a reminder.
-    $reminderDays = [7, 5, 3, 1];
+    // Get reminder days from database (default to [7, 5, 3, 1] if not set)
+    $schedule = \App\Models\Schedule::where('schedule_type', 'SMS - Payment Reminders')->first();
+    $reminderDays = $schedule && $schedule->sms_days && is_array($schedule->sms_days) 
+        ? $schedule->sms_days 
+        : [7, 5, 3, 1];
+    
+    // Sort and filter valid days
+    $reminderDays = array_filter(array_map('intval', $reminderDays), fn($d) => $d > 0 && $d <= 365);
+    sort($reminderDays);
+    
+    if (empty($reminderDays)) {
+        $this->info("No reminder days configured. Using default: [7, 5, 3, 1]");
+        $reminderDays = [7, 5, 3, 1];
+    }
+    
     $targetDates = collect($reminderDays)->map(fn($days) => $today->copy()->addDays($days)->toDateString());
-    // ✅ END OF FIX
 
     // Find vendors with unpaid bills that are due on one of the target dates.
     $vendors = User::vendors()->active()
