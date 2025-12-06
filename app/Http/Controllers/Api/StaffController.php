@@ -844,8 +844,8 @@ class StaffController extends Controller
             Log::info('Vendor saved with profile_picture: ' . $vendor->profile_picture);
 
             // Generate the URL
-            $url = $vendor->profile_picture_url;
-            Log::info('Generated profile_picture_url: ' . ($url ?: 'NULL'));
+           $url = Storage::disk('b2')->temporaryUrl($path, now()->addDays(7));
+Log::info('Generated temporary URL: ' . $url);
 
             AuditLogger::log(
                 'Uploaded Vendor Profile Picture',
