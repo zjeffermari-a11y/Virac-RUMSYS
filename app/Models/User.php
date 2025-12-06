@@ -224,7 +224,8 @@ class User extends Authenticatable
                 now()->addDays(7)
             );
         } catch (\Exception $e) {
-            return \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
+            \Log::error('Failed to generate profile picture URL: ' . $e->getMessage());
+            return null;
         }
     }
 }
