@@ -866,7 +866,7 @@ class StaffController extends Controller
         }
         
         if ($vendor->profile_picture) {
-            Storage::disk('public')->delete($vendor->profile_picture);
+            Storage::disk('b2')->delete($vendor->profile_picture);
             $vendor->profile_picture = null;
             $vendor->save();
 
