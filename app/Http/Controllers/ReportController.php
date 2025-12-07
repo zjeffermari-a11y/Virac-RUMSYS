@@ -57,10 +57,27 @@ class ReportController extends Controller
 
             // Validations for custom paths specifically for the Laravel Cloud environment
             $chromePath = env('BROWSERSHOT_CHROME_PATH');
+            
+            // Auto-detect chromium on ARM if not set
+            if (!$chromePath && (str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'))) {
+                $possiblePaths = [
+                    '/usr/bin/chromium',
+                    '/usr/bin/chromium-browser',
+                    '/usr/bin/google-chrome',
+                    '/usr/bin/google-chrome-stable'
+                ];
+                foreach ($possiblePaths as $path) {
+                    if (file_exists($path)) {
+                        $chromePath = $path;
+                        break;
+                    }
+                }
+            }
+
             \Illuminate\Support\Facades\Log::info('Browsershot Config', [
-                'chrome_path_env' => $chromePath,
-                'node_path_env' => env('BROWSERSHOT_NODE_PATH'),
-                'npm_path_env' => env('BROWSERSHOT_NPM_PATH'),
+                'chrome_path_final' => $chromePath,
+                'is_arm' => str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'),
+                'php_uname' => php_uname(),
             ]);
 
             if ($chromePath) {
@@ -74,6 +91,8 @@ class ReportController extends Controller
             if (env('BROWSERSHOT_NPM_PATH')) {
                 $browsershot->setNpmBinary(env('BROWSERSHOT_NPM_PATH'));
             }
+            
+            $browsershot->ignoreHttpsErrors(); // Often needed in cloud environments
 
             $pdf = $browsershot->pdf();
 
