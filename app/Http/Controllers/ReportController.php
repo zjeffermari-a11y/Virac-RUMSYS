@@ -56,8 +56,15 @@ class ReportController extends Controller
                 ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']);
 
             // Validations for custom paths specifically for the Laravel Cloud environment
-            if (env('BROWSERSHOT_CHROME_PATH')) {
-                $browsershot->setChromePath(env('BROWSERSHOT_CHROME_PATH'));
+            $chromePath = env('BROWSERSHOT_CHROME_PATH');
+            \Illuminate\Support\Facades\Log::info('Browsershot Config', [
+                'chrome_path_env' => $chromePath,
+                'node_path_env' => env('BROWSERSHOT_NODE_PATH'),
+                'npm_path_env' => env('BROWSERSHOT_NPM_PATH'),
+            ]);
+
+            if ($chromePath) {
+                $browsershot->setChromePath($chromePath);
             }
 
             if (env('BROWSERSHOT_NODE_PATH')) {
