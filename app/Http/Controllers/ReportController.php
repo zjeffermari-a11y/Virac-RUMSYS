@@ -47,13 +47,28 @@ class ReportController extends Controller
         try {
             // Use Browsershot to generate the PDF from the rendered HTML
             // Added delay to ensure Chart.js is loaded before rendering
-            $pdf = Browsershot::html($html)
+            // Use Browsershot to generate the PDF from the rendered HTML
+            $browsershot = Browsershot::html($html)
                 ->format('Letter')
                 ->showBrowserHeaderAndFooter(false)
                 ->waitUntilNetworkIdle()
                 ->delay(3000) // Increase to 3 seconds to ensure charts render
-                ->setOption('args', ['--no-sandbox'])
-                ->pdf();
+                ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']);
+
+            // Validations for custom paths specifically for the Laravel Cloud environment
+            if (env('BROWSERSHOT_CHROME_PATH')) {
+                $browsershot->setChromePath(env('BROWSERSHOT_CHROME_PATH'));
+            }
+
+            if (env('BROWSERSHOT_NODE_PATH')) {
+                $browsershot->setNodeBinary(env('BROWSERSHOT_NODE_PATH'));
+            }
+
+            if (env('BROWSERSHOT_NPM_PATH')) {
+                $browsershot->setNpmBinary(env('BROWSERSHOT_NPM_PATH'));
+            }
+
+            $pdf = $browsershot->pdf();
 
             // Create a filename based on the report period
             $filename = 'Monthly_Report_' . str_replace(' ', '_', $data['report_period']) . '.pdf';
