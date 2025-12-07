@@ -11,14 +11,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (togglePassword) {
         togglePassword.addEventListener("click", function (e) {
+            const password = document.querySelector("#password");
+            const eyeIcon = document.querySelector("#eyeIcon");
+
             // toggle the type attribute
             const type =
                 password.getAttribute("type") === "password"
                     ? "text"
                     : "password";
             password.setAttribute("type", type);
-            // toggle the eye slash icon
-            this.classList.toggle("fa-eye-slash");
+
+            // toggle the eye icon (target the icon, not the button)
+            if (eyeIcon) {
+                eyeIcon.classList.toggle("fa-eye");
+                eyeIcon.classList.toggle("fa-eye-slash");
+            }
         });
     }
 
