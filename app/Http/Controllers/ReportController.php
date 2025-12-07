@@ -111,6 +111,9 @@ class ReportController extends Controller
             }
             
             $browsershot->ignoreHttpsErrors(); // Often needed in cloud environments
+            
+            // CRITICAL: Tell Browsershot where to find node_modules (puppeteer)
+            $browsershot->setNodeModulePath(base_path('node_modules/'));
 
             $pdf = $browsershot->pdf();
 
