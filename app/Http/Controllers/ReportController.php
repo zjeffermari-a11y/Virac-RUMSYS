@@ -45,75 +45,25 @@ class ReportController extends Controller
         ])->render();
 
         try {
-            // Use Browsershot to generate the PDF from the rendered HTML
-            // Added delay to ensure Chart.js is loaded before rendering
-            // Use Browsershot to generate the PDF from the rendered HTML
+            // Use Browsershot with Browserless.io remote Chrome service
+            // This works on Laravel Cloud where local Chrome/Puppeteer cannot run
+            $browserlessToken = env('BROWSERLESS_TOKEN');
+            
             $browsershot = Browsershot::html($html)
                 ->format('Letter')
                 ->showBrowserHeaderAndFooter(false)
                 ->waitUntilNetworkIdle()
-                ->delay(3000) // Increase to 3 seconds to ensure charts render
-                ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']);
+                ->delay(3000); // 3 seconds to ensure charts render
 
-            // Validations for custom paths specifically for the Laravel Cloud environment
-            $chromePath = env('BROWSERSHOT_CHROME_PATH');
-            
-            // If on Cloud/ARM, verify if we can find the @sparticuz/chromium binary
-            if (!$chromePath && (str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'))) {
-                 try {
-                    $scriptPath = base_path('find-chrome.cjs');
-                    if (file_exists($scriptPath)) {
-                        $output = shell_exec("node $scriptPath");
-                        $resolvedPath = trim($output);
-                        if ($resolvedPath && file_exists($resolvedPath)) {
-                            $chromePath = $resolvedPath;
-                            // Ensure the binary is executable
-                            chmod($chromePath, 0755);
-                        }
-                    }
-                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Failed to resolve sparticuz firefox path: ' . $e->getMessage());
-                 }
+            // Use Browserless.io remote Chrome if token is configured
+            if ($browserlessToken) {
+                $browsershot->setRemoteInstance('https://chrome.browserless.io?token=' . $browserlessToken);
+                \Illuminate\Support\Facades\Log::info('Browsershot: Using Browserless.io remote instance');
+            } else {
+                // Fallback to local Chrome with standard args (for local development)
+                $browsershot->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']);
+                \Illuminate\Support\Facades\Log::info('Browsershot: Using local Chrome (no BROWSERLESS_TOKEN set)');
             }
-            
-            // Fallback for native Linux install if sparticuz failed or wasn't used
-            if (!$chromePath && (str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'))) {
-                $possiblePaths = [
-                    '/usr/bin/chromium',
-                    '/usr/bin/chromium-browser',
-                    '/usr/bin/google-chrome',
-                    '/usr/bin/google-chrome-stable'
-                ];
-                foreach ($possiblePaths as $path) {
-                    if (file_exists($path)) {
-                        $chromePath = $path;
-                        break;
-                    }
-                }
-            }
-
-            \Illuminate\Support\Facades\Log::info('Browsershot Config', [
-                'chrome_path_final' => $chromePath,
-                'is_arm' => str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'),
-                'php_uname' => php_uname(),
-            ]);
-
-            if ($chromePath) {
-                $browsershot->setChromePath($chromePath);
-            }
-
-            if (env('BROWSERSHOT_NODE_PATH')) {
-                $browsershot->setNodeBinary(env('BROWSERSHOT_NODE_PATH'));
-            }
-
-            if (env('BROWSERSHOT_NPM_PATH')) {
-                $browsershot->setNpmBinary(env('BROWSERSHOT_NPM_PATH'));
-            }
-            
-            $browsershot->ignoreHttpsErrors(); // Often needed in cloud environments
-            
-            // CRITICAL: Tell Browsershot where to find node_modules (puppeteer)
-            $browsershot->setNodeModulePath(base_path('node_modules/'));
 
             $pdf = $browsershot->pdf();
 
