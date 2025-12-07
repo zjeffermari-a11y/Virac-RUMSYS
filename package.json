@@ -21,12 +21,14 @@
     },
     "dependencies": {
         "@alpinejs/collapse": "^3.14.9",
+        "@sparticuz/chromium": "^143.0.0",
         "@vitejs/plugin-react": "^4.5.0",
         "@vitejs/plugin-vue": "^5.2.4",
         "alpinejs": "^3.14.9",
         "chart.js": "^4.5.0",
         "html2pdf.js": "^0.12.1",
         "puppeteer": "^24.32.0",
+        "puppeteer-core": "^24.32.0",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
         "vue": "^3.5.16"

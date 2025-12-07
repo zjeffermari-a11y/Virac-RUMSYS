@@ -58,7 +58,25 @@ class ReportController extends Controller
             // Validations for custom paths specifically for the Laravel Cloud environment
             $chromePath = env('BROWSERSHOT_CHROME_PATH');
             
-            // Auto-detect chromium on ARM if not set
+            // If on Cloud/ARM, verify if we can find the @sparticuz/chromium binary
+            if (!$chromePath && (str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'))) {
+                 try {
+                    $scriptPath = base_path('find-chrome.cjs');
+                    if (file_exists($scriptPath)) {
+                        $output = shell_exec("node $scriptPath");
+                        $resolvedPath = trim($output);
+                        if ($resolvedPath && file_exists($resolvedPath)) {
+                            $chromePath = $resolvedPath;
+                            // Ensure the binary is executable
+                            chmod($chromePath, 0755);
+                        }
+                    }
+                 } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Failed to resolve sparticuz firefox path: ' . $e->getMessage());
+                 }
+            }
+            
+            // Fallback for native Linux install if sparticuz failed or wasn't used
             if (!$chromePath && (str_contains(php_uname('m'), 'aarch64') || str_contains(php_uname('m'), 'arm'))) {
                 $possiblePaths = [
                     '/usr/bin/chromium',
