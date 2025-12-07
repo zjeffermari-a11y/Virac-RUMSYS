@@ -45,27 +45,52 @@ class ReportController extends Controller
         ])->render();
 
         try {
-            // Use Browsershot with Browserless.io remote Chrome service
-            // This works on Laravel Cloud where local Chrome/Puppeteer cannot run
             $browserlessToken = env('BROWSERLESS_TOKEN');
             
-            $browsershot = Browsershot::html($html)
-                ->format('Letter')
-                ->showBrowserHeaderAndFooter(false)
-                ->waitUntilNetworkIdle()
-                ->delay(3000); // 3 seconds to ensure charts render
-
-            // Use Browserless.io remote Chrome if token is configured
             if ($browserlessToken) {
-                $browsershot->setRemoteInstance('https://chrome.browserless.io?token=' . $browserlessToken);
-                \Illuminate\Support\Facades\Log::info('Browsershot: Using Browserless.io remote instance');
+                // Use Browserless.io REST API directly - no Puppeteer/Node required!
+                \Illuminate\Support\Facades\Log::info('Using Browserless.io REST API for PDF generation');
+                
+                $response = \Illuminate\Support\Facades\Http::timeout(60)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post('https://chrome.browserless.io/pdf?token=' . $browserlessToken, [
+                        'html' => $html,
+                        'options' => [
+                            'format' => 'Letter',
+                            'printBackground' => true,
+                            'displayHeaderFooter' => false,
+                            'margin' => [
+                                'top' => '0.5in',
+                                'right' => '0.5in',
+                                'bottom' => '0.5in',
+                                'left' => '0.5in',
+                            ],
+                        ],
+                        'gotoOptions' => [
+                            'waitUntil' => 'networkidle0',
+                            'timeout' => 30000,
+                        ],
+                    ]);
+                
+                if (!$response->successful()) {
+                    throw new \Exception('Browserless.io API error: ' . $response->body());
+                }
+                
+                $pdf = $response->body();
             } else {
-                // Fallback to local Chrome with standard args (for local development)
-                $browsershot->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']);
-                \Illuminate\Support\Facades\Log::info('Browsershot: Using local Chrome (no BROWSERLESS_TOKEN set)');
+                // Fallback to local Browsershot for development
+                \Illuminate\Support\Facades\Log::info('Using local Browsershot (no BROWSERLESS_TOKEN set)');
+                
+                $pdf = Browsershot::html($html)
+                    ->format('Letter')
+                    ->showBrowserHeaderAndFooter(false)
+                    ->waitUntilNetworkIdle()
+                    ->delay(3000)
+                    ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'])
+                    ->pdf();
             }
-
-            $pdf = $browsershot->pdf();
 
             // Create a filename based on the report period
             $filename = 'Monthly_Report_' . str_replace(' ', '_', $data['report_period']) . '.pdf';
