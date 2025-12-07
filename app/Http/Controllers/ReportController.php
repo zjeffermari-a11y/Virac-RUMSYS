@@ -51,7 +51,7 @@ class ReportController extends Controller
                 // Use Browserless.io REST API directly - no Puppeteer/Node required!
                 \Illuminate\Support\Facades\Log::info('Using Browserless.io REST API for PDF generation');
                 
-                $response = \Illuminate\Support\Facades\Http::timeout(60)
+                $response = \Illuminate\Support\Facades\Http::timeout(120)
                     ->withHeaders([
                         'Content-Type' => 'application/json',
                     ])
@@ -70,6 +70,11 @@ class ReportController extends Controller
                         ],
                         'gotoOptions' => [
                             'waitUntil' => 'networkidle0',
+                            'timeout' => 60000,
+                        ],
+                        // Wait for Chart.js to finish rendering
+                        'waitForFunction' => [
+                            'fn' => 'window.chartsRendered === true',
                             'timeout' => 30000,
                         ],
                     ]);

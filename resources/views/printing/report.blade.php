@@ -265,6 +265,10 @@
                 createBarChart(`${util.toLowerCase()}Chart`, `${util} Collections`, data, utilityColors[
                     util]);
             });
+            
+            // Signal that all charts have been rendered (for PDF generation)
+            window.chartsRendered = true;
+            console.log('Charts rendered, window.chartsRendered =', window.chartsRendered);
         });
     </script>
 </body>
