@@ -23,25 +23,11 @@ class ReportController extends Controller
         
         $notes = $request->input('notes', '');
 
-        // Read Chart.js directly from node_modules
-        $chartJsPath = base_path('node_modules/chart.js/dist/chart.umd.js');
-        $chartJsContent = '';
-        
-        if (file_exists($chartJsPath)) {
-            $chartJsContent = file_get_contents($chartJsPath);
-        } else {
-            // Fallback: try to find it in a different location
-            $altPath = base_path('node_modules/chart.js/dist/chart.js');
-            if (file_exists($altPath)) {
-                $chartJsContent = file_get_contents($altPath);
-            }
-        }
-
         // Render a dedicated Blade view for the PDF content
+        // Chart.js is now loaded from CDN in the blade template
         $html = view('printing.report', [
             'data' => $data, 
             'notes' => $notes,
-            'chartJsContent' => $chartJsContent
         ])->render();
 
         try {

@@ -4,12 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Monthly Report</title>
-    {{-- Inline the compiled JavaScript for PDF generation --}}
-    @if (!empty($chartJsContent))
-        <script>
-            {!! $chartJsContent !!}
-        </script>
-    @endif
+    {{-- Load Chart.js from CDN (required for cloud environments where node_modules doesn't exist) --}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
