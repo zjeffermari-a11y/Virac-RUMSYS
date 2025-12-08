@@ -9,7 +9,7 @@ class SmsNotificationSettingsSeeder extends Seeder
 {
     public function run()
     {
-        DB::table('sms_notification_settings')->insert([
+        DB::table('sms_notification_settings')->upsert([
             [
                 'id' => 1,
                 'name' => 'bill_statement_wet_section',
@@ -42,6 +42,6 @@ class SmsNotificationSettingsSeeder extends Seeder
                 'created_at' => '2025-08-28 09:33:07',
                 'updated_at' => '2025-10-16 00:54:19',
             ],
-        ]);
+        ], ['id'], ['name', 'message_template', 'enabled', 'updated_at']);
     }
 }
