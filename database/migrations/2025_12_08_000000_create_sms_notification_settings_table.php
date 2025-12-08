@@ -11,13 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('sms_notification_settings', function (Blueprint $table) {
-            $table->id();
-            $table->string('name')->unique();
-            $table->text('message_template');
-            $table->boolean('enabled')->default(true);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('sms_notification_settings')) {
+            Schema::create('sms_notification_settings', function (Blueprint $table) {
+                $table->id();
+                $table->string('name')->unique();
+                $table->text('message_template');
+                $table->boolean('enabled')->default(true);
+                $table->timestamps();
+            });
+        }
     }
 
     /**
