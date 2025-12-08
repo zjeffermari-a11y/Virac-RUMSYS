@@ -511,6 +511,7 @@ class SuperAdminDashboard {
             this.dashboardManager.init();
         }
 
+        this.setupGlobalDelegation();
         this.setupEventListeners();
         this.setInitialSection();
         this.render();
@@ -657,12 +658,7 @@ class SuperAdminDashboard {
                 }
                 break;
             case "billingStatementSmsNotificationSettingsSection":
-                console.log("[initializeSection] billingStatementSmsNotificationSettingsSection - listenersInitialized:", this.listenersInitialized.billingSmsSettings);
-                if (!this.listenersInitialized.billingSmsSettings) {
-                    console.log("[initializeSection] Calling setupBillingSmsSettingsEventListeners");
-                    this.setupBillingSmsSettingsEventListeners(); // Combined listener
-                    this.listenersInitialized.billingSmsSettings = true;
-                }
+                // Global delegation handles this now
                 break;
             case "discountsSurchargesPenaltySection":
                 if (!this.listenersInitialized.billingSettings) {
@@ -1164,122 +1160,82 @@ class SuperAdminDashboard {
         }
     }
 
-    // Combined event listener setup for the "Billing Statement / SMS..." section
-    setupBillingSmsSettingsEventListeners() {
-        console.log("[SMS Settings] setupBillingSmsSettingsEventListeners called");
+    setupGlobalDelegation() {
+        console.log("[SuperAdmin] Setting up global event delegation");
+        document.addEventListener('click', (e) => {
+            // --- SMS Notification Tabs ---
+            if (e.target.closest('.notification-tab')) {
+                const tab = e.target.closest('.notification-tab');
+                const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
+                if (!container.contains(tab)) return; // Only for this section
 
-        // Scope everything to the specific section to avoid global selector conflicts
-        const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
-        if (!container) {
-            console.error("[SMS Settings] Section container not found!");
-            return;
-        }
-
-        // Re-query tabs and contents *within the container* to ensure we target the correct elements
-        const notificationTabs = container.querySelectorAll(".notification-tab");
-        const notificationTabContents = container.querySelectorAll(".notification-tab-content");
-
-        console.log("[SMS Settings] Found tabs:", notificationTabs.length);
-        console.log("[SMS Settings] Found contents:", notificationTabContents.length);
-
-        if (notificationTabs.length > 0) {
-            this.elements.notificationTabs = notificationTabs;
-        }
-        if (notificationTabContents.length > 0) {
-            this.elements.notificationTabContents = notificationTabContents;
-        }
-
-        // --- Notification Template Listeners (Tab Switching with Context) ---
-        notificationTabs.forEach((tab, index) => {
-            console.log(`[SMS Settings] Attaching listener to tab ${index}: ${tab.dataset.tab}`);
-            tab.addEventListener("click", (e) => {
                 e.preventDefault();
                 const tabId = tab.dataset.tab;
-                console.log(`[SMS Settings] Tab clicked: ${tabId}`);
+                console.log(`[Global Delegation] Tab clicked: ${tabId}`);
 
-                // Context Awareness: Reset active editor to prevent ghost inputs
+                // Context Awareness: Reset active editor
                 this.activeNotificationEditor = null;
 
-                // Query *current* state within the container
                 const currentTabs = container.querySelectorAll(".notification-tab");
                 const currentContents = container.querySelectorAll(".notification-tab-content");
 
                 // Update Tab Styles
                 currentTabs.forEach((t) =>
-                    t.classList.remove(
-                        "active",
-                        "text-market-primary",
-                        "border-b-2",
-                        "border-market-primary"
-                    )
+                    t.classList.remove("active", "text-market-primary", "border-b-2", "border-market-primary")
                 );
-                tab.classList.add(
-                    "active",
-                    "text-market-primary",
-                    "border-b-2",
-                    "border-market-primary"
-                );
+                tab.classList.add("active", "text-market-primary", "border-b-2", "border-market-primary");
 
-                // Update Content Visibility & Set New Context
+                // Update Content Visibility
                 currentContents.forEach((content) => {
                     if (content.dataset.content === tabId) {
                         content.classList.remove("hidden");
-                        // Attempt to find the first visible textarea in this new tab to set as active context
                         const firstEditor = content.querySelector('.template-editor');
-                        if (firstEditor) {
-                            this.activeNotificationEditor = firstEditor;
-                        }
+                        if (firstEditor) this.activeNotificationEditor = firstEditor;
                     } else {
                         content.classList.add("hidden");
                     }
                 });
-            });
-        });
+            }
 
-        if (this.elements.saveTemplatesBtn) {
-            this.elements.saveTemplatesBtn.addEventListener("click", () =>
-                this.saveNotificationTemplates()
-            );
-        }
+            // --- SMS Schedule Buttons ---
+            if (e.target.closest('#editSmsSchedulesBtn')) {
+                console.log("[Global Delegation] Edit SMS Schedules Clicked");
+                if (typeof this.toggleSmsSchedulesEditMode === 'function') this.toggleSmsSchedulesEditMode(true);
+            }
+            if (e.target.closest('#cancelSmsSchedulesBtn')) {
+                console.log("[Global Delegation] Cancel SMS Schedules Clicked");
+                if (typeof this.toggleSmsSchedulesEditMode === 'function') this.toggleSmsSchedulesEditMode(false);
+            }
+            if (e.target.closest('#saveSmsSchedulesBtn')) {
+                console.log("[Global Delegation] Save SMS Schedules Clicked");
+                if (typeof this.saveSmsSchedules === 'function') this.saveSmsSchedules();
+            }
 
-        const templateEditors = container.querySelectorAll(".template-editor");
-        templateEditors.forEach((editor) => {
-            editor.addEventListener("focus", () => {
-                this.activeNotificationEditor = editor;
-            });
-            editor.addEventListener("input", () => {
-                this.updateCharacterCount(editor);
-                this.updateLivePreview(editor);
-            });
-        });
-
-        container.querySelectorAll(".placeholder-btn").forEach((button) => {
-            button.addEventListener("click", () => {
-                if (this.activeNotificationEditor) {
-                    this.insertPlaceholder(
-                        this.activeNotificationEditor,
-                        button.textContent.trim()
-                    );
-                } else {
-                    this.showToast("Please select a text area first.", "info");
+            // --- Placeholder Buttons ---
+            if (e.target.closest('.placeholder-btn')) {
+                const button = e.target.closest('.placeholder-btn');
+                const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
+                if (container && container.contains(button)) {
+                    if (this.activeNotificationEditor) {
+                        this.insertPlaceholder(this.activeNotificationEditor, button.textContent.trim());
+                    } else {
+                        this.showToast("Please select a text area first.", "info");
+                    }
                 }
-            });
+            }
         });
 
-        // Add search functionality for placeholders
-        const placeholderSearch = document.getElementById("placeholderSearch");
-        if (placeholderSearch) {
-            placeholderSearch.addEventListener("input", (e) => {
+        // Initialize Search for Placeholders (delegated input)
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'placeholderSearch') {
                 const searchTerm = e.target.value.toLowerCase();
                 const categories = document.querySelectorAll(".placeholder-category");
-
                 categories.forEach((category) => {
                     const buttons = category.querySelectorAll(".placeholder-btn");
                     const hasMatch = Array.from(buttons).some((btn) =>
                         btn.textContent.toLowerCase().includes(searchTerm) ||
                         btn.getAttribute("title")?.toLowerCase().includes(searchTerm)
                     );
-
                     if (hasMatch || !searchTerm) {
                         category.style.display = "block";
                         buttons.forEach((btn) => {
@@ -1292,32 +1248,32 @@ class SuperAdminDashboard {
                         category.style.display = "none";
                     }
                 });
-            });
-        }
+            }
 
-        // --- Event Delegation for SMS Schedule Section ---
-        container.addEventListener("click", (e) => {
-            // Check if matched element or any parent matches the button ID/Class
-            if (e.target.closest("#editSmsSchedulesBtn")) {
-                console.log("Edit SMS Schedules Button Clicked (Delegated)");
-                if (typeof this.toggleSmsSchedulesEditMode === 'function') {
-                    this.toggleSmsSchedulesEditMode(true);
-                }
-            } else if (e.target.closest("#cancelSmsSchedulesBtn")) {
-                console.log("Cancel SMS Schedules Button Clicked (Delegated)");
-                if (typeof this.toggleSmsSchedulesEditMode === 'function') {
-                    this.toggleSmsSchedulesEditMode(false);
-                }
-            } else if (e.target.closest("#saveSmsSchedulesBtn")) {
-                console.log("Save SMS Schedules Button Clicked (Delegated)");
-                if (typeof this.saveSmsSchedules === 'function') {
-                    this.saveSmsSchedules();
-                }
+            // Editor Live Preview Updates
+            if (e.target.classList.contains('template-editor')) {
+                const editor = e.target;
+                this.updateCharacterCount(editor);
+                this.updateLivePreview(editor);
             }
         });
 
-        // Initialize tab state to ensure Bill Statement tab is visible by default
-        this.initializeSmsNotificationTabs(container);
+        document.addEventListener('focusin', (e) => {
+            if (e.target.classList.contains('template-editor')) {
+                this.activeNotificationEditor = e.target;
+            }
+        });
+
+        // Initialize Save Templates Button (Delegated)
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#saveTemplatesBtn')) {
+                this.saveNotificationTemplates();
+            }
+        });
+
+        // Initial Logic for Tab Visibility (called once)
+        const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
+        if (container) this.initializeSmsNotificationTabs(container);
     }
 
     // Ensure Bill Statement tab is active and visible on section load
