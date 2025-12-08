@@ -1181,11 +1181,13 @@ class SuperAdminDashboard {
                     "border-b-2",
                     "border-market-primary"
                 );
+                // Explicitly add/remove hidden class for better reliability
                 this.elements.notificationTabContents.forEach((content) => {
-                    content.classList.toggle(
-                        "hidden",
-                        content.dataset.content !== tabId
-                    );
+                    if (content.dataset.content === tabId) {
+                        content.classList.remove("hidden");
+                    } else {
+                        content.classList.add("hidden");
+                    }
                 });
             });
         });
@@ -1257,6 +1259,37 @@ class SuperAdminDashboard {
         this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
             this.saveSmsSchedules()
         );
+
+        // Initialize tab state to ensure Bill Statement tab is visible by default
+        this.initializeSmsNotificationTabs();
+    }
+
+    // Ensure Bill Statement tab is active and visible on section load
+    initializeSmsNotificationTabs() {
+        const billStatementTab = document.querySelector('[data-tab="billStatement"]');
+        const billStatementContent = document.querySelector('[data-content="billStatement"]');
+
+        if (billStatementTab && billStatementContent) {
+            // Set Bill Statement tab as active
+            this.elements.notificationTabs.forEach((t) =>
+                t.classList.remove("active", "text-market-primary", "border-b-2", "border-market-primary")
+            );
+            billStatementTab.classList.add(
+                "active",
+                "text-market-primary",
+                "border-b-2",
+                "border-market-primary"
+            );
+
+            // Show only Bill Statement content, hide others
+            this.elements.notificationTabContents.forEach((content) => {
+                if (content.dataset.content === "billStatement") {
+                    content.classList.remove("hidden");
+                } else {
+                    content.classList.add("hidden");
+                }
+            });
+        }
     }
 
     updateCharacterCount(editorElement) {
