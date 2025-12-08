@@ -1168,14 +1168,21 @@ class SuperAdminDashboard {
     setupBillingSmsSettingsEventListeners() {
         console.log("[SMS Settings] setupBillingSmsSettingsEventListeners called");
 
-        // Re-query tabs and contents dynamically in case they weren't available at initial cache
-        const notificationTabs = document.querySelectorAll(".notification-tab");
-        const notificationTabContents = document.querySelectorAll(".notification-tab-content");
+        // Scope everything to the specific section to avoid global selector conflicts
+        const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
+        if (!container) {
+            console.error("[SMS Settings] Section container not found!");
+            return;
+        }
+
+        // Re-query tabs and contents *within the container* to ensure we target the correct elements
+        // This fixes the issue where global selectors might pick up duplicates or unrelated items
+        const notificationTabs = container.querySelectorAll(".notification-tab");
+        const notificationTabContents = container.querySelectorAll(".notification-tab-content");
 
         console.log("[SMS Settings] Found tabs:", notificationTabs.length);
         console.log("[SMS Settings] Found contents:", notificationTabContents.length);
 
-        // Update cached elements in case they were empty at page load
         if (notificationTabs.length > 0) {
             this.elements.notificationTabs = notificationTabs;
         }
@@ -1184,18 +1191,21 @@ class SuperAdminDashboard {
         }
 
         // --- Notification Template Listeners ---
-        this.elements.notificationTabs.forEach((tab, index) => {
+        notificationTabs.forEach((tab, index) => {
+            // Remove existing listeners to be safe (though not easily possible with anonymous functions, the flag prevents double attachment)
+            // We rely on listenersInitialized flag in initializeSection.
+
             console.log(`[SMS Settings] Attaching listener to tab ${index}: ${tab.dataset.tab}`);
-            tab.addEventListener("click", () => {
+            tab.addEventListener("click", (e) => {
+                e.preventDefault(); // Prevent default anchor behavior if any
                 const tabId = tab.dataset.tab;
                 console.log(`[SMS Settings] Tab clicked: ${tabId}`);
 
-                // Re-query on each click to ensure we have current references
-                const currentTabs = document.querySelectorAll(".notification-tab");
-                const currentContents = document.querySelectorAll(".notification-tab-content");
+                // Query *current* state within the container
+                const currentTabs = container.querySelectorAll(".notification-tab");
+                const currentContents = container.querySelectorAll(".notification-tab-content");
 
-                console.log(`[SMS Settings] Current tabs count: ${currentTabs.length}, contents: ${currentContents.length}`);
-
+                // Update Tab Styles
                 currentTabs.forEach((t) =>
                     t.classList.remove(
                         "active",
@@ -1210,9 +1220,9 @@ class SuperAdminDashboard {
                     "border-b-2",
                     "border-market-primary"
                 );
-                // Explicitly add/remove hidden class for better reliability
+
+                // Update Content Visibility
                 currentContents.forEach((content) => {
-                    console.log(`[SMS Settings] Processing content: ${content.dataset.content}, tabId: ${tabId}, match: ${content.dataset.content === tabId}`);
                     if (content.dataset.content === tabId) {
                         content.classList.remove("hidden");
                     } else {
@@ -1222,11 +1232,13 @@ class SuperAdminDashboard {
             });
         });
 
-        this.elements.saveTemplatesBtn.addEventListener("click", () =>
-            this.saveNotificationTemplates()
-        );
+        if (this.elements.saveTemplatesBtn) {
+            this.elements.saveTemplatesBtn.addEventListener("click", () =>
+                this.saveNotificationTemplates()
+            );
+        }
 
-        const templateEditors = document.querySelectorAll(".template-editor");
+        const templateEditors = container.querySelectorAll(".template-editor");
         templateEditors.forEach((editor) => {
             editor.addEventListener("focus", () => {
                 this.activeNotificationEditor = editor;
@@ -1237,7 +1249,7 @@ class SuperAdminDashboard {
             });
         });
 
-        document.querySelectorAll(".placeholder-btn").forEach((button) => {
+        container.querySelectorAll(".placeholder-btn").forEach((button) => {
             button.addEventListener("click", () => {
                 if (this.activeNotificationEditor) {
                     this.insertPlaceholder(
@@ -1280,26 +1292,42 @@ class SuperAdminDashboard {
         }
 
         // --- New SMS Schedule Listeners ---
-        this.elements.editSmsSchedulesBtn.addEventListener("click", () =>
-            this.toggleSmsSchedulesEditMode(true)
-        );
-        this.elements.cancelSmsSchedulesBtn.addEventListener("click", () =>
-            this.toggleSmsSchedulesEditMode(false)
-        );
-        this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
-            this.saveSmsSchedules()
-        );
+        // Added safety checks to prevent crashes if elements are missing
+        if (this.elements.editSmsSchedulesBtn) {
+            this.elements.editSmsSchedulesBtn.addEventListener("click", () => {
+                console.log("Edit SMS Schedules Button Clicked");
+                if (typeof this.toggleSmsSchedulesEditMode === 'function') {
+                    this.toggleSmsSchedulesEditMode(true);
+                } else {
+                    console.error("toggleSmsSchedulesEditMode is not a function!");
+                }
+            });
+        } else {
+            console.error("Element editSmsSchedulesBtn not found!");
+        }
+
+        if (this.elements.cancelSmsSchedulesBtn) {
+            this.elements.cancelSmsSchedulesBtn.addEventListener("click", () =>
+                this.toggleSmsSchedulesEditMode(false)
+            );
+        }
+
+        if (this.elements.saveSmsSchedulesBtn) {
+            this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
+                this.saveSmsSchedules()
+            );
+        }
 
         // Initialize tab state to ensure Bill Statement tab is visible by default
-        this.initializeSmsNotificationTabs();
+        this.initializeSmsNotificationTabs(container);
     }
 
     // Ensure Bill Statement tab is active and visible on section load
-    initializeSmsNotificationTabs() {
-        // Re-query dynamically to ensure we have current references
-        const allTabs = document.querySelectorAll('.notification-tab');
-        const allContents = document.querySelectorAll('.notification-tab-content');
-        const billStatementTab = document.querySelector('[data-tab="billStatement"]');
+    initializeSmsNotificationTabs(container = document) {
+        // Re-query dynamically to ensure we have current references, constrained to container
+        const allTabs = container.querySelectorAll('.notification-tab');
+        const allContents = container.querySelectorAll('.notification-tab-content');
+        const billStatementTab = container.querySelector('[data-tab="billStatement"]');
 
         if (billStatementTab && allTabs.length > 0 && allContents.length > 0) {
             // Set Bill Statement tab as active
@@ -2904,15 +2932,21 @@ class SuperAdminDashboard {
     }
 
     setupScheduleEventListeners() {
-        this.elements.editScheduleBtn.addEventListener("click", () =>
-            this.toggleScheduleEditMode(true)
-        );
-        this.elements.cancelScheduleBtn.addEventListener("click", () =>
-            this.toggleScheduleEditMode(false)
-        );
-        this.elements.saveScheduleBtn.addEventListener("click", () =>
-            this.saveMeterReadingSchedule()
-        );
+        if (this.elements.editScheduleBtn) {
+            this.elements.editScheduleBtn.addEventListener("click", () =>
+                this.toggleScheduleEditMode(true)
+            );
+        }
+        if (this.elements.cancelScheduleBtn) {
+            this.elements.cancelScheduleBtn.addEventListener("click", () =>
+                this.toggleScheduleEditMode(false)
+            );
+        }
+        if (this.elements.saveScheduleBtn) {
+            this.elements.saveScheduleBtn.addEventListener("click", () =>
+                this.saveMeterReadingSchedule()
+            );
+        }
     }
 
     async fetchMeterReadingSchedule() {
