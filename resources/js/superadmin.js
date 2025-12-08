@@ -627,6 +627,7 @@ class SuperAdminDashboard {
     }
 
     initializeSection(sectionId) {
+        console.log("[initializeSection] Called with sectionId:", sectionId);
         // This function ensures data is loaded and listeners are attached for a given section
         this.loadDataForSection(sectionId);
 
@@ -656,7 +657,9 @@ class SuperAdminDashboard {
                 }
                 break;
             case "billingStatementSmsNotificationSettingsSection":
+                console.log("[initializeSection] billingStatementSmsNotificationSettingsSection - listenersInitialized:", this.listenersInitialized.billingSmsSettings);
                 if (!this.listenersInitialized.billingSmsSettings) {
+                    console.log("[initializeSection] Calling setupBillingSmsSettingsEventListeners");
                     this.setupBillingSmsSettingsEventListeners(); // Combined listener
                     this.listenersInitialized.billingSmsSettings = true;
                 }
@@ -1163,9 +1166,14 @@ class SuperAdminDashboard {
 
     // Combined event listener setup for the "Billing Statement / SMS..." section
     setupBillingSmsSettingsEventListeners() {
+        console.log("[SMS Settings] setupBillingSmsSettingsEventListeners called");
+
         // Re-query tabs and contents dynamically in case they weren't available at initial cache
         const notificationTabs = document.querySelectorAll(".notification-tab");
         const notificationTabContents = document.querySelectorAll(".notification-tab-content");
+
+        console.log("[SMS Settings] Found tabs:", notificationTabs.length);
+        console.log("[SMS Settings] Found contents:", notificationTabContents.length);
 
         // Update cached elements in case they were empty at page load
         if (notificationTabs.length > 0) {
@@ -1176,12 +1184,17 @@ class SuperAdminDashboard {
         }
 
         // --- Notification Template Listeners ---
-        this.elements.notificationTabs.forEach((tab) => {
+        this.elements.notificationTabs.forEach((tab, index) => {
+            console.log(`[SMS Settings] Attaching listener to tab ${index}: ${tab.dataset.tab}`);
             tab.addEventListener("click", () => {
                 const tabId = tab.dataset.tab;
+                console.log(`[SMS Settings] Tab clicked: ${tabId}`);
+
                 // Re-query on each click to ensure we have current references
                 const currentTabs = document.querySelectorAll(".notification-tab");
                 const currentContents = document.querySelectorAll(".notification-tab-content");
+
+                console.log(`[SMS Settings] Current tabs count: ${currentTabs.length}, contents: ${currentContents.length}`);
 
                 currentTabs.forEach((t) =>
                     t.classList.remove(
@@ -1199,6 +1212,7 @@ class SuperAdminDashboard {
                 );
                 // Explicitly add/remove hidden class for better reliability
                 currentContents.forEach((content) => {
+                    console.log(`[SMS Settings] Processing content: ${content.dataset.content}, tabId: ${tabId}, match: ${content.dataset.content === tabId}`);
                     if (content.dataset.content === tabId) {
                         content.classList.remove("hidden");
                     } else {
