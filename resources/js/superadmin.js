@@ -1163,11 +1163,27 @@ class SuperAdminDashboard {
 
     // Combined event listener setup for the "Billing Statement / SMS..." section
     setupBillingSmsSettingsEventListeners() {
+        // Re-query tabs and contents dynamically in case they weren't available at initial cache
+        const notificationTabs = document.querySelectorAll(".notification-tab");
+        const notificationTabContents = document.querySelectorAll(".notification-tab-content");
+
+        // Update cached elements in case they were empty at page load
+        if (notificationTabs.length > 0) {
+            this.elements.notificationTabs = notificationTabs;
+        }
+        if (notificationTabContents.length > 0) {
+            this.elements.notificationTabContents = notificationTabContents;
+        }
+
         // --- Notification Template Listeners ---
         this.elements.notificationTabs.forEach((tab) => {
             tab.addEventListener("click", () => {
                 const tabId = tab.dataset.tab;
-                this.elements.notificationTabs.forEach((t) =>
+                // Re-query on each click to ensure we have current references
+                const currentTabs = document.querySelectorAll(".notification-tab");
+                const currentContents = document.querySelectorAll(".notification-tab-content");
+
+                currentTabs.forEach((t) =>
                     t.classList.remove(
                         "active",
                         "text-market-primary",
@@ -1182,7 +1198,7 @@ class SuperAdminDashboard {
                     "border-market-primary"
                 );
                 // Explicitly add/remove hidden class for better reliability
-                this.elements.notificationTabContents.forEach((content) => {
+                currentContents.forEach((content) => {
                     if (content.dataset.content === tabId) {
                         content.classList.remove("hidden");
                     } else {
@@ -1266,12 +1282,14 @@ class SuperAdminDashboard {
 
     // Ensure Bill Statement tab is active and visible on section load
     initializeSmsNotificationTabs() {
+        // Re-query dynamically to ensure we have current references
+        const allTabs = document.querySelectorAll('.notification-tab');
+        const allContents = document.querySelectorAll('.notification-tab-content');
         const billStatementTab = document.querySelector('[data-tab="billStatement"]');
-        const billStatementContent = document.querySelector('[data-content="billStatement"]');
 
-        if (billStatementTab && billStatementContent) {
+        if (billStatementTab && allTabs.length > 0 && allContents.length > 0) {
             // Set Bill Statement tab as active
-            this.elements.notificationTabs.forEach((t) =>
+            allTabs.forEach((t) =>
                 t.classList.remove("active", "text-market-primary", "border-b-2", "border-market-primary")
             );
             billStatementTab.classList.add(
@@ -1282,7 +1300,7 @@ class SuperAdminDashboard {
             );
 
             // Show only Bill Statement content, hide others
-            this.elements.notificationTabContents.forEach((content) => {
+            allContents.forEach((content) => {
                 if (content.dataset.content === "billStatement") {
                     content.classList.remove("hidden");
                 } else {
