@@ -1176,7 +1176,6 @@ class SuperAdminDashboard {
         }
 
         // Re-query tabs and contents *within the container* to ensure we target the correct elements
-        // This fixes the issue where global selectors might pick up duplicates or unrelated items
         const notificationTabs = container.querySelectorAll(".notification-tab");
         const notificationTabContents = container.querySelectorAll(".notification-tab-content");
 
@@ -1190,16 +1189,16 @@ class SuperAdminDashboard {
             this.elements.notificationTabContents = notificationTabContents;
         }
 
-        // --- Notification Template Listeners ---
+        // --- Notification Template Listeners (Tab Switching with Context) ---
         notificationTabs.forEach((tab, index) => {
-            // Remove existing listeners to be safe (though not easily possible with anonymous functions, the flag prevents double attachment)
-            // We rely on listenersInitialized flag in initializeSection.
-
             console.log(`[SMS Settings] Attaching listener to tab ${index}: ${tab.dataset.tab}`);
             tab.addEventListener("click", (e) => {
-                e.preventDefault(); // Prevent default anchor behavior if any
+                e.preventDefault();
                 const tabId = tab.dataset.tab;
                 console.log(`[SMS Settings] Tab clicked: ${tabId}`);
+
+                // Context Awareness: Reset active editor to prevent ghost inputs
+                this.activeNotificationEditor = null;
 
                 // Query *current* state within the container
                 const currentTabs = container.querySelectorAll(".notification-tab");
@@ -1221,10 +1220,15 @@ class SuperAdminDashboard {
                     "border-market-primary"
                 );
 
-                // Update Content Visibility
+                // Update Content Visibility & Set New Context
                 currentContents.forEach((content) => {
                     if (content.dataset.content === tabId) {
                         content.classList.remove("hidden");
+                        // Attempt to find the first visible textarea in this new tab to set as active context
+                        const firstEditor = content.querySelector('.template-editor');
+                        if (firstEditor) {
+                            this.activeNotificationEditor = firstEditor;
+                        }
                     } else {
                         content.classList.add("hidden");
                     }
@@ -1291,32 +1295,26 @@ class SuperAdminDashboard {
             });
         }
 
-        // --- New SMS Schedule Listeners ---
-        // Added safety checks to prevent crashes if elements are missing
-        if (this.elements.editSmsSchedulesBtn) {
-            this.elements.editSmsSchedulesBtn.addEventListener("click", () => {
-                console.log("Edit SMS Schedules Button Clicked");
+        // --- Event Delegation for SMS Schedule Section ---
+        container.addEventListener("click", (e) => {
+            // Check if matched element or any parent matches the button ID/Class
+            if (e.target.closest("#editSmsSchedulesBtn")) {
+                console.log("Edit SMS Schedules Button Clicked (Delegated)");
                 if (typeof this.toggleSmsSchedulesEditMode === 'function') {
                     this.toggleSmsSchedulesEditMode(true);
-                } else {
-                    console.error("toggleSmsSchedulesEditMode is not a function!");
                 }
-            });
-        } else {
-            console.error("Element editSmsSchedulesBtn not found!");
-        }
-
-        if (this.elements.cancelSmsSchedulesBtn) {
-            this.elements.cancelSmsSchedulesBtn.addEventListener("click", () =>
-                this.toggleSmsSchedulesEditMode(false)
-            );
-        }
-
-        if (this.elements.saveSmsSchedulesBtn) {
-            this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
-                this.saveSmsSchedules()
-            );
-        }
+            } else if (e.target.closest("#cancelSmsSchedulesBtn")) {
+                console.log("Cancel SMS Schedules Button Clicked (Delegated)");
+                if (typeof this.toggleSmsSchedulesEditMode === 'function') {
+                    this.toggleSmsSchedulesEditMode(false);
+                }
+            } else if (e.target.closest("#saveSmsSchedulesBtn")) {
+                console.log("Save SMS Schedules Button Clicked (Delegated)");
+                if (typeof this.saveSmsSchedules === 'function') {
+                    this.saveSmsSchedules();
+                }
+            }
+        });
 
         // Initialize tab state to ensure Bill Statement tab is visible by default
         this.initializeSmsNotificationTabs(container);
