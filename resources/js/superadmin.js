@@ -2699,11 +2699,15 @@ class SuperAdminDashboard {
                     
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700"> 
                         
-                        <input type="number" 
+                            <input type="number" 
                                class="edit-utility-rate no-spinner w-full h-full bg-transparent text-left text-gray-700 focus:outline-none focus:bg-gray-100 rounded-lg px-4 py-1 transition" 
                                value="${rateValue}" 
                                min="0" 
                                step="0.01">
+                    </td>
+                    <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">
+                        <input type="date" 
+                               class="edit-effectivity-date w-full h-full bg-transparent text-gray-700 focus:outline-none focus:bg-gray-100 rounded-lg px-2 py-1 transition">
                     </td>
                 </tr>`;
                     }
@@ -2720,6 +2724,7 @@ class SuperAdminDashboard {
                 <tr class="hover:bg-gray-50 transition-colors" data-id="util-${rate.id || ''}">
                     <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${rate.utility || 'N/A'}</td>
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${rateValue.toFixed(2)} / ${unit}</td>
+                    <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700 text-center text-gray-400">-</td>
                 </tr>`;
                     }
                 )
@@ -2764,7 +2769,8 @@ class SuperAdminDashboard {
                     if (rateToUpdate) {
                         rateToUpdate.rate = rateValue;
                     }
-                    updatedRatesPayload.push({ id, rate: rateValue });
+                    const effectivityDate = row.querySelector(".edit-effectivity-date").value;
+                    updatedRatesPayload.push({ id, rate: rateValue, effectivityDate: effectivityDate });
                 }
             });
 
@@ -2791,7 +2797,9 @@ class SuperAdminDashboard {
                     utility_type: oldRate.utility,
                     old_rate: oldRate.rate,
                     new_rate: updatedRate.rate,
+                    new_rate: updatedRate.rate,
                     changed_at: new Date().toISOString(), // Use browser time for instant display
+                    effectivity_date: updatedRate.effectivityDate
                 };
                 newHistoryLogs.push(optimisticLog);
             }
@@ -2876,9 +2884,13 @@ class SuperAdminDashboard {
                               <td data-label="Old Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
                             log.old_rate
                         ).toFixed(2)}</td>
-                              <td data-label="New Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
+                                <td data-label="New Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
                             log.new_rate
                         ).toFixed(2)}</td>
+                                <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">${log.effectivity_date
+                            ? new Date(log.effectivity_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                            : '<span class="text-gray-400">Immediate</span>'
+                        }</td>
                           </tr>
                       `;
                 })

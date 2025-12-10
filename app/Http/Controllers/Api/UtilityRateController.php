@@ -48,6 +48,7 @@ class UtilityRateController extends Controller
     $validator = Validator::make($request->all(), [
         'rate'        => 'required|numeric|min:0',
         'monthlyRate' => 'required|numeric|min:0',
+        'effectivityDate' => 'nullable|date|after_or_equal:today',
     ]);
 
     if ($validator->fails()) {
@@ -68,6 +69,7 @@ class UtilityRateController extends Controller
 
             $newRateValue = (float) $request->input('rate');
             $newMonthlyRateValue = (float) $request->input('monthlyRate');
+            $effectivityDate = $request->input('effectivityDate');
             $loggedInUserId = Auth::id() ?? 1;
 
             DB::table('rates')->where('id', $id)->update([
@@ -84,13 +86,21 @@ class UtilityRateController extends Controller
                     'new_rate'   => $newRateValue,
                     'changed_by' => $loggedInUserId,
                     'changed_at' => now(),
+                    'effectivity_date' => $effectivityDate,
                 ]);
 
                 AuditLogger::log(
                     'Updated Utility Rate',
                     'Utility Rates',
                     'Success',
-                    ['rate_id' => $id, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue]
+                    [
+                        'rate_id' => $id, 
+                        'old_rate' => $oldRateValue, 
+                        'new_rate' => $newRateValue, 
+                        'old_monthly_rate' => $oldMonthlyRateValue, 
+                        'new_monthly_rate' => $newMonthlyRateValue,
+                        'effectivity_date' => $effectivityDate
+                    ]
                 );
 
                 // Create draft announcement for rate change
@@ -101,7 +111,8 @@ class UtilityRateController extends Controller
                         $oldRateValue,
                         $newRateValue,
                         $oldMonthlyRateValue,
-                        $newMonthlyRateValue
+                        $newMonthlyRateValue,
+                        $effectivityDate
                     );
                 } catch (\Exception $e) {
                     // Log error but don't fail the transaction
@@ -138,6 +149,9 @@ class UtilityRateController extends Controller
                 $loggedInUserId = Auth::id() ?? 1;
 
                 foreach ($rates as $rateData) {
+                    // Extract common effectivity date if sent once, or individual if sent per row (assuming per-row or global from request)
+                    $effectivityDate = $rateData['effectivityDate'] ?? $request->input('effectivityDate');
+
                     // Get the current rate to check if the value has changed
                     $currentRate = DB::table('rates')->where('id', $rateData['id'])->first();
                     if (!$currentRate) {
@@ -170,6 +184,7 @@ class UtilityRateController extends Controller
                             'new_rate'   => $newRateValue,
                             'changed_by' => $loggedInUserId,
                             'changed_at' => now(),
+                            'effectivity_date' => $effectivityDate,
                         ]);
 
                         // Create draft announcement for rate change
@@ -180,7 +195,8 @@ class UtilityRateController extends Controller
                                 $oldRateValue,
                                 $newRateValue,
                                 $oldMonthlyRateValue,
-                                $newMonthlyRateValue
+                                $newMonthlyRateValue,
+                                $effectivityDate
                             );
                         } catch (\Exception $e) {
                             // Log error but don't fail the transaction
@@ -217,7 +233,7 @@ class UtilityRateController extends Controller
             ->join('rates as r', 'rh.rate_id', '=', 'r.id')
             ->join('users as u', 'rh.changed_by', '=', 'u.id')
             ->whereIn('r.utility_type', ['Electricity', 'Water'])
-            ->select('rh.old_rate', 'rh.new_rate', 'rh.changed_at', 'r.utility_type')
+            ->select('rh.old_rate', 'rh.new_rate', 'rh.changed_at', 'rh.effectivity_date', 'r.utility_type')
             ->orderBy('rh.changed_at', 'desc')
             ->paginate(10); // Still paginate the results
 

@@ -437,6 +437,9 @@
                             <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700 w-1/3">
                                 Rate
                             </th>
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700 w-1/4">
+                                Effectivity Date
+                            </th>
 
                         </tr>
                     </thead>

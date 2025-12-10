@@ -10,7 +10,7 @@ class AnnouncementService
     /**
      * Generate a draft announcement when utility rates change
      */
-    public function createRateChangeAnnouncement(string $utilityType, float $oldRate, float $newRate, float $oldMonthlyRate = null, float $newMonthlyRate = null): ?Announcement
+    public function createRateChangeAnnouncement(string $utilityType, float $oldRate, float $newRate, float $oldMonthlyRate = null, float $newMonthlyRate = null, ?string $effectivityDate = null): ?Announcement
     {
         $rateChange = $newRate - $oldRate;
         $rateChangePercent = $oldRate > 0 ? (($rateChange / $oldRate) * 100) : 0;
@@ -31,6 +31,10 @@ class AnnouncementService
         
         if ($rateChangePercent != 0) {
             $content .= "\nChange: " . ($rateChangePercent > 0 ? '+' : '') . number_format($rateChangePercent, 2) . "%\n";
+        }
+
+        if ($effectivityDate) {
+            $content .= "\nEffective Date: " . date('F j, Y', strtotime($effectivityDate)) . "\n";
         }
         
         $content .= "\nThis change will be reflected in your next billing statement.\n\n";
