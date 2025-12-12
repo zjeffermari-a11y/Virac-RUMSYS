@@ -9,9 +9,10 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-        Schema::table('users', function (Blueprint $table) {
-            // Logic moved to create_users_table
-        });
+    public function up(): void
+    {
+        // Consolidated into create_users_table
+    }
 
     /**
      * Reverse the migrations.
