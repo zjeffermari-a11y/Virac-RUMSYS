@@ -15,6 +15,11 @@ return new class extends Migration
             $table->id();
             $table->string('title');
             $table->text('content');
+            $table->string('announcement_type')->nullable(); // Consolidated
+            $table->string('related_section')->nullable(); // Consolidated
+            $table->string('related_utility')->nullable(); // Consolidated
+            $table->unsignedBigInteger('related_stall_id')->nullable(); // Consolidated
+            $table->json('recipients')->nullable(); // Consolidated
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

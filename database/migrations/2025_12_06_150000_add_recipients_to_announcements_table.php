@@ -11,9 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('announcements', function (Blueprint $table) {
-            $table->json('recipients')->nullable()->after('related_stall_id');
-        });
+        // Consolidated into create_announcements_table
     }
 
     /**
