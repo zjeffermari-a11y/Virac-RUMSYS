@@ -11,6 +11,7 @@ return new class extends Migration {
             $table->enum('utility_type', ['Rent','Electricity','Water']);
             $table->foreignId('section_id')->nullable()->constrained('sections')->onDelete('cascade');
             $table->decimal('rate', 10, 2);
+            $table->decimal('monthly_rate', 10, 2)->nullable();
             $table->timestamps();
         });
     }
