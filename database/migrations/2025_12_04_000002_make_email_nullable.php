@@ -9,18 +9,9 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up(): void
-    {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'email')) {
-                // Make email nullable and default to null
-                $table->string('email')->nullable()->default(null)->change();
-            } else {
-                // If missing, add it as nullable
-                $table->string('email')->nullable()->default(null)->unique()->after('username');
-            }
+            // Logic moved to create_users_table
         });
-    }
 
     /**
      * Reverse the migrations.
