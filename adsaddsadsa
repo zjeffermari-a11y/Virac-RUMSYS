@@ -1,0 +1,10 @@
+* [33m087b872[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/utility-rates-effectivity[m[33m, [m[1;31morigin/feature/utility-rates-effectivity[m[33m)[m feat: implement utility rate effectivity date and announcements
+* [33mad496a2[m[33m ([m[1;31morigin/friend-work[m[33m, [m[1;32mfriend-work[m[33m)[m Make sms_notification_settings migration safe
+* [33mc8bd505[m Implement global event delegation for SMS settings and fix seeder duplicate key error
+* [33m8b3fa4c[m Add SmsNotificationSettingsSeeder 2
+* [33mb00018f[m Add SmsNotificationSettingsSeeder
+* [33m8343181[m Implement event delegation for Billing SMS buttons and context-aware tab switching
+* [33me4778fd[m Fix billing SMS tabs disappearance and edit schedule button issues
+* [33mb95091d[m chore(debug): Add extensive debug logs to SMS settings tab navigation - Logs for initializeSection and setupBillingSmsSettingsEventListeners - Logging found tabs/content counts and click events
+* [33md607fc4[m fix(admin): Use dynamic DOM queries for SMS notification tabs
+* [33mda0dab7[m fix(admin): Fix tab navigation in Billing Statement SMS Settings - Changed tab switching to use explicit add/remove for hidden class - Added initializeSmsNotificationTabs() to ensure Bill Statement tab is visible on load - Fixes issue where template editors disappeared when navigating tabs
