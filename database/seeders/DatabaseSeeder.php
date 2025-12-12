@@ -37,8 +37,18 @@ class DatabaseSeeder extends Seeder
                         continue;
                     }
 
-                    // Skip migrations table to avoid duplicates there
+                    // Start skipping if we hit migrations insert
                     if (Str::contains($line, 'INSERT INTO `migrations`') || Str::contains($line, 'INSERT INTO migrations')) {
+                        $count++;
+                        $query = ""; // Clear any partial query
+                        // Consume lines until we find the semicolon
+                        if (!str_ends_with($trimLine, ';')) {
+                            while (($nextLine = fgets($handle)) !== false) {
+                                if (str_ends_with(trim($nextLine), ';')) {
+                                    break;
+                                }
+                            }
+                        }
                         continue;
                     }
 
@@ -51,6 +61,7 @@ class DatabaseSeeder extends Seeder
                             if ($count % 50 == 0) $this->command->getOutput()->write('.');
                         } catch (\Exception $e) {
                              $this->command->error("Error importing statement: " . $e->getMessage());
+                             // Optional: don't stop on error, just log it. The loop continues.
                         }
                         $query = "";
                     }

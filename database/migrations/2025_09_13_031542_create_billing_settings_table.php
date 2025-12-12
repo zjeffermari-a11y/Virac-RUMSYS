@@ -22,37 +22,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // --- CORRECTED SEED DATA ---
-        // All arrays now have the same keys to prevent the column count mismatch error.
-        DB::table('billing_settings')->insert([
-            [
-                'utility_type' => 'Rent',
-                'surcharge_rate' => 0.25,
-                'monthly_interest_rate' => 0.02,
-                'penalty_rate' => 0.00,
-                'discount_rate' => 0.00,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'utility_type' => 'Electricity',
-                'surcharge_rate' => 0.00,
-                'monthly_interest_rate' => 0.00,
-                'penalty_rate' => 0.10,
-                'discount_rate' => 0.00,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'utility_type' => 'Water',
-                'surcharge_rate' => 0.00,
-                'monthly_interest_rate' => 0.00,
-                'penalty_rate' => 0.10,
-                'discount_rate' => 0.00,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-        ]);
+        // Seed data removed to avoid conflicts with DatabaseSeeder/SQL dump
     }
 
     /**

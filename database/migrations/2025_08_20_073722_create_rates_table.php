@@ -9,6 +9,7 @@ return new class extends Migration {
         Schema::create('rates', function (Blueprint $table) {
             $table->id();
             $table->enum('utility_type', ['Rent','Electricity','Water']);
+            $table->foreignId('section_id')->nullable()->constrained('sections')->onDelete('cascade');
             $table->decimal('rate', 10, 2);
             $table->timestamps();
         });
