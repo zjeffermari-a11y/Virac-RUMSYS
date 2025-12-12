@@ -11,11 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (!Schema::hasColumn('users', 'profile_picture')) {
-            Schema::table('users', function (Blueprint $table) {
-                $table->string('profile_picture')->nullable()->after('contact_number');
-            });
-        }
+        // Consolidated into create_users_table
     }
 
     /**

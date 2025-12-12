@@ -12,8 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Alter the column from VARCHAR to LONGTEXT to store base64 image data
-        DB::statement('ALTER TABLE users MODIFY COLUMN profile_picture LONGTEXT NULL');
+        // Consolidated into create_users_table
     }
 
     /**
