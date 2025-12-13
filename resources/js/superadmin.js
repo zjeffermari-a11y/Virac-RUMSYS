@@ -7059,6 +7059,13 @@ class SuperAdminDashboard {
                     Stall ${change.table_number}: ₱${parseFloat(change.old_daily_rate).toFixed(2)}/day → ₱${parseFloat(change.new_daily_rate).toFixed(2)}/day<br>
                 `;
             });
+        } else if (changeData.changeType === 'meter_reading_schedule') {
+            const data = changeData.changeData;
+            detailsHtml = `
+                <strong>Meter Reading Schedule Change:</strong><br>
+                Old Day: Day ${data.old_day}<br>
+                New Day: Day ${data.new_day}<br>
+            `;
         }
 
         detailsDiv.innerHTML = detailsHtml;
@@ -7153,11 +7160,21 @@ class SuperAdminDashboard {
                         this.filterAndRenderRates(this.rentalRatesPagination.current_page || 1);
                     }
                 } else if (url.includes('schedules')) {
-                    await this.fetchBillingDateSchedules();
-                    this.billingDateHistory = [];
-                    this.billingDateHistoryPage = 1;
-                    this.billingDateHistoryHasMore = true;
-                    await this.fetchBillingDateHistory();
+                    if (url.includes('meter-reading')) {
+                        // Meter reading schedule update
+                        await this.fetchMeterReadingSchedule();
+                        this.scheduleHistory = [];
+                        this.scheduleHistoryPage = 1;
+                        this.scheduleHistoryHasMore = true;
+                        await this.fetchMeterReadingScheduleHistory();
+                    } else {
+                        // Billing dates schedules
+                        await this.fetchBillingDateSchedules();
+                        this.billingDateHistory = [];
+                        this.billingDateHistoryPage = 1;
+                        this.billingDateHistoryHasMore = true;
+                        await this.fetchBillingDateHistory();
+                    }
                 } else if (url.includes('billing-settings')) {
                     await this.fetchBillingSettings();
                     this.billingSettingsHistory = [];

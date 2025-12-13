@@ -45,18 +45,38 @@ class ScheduleController extends Controller
         }
 
         try {
+            $schedule = DB::table('schedules')->where('id', $scheduleId)->first();
+            if (!$schedule) {
+                throw new \Exception('Schedule not found.');
+            }
+
+            $oldDay = $schedule->description;
+            $newDay = $request->input('day');
+
+            // Check if day has actually changed
+            if ($oldDay == $newDay) {
+                return response()->json(['message' => 'No changes detected.']);
+            }
+
+            // Check if we need to show modal
             $effectiveToday = $request->input('effectiveToday');
+            
+            if ($effectiveToday === null) {
+                // Return change info for modal
+                return response()->json([
+                    'changeDetected' => true,
+                    'changeType' => 'meter_reading_schedule',
+                    'changeData' => [
+                        'old_day' => $oldDay,
+                        'new_day' => $newDay,
+                    ],
+                    'requiresConfirmation' => true,
+                ]);
+            }
+
             $pendingChangeId = null;
 
-            DB::transaction(function () use ($request, $scheduleId, $effectiveToday, $notificationService, &$pendingChangeId) {
-                $schedule = DB::table('schedules')->where('id', $scheduleId)->first();
-                if (!$schedule) {
-                    throw new \Exception('Schedule not found.');
-                }
-
-                $oldDay = $schedule->description;
-                $newDay = $request->input('day');
-                
+            DB::transaction(function () use ($request, $scheduleId, $effectiveToday, $notificationService, &$pendingChangeId, $oldDay, $newDay) {
                 // Determine effectivity date based on effectiveToday
                 $effectivityDate = $effectiveToday
                     ? \Carbon\Carbon::now()->format('Y-m-d')
