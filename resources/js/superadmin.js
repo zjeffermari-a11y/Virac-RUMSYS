@@ -2519,7 +2519,9 @@ class SuperAdminDashboard {
         this.auditTrails = [];
         this.auditTrailsPage = 1;
         this.auditTrailsHasMore = true;
-        this.elements.auditTrailsTableBody.innerHTML = ""; // Clear table immediately
+        if (this.elements.auditTrailsTableBody) {
+            this.elements.auditTrailsTableBody.innerHTML = ""; // Clear table immediately
+        }
         this.fetchAuditTrails();
     }
 
@@ -2527,7 +2529,9 @@ class SuperAdminDashboard {
         if (this.isFetchingAuditTrails || !this.auditTrailsHasMore) return;
 
         this.isFetchingAuditTrails = true;
-        this.elements.auditTrailsLoader.classList.remove("hidden");
+        if (this.elements.auditTrailsLoader) {
+            this.elements.auditTrailsLoader.classList.remove("hidden");
+        }
 
         const params = new URLSearchParams(this.auditTrailFilters);
         params.append("page", this.auditTrailsPage);
@@ -2539,22 +2543,48 @@ class SuperAdminDashboard {
             if (!response.ok) throw new Error("Could not fetch audit trails.");
 
             const data = await response.json();
+            
+            // Debug logging
+            console.log("Audit trails response:", {
+                total: data.total,
+                current_page: data.current_page,
+                per_page: data.per_page,
+                data_count: data.data ? data.data.length : 0,
+                has_more: data.next_page_url !== null
+            });
 
-            this.auditTrails.push(...data.data);
-            this.auditTrailsHasMore = data.next_page_url !== null;
-            this.auditTrailsPage++;
+            if (data.data && Array.isArray(data.data)) {
+                // For pagination, only append new items
+                if (this.auditTrailsPage === 1) {
+                    // First page - replace all
+                    this.auditTrails = [...data.data];
+                } else {
+                    // Subsequent pages - append
+                    this.auditTrails.push(...data.data);
+                }
+                this.auditTrailsHasMore = data.next_page_url !== null;
+                this.auditTrailsPage++;
+            } else {
+                // Handle non-paginated response
+                this.auditTrails = Array.isArray(data) ? data : [];
+                this.auditTrailsHasMore = false;
+            }
+            
             this.renderAuditTrails();
         } catch (error) {
             console.error("Failed to fetch audit trails:", error);
             this.showToast("Failed to load audit trail data.", "error");
         } finally {
             this.isFetchingAuditTrails = false;
-            this.elements.auditTrailsLoader.classList.add("hidden");
+            if (this.elements.auditTrailsLoader) {
+                this.elements.auditTrailsLoader.classList.add("hidden");
+            }
         }
     }
 
     renderAuditTrails() {
         const tableBody = this.elements.auditTrailsTableBody;
+        if (!tableBody) return;
 
         if (this.auditTrails.length === 0) {
             tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">No audit trail records found for the selected filters.</td></tr>`;
@@ -2567,9 +2597,8 @@ class SuperAdminDashboard {
             Error: "text-orange-600",
         };
 
-        // Append new rows instead of replacing innerHTML for infinite scroll
-        const newRowsHtml = this.auditTrails
-            .slice((this.auditTrailsPage - 2) * 25) // Only render the newly fetched items
+        // Render all audit trails (for proper display on filter change)
+        const rowsHtml = this.auditTrails
             .map((log) => {
                 const formattedDate = new Date(log.date_time).toLocaleString(
                     "en-US",
@@ -2617,7 +2646,14 @@ class SuperAdminDashboard {
             })
             .join("");
 
-        tableBody.insertAdjacentHTML("beforeend", newRowsHtml);
+        // Replace all on first page, append on subsequent pages
+        if (this.auditTrailsPage === 2) {
+            // First page - replace all
+            tableBody.innerHTML = rowsHtml.join('');
+        } else {
+            // Subsequent pages - append
+            tableBody.insertAdjacentHTML("beforeend", rowsHtml.join(''));
+        }
     }
 
     setupNotificationSectionEventListeners() {

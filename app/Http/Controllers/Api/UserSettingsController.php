@@ -133,16 +133,12 @@ class UserSettingsController extends Controller
             );
 
             // Generate absolute URL for the profile picture
-            $url = Storage::disk('public')->url($path);
-            // Ensure it's an absolute URL - remove leading slash if present and use asset()
-            $url = str_replace('//', '/', $url);
+            // Use asset() directly for cloud compatibility
+            $url = asset('storage/' . $path);
+            
+            // Ensure it's an absolute URL
             if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                // If it starts with /storage, use asset() to make it absolute
-                if (strpos($url, '/storage') === 0) {
-                    $url = asset($url);
-                } else {
-                    $url = url($url);
-                }
+                $url = url('storage/' . $path);
             }
             
             \Log::info('Profile picture uploaded successfully', [
