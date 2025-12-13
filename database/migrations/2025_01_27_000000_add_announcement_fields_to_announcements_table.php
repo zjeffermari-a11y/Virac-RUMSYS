@@ -12,10 +12,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('announcements', function (Blueprint $table) {
-            $table->string('announcement_type')->nullable()->after('content');
-            $table->string('related_section')->nullable()->after('announcement_type');
-            $table->string('related_utility')->nullable()->after('related_section');
-            $table->unsignedBigInteger('related_stall_id')->nullable()->after('related_utility');
+            if (!Schema::hasColumn('announcements', 'announcement_type')) {
+                $table->string('announcement_type')->nullable()->after('content');
+            }
+            if (!Schema::hasColumn('announcements', 'related_section')) {
+                $table->string('related_section')->nullable()->after('announcement_type');
+            }
+            if (!Schema::hasColumn('announcements', 'related_utility')) {
+                $table->string('related_utility')->nullable()->after('related_section');
+            }
+            if (!Schema::hasColumn('announcements', 'related_stall_id')) {
+                $table->unsignedBigInteger('related_stall_id')->nullable()->after('related_utility');
+            }
         });
     }
 
@@ -25,7 +33,22 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('announcements', function (Blueprint $table) {
-            $table->dropColumn(['announcement_type', 'related_section', 'related_utility', 'related_stall_id']);
+            $columnsToDrop = [];
+            if (Schema::hasColumn('announcements', 'announcement_type')) {
+                $columnsToDrop[] = 'announcement_type';
+            }
+            if (Schema::hasColumn('announcements', 'related_section')) {
+                $columnsToDrop[] = 'related_section';
+            }
+            if (Schema::hasColumn('announcements', 'related_utility')) {
+                $columnsToDrop[] = 'related_utility';
+            }
+            if (Schema::hasColumn('announcements', 'related_stall_id')) {
+                $columnsToDrop[] = 'related_stall_id';
+            }
+            if (!empty($columnsToDrop)) {
+                $table->dropColumn($columnsToDrop);
+            }
         });
     }
 };
