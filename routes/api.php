@@ -125,7 +125,7 @@ Route::delete('/user-settings/remove-profile-picture', [UserSettingsController::
 use App\Http\Controllers\Api\AuditTrailController;
 
 // route for fetching audit trail logs
-Route::get('/audit-trails', [AuditTrailController::class, 'index']);
+Route::get('/audit-trails', [AuditTrailController::class, 'index'])->middleware('auth:sanctum');
 
 use App\Http\Controllers\Api\BillingSettingsController;
 

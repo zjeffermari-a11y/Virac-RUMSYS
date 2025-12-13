@@ -955,6 +955,10 @@ class SuperAdminDashboard {
                 this.filterAndRenderRates();
                 break;
             case "auditTrailsSection":
+                // Reset audit trails state when section is opened
+                this.auditTrails = [];
+                this.auditTrailsPage = 1;
+                this.auditTrailsHasMore = true;
                 await this.fetchAuditTrails();
                 break;
             case "billingStatementSmsNotificationSettingsSection":

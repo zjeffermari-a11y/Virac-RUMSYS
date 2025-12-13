@@ -1938,8 +1938,9 @@
                     <div class="relative inline-block">
                         <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
                             @if(auth()->user()->profile_picture)
-                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
-                                     alt="Profile Picture" class="w-full h-full object-cover">
+                                <img id="profilePictureImg" src="{{ asset('storage/' . auth()->user()->profile_picture) }}" 
+                                     alt="Profile Picture" class="w-full h-full object-cover"
+                                     onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
                             @else
                                 <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">
                                     <i class="fas fa-user text-6xl text-gray-400"></i>

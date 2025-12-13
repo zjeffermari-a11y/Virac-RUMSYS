@@ -13,18 +13,19 @@ class AuditTrailController extends Controller
      */
   public function index(Request $request)
     {
-        $query = DB::table('audit_trails as at')
-            ->join('users as u', 'at.user_id', '=', 'u.id')
-            ->join('roles as r', 'at.role_id', '=', 'r.id')
-            ->select(
-                'at.created_at as date_time',
-                'u.name as user_name',
-                'r.name as user_role',
-                'at.action',
-                'at.module',
-                'at.result',
-                'at.details'
-            );
+        try {
+            $query = DB::table('audit_trails as at')
+                ->join('users as u', 'at.user_id', '=', 'u.id')
+                ->join('roles as r', 'at.role_id', '=', 'r.id')
+                ->select(
+                    'at.created_at as date_time',
+                    'u.name as user_name',
+                    'r.name as user_role',
+                    'at.action',
+                    'at.module',
+                    'at.result',
+                    'at.details'
+                );
 
         // Search by user name or action
         if ($request->filled('search')) {

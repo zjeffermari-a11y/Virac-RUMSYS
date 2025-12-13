@@ -111,10 +111,11 @@
                             <div id="sidebarProfileImage"
                                 class="w-20 h-20 rounded-xl bg-gray-200 flex items-center justify-center shadow-inner overflow-hidden">
                                 @if(Auth::user()->profile_picture)
-                                    <img src="{{ Storage::url(Auth::user()->profile_picture) }}" 
+                                    <img src="{{ asset('storage/' . Auth::user()->profile_picture) }}" 
                                          alt="Profile" 
                                          class="w-full h-full object-cover"
-                                         id="sidebarProfilePicture">
+                                         id="sidebarProfilePicture"
+                                         onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
                                     <i id="sidebarProfileIcon" class="fas fa-user text-4xl text-gray-400 hidden"></i>
                                 @else
                                     <img id="sidebarProfilePicture" src="" alt="Profile" class="w-full h-full object-cover hidden">
