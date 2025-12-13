@@ -216,14 +216,36 @@ class User extends Authenticatable
             return null;
         }
         
-        // Generate URL from B2 - returns full public URL
-        $url = \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
-        
-        // Ensure HTTPS (B2 URLs should already be HTTPS)
-        if (strpos($url, 'http://') === 0) {
-            $url = str_replace('http://', 'https://', $url);
+        try {
+            // Generate URL from B2 - returns full public URL
+            $url = \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
+            
+            // If URL is not a full URL, construct it manually using B2_URL config
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                $b2Url = config('filesystems.disks.b2.url');
+                if ($b2Url) {
+                    // Construct full URL: B2_URL + path
+                    $url = rtrim($b2Url, '/') . '/' . ltrim($this->profile_picture, '/');
+                }
+            }
+            
+            // Ensure HTTPS (B2 URLs should already be HTTPS)
+            if (strpos($url, 'http://') === 0) {
+                $url = str_replace('http://', 'https://', $url);
+            }
+            
+            return $url;
+        } catch (\Exception $e) {
+            \Log::error('Failed to generate profile picture URL from B2', [
+                'path' => $this->profile_picture,
+                'error' => $e->getMessage()
+            ]);
+            // Fallback: try to construct URL manually
+            $b2Url = config('filesystems.disks.b2.url');
+            if ($b2Url) {
+                return rtrim($b2Url, '/') . '/' . ltrim($this->profile_picture, '/');
+            }
+            return null;
         }
-        
-        return $url;
     }
 }

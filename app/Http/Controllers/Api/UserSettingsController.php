@@ -140,12 +140,53 @@ class UserSettingsController extends Controller
             );
 
             // Generate absolute URL for the profile picture from B2
-            // B2 returns full public URLs when visibility is 'public'
-            $url = Storage::disk('b2')->url($path);
+            try {
+                // B2 returns full public URLs when visibility is 'public'
+                $url = Storage::disk('b2')->url($path);
+                
+                // If URL is not a full URL, construct it manually using B2_URL config
+                if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                    $b2Url = config('filesystems.disks.b2.url');
+                    if ($b2Url) {
+                        // Construct full URL: B2_URL + path
+                        $url = rtrim($b2Url, '/') . '/' . ltrim($path, '/');
+                    } else {
+                        // Fallback: use Storage URL even if relative
+                        $url = Storage::disk('b2')->url($path);
+                    }
+                }
+                
+                // Ensure HTTPS (B2 URLs should already be HTTPS, but just in case)
+                if (strpos($url, 'http://') === 0) {
+                    $url = str_replace('http://', 'https://', $url);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Failed to generate B2 URL', [
+                    'path' => $path,
+                    'error' => $e->getMessage()
+                ]);
+                // Fallback: try to construct URL manually
+                $b2Url = config('filesystems.disks.b2.url');
+                if ($b2Url) {
+                    $url = rtrim($b2Url, '/') . '/' . ltrim($path, '/');
+                } else {
+                    throw new \Exception('B2 URL configuration is missing. Please set B2_URL in .env file.');
+                }
+            }
             
-            // Ensure HTTPS (B2 URLs should already be HTTPS, but just in case)
-            if (strpos($url, 'http://') === 0) {
-                $url = str_replace('http://', 'https://', $url);
+            // Try to get file info (wrap in try-catch to prevent failure if check fails)
+            $fileExists = false;
+            $fileSize = 'N/A';
+            try {
+                $fileExists = Storage::disk('b2')->exists($path);
+                if ($fileExists) {
+                    $fileSize = Storage::disk('b2')->size($path) ?? 'N/A';
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Could not verify file existence in B2', [
+                    'path' => $path,
+                    'error' => $e->getMessage()
+                ]);
             }
             
             \Log::info('Profile picture uploaded successfully to B2', [
@@ -155,23 +196,38 @@ class UserSettingsController extends Controller
                 'app_url' => config('app.url'),
                 'app_env' => config('app.env'),
                 'profile_picture_field' => $user->profile_picture,
-                'storage_exists' => Storage::disk('b2')->exists($path),
-                'file_size' => Storage::disk('b2')->size($path) ?? 'N/A',
+                'storage_exists' => $fileExists,
+                'file_size' => $fileSize,
                 'is_full_url' => filter_var($url, FILTER_VALIDATE_URL)
             ]);
             
             return response()->json([
                 'message' => 'Profile picture uploaded successfully.',
                 'profile_picture_url' => $url,
-                'profile_picture_path' => $path
+                'profile_picture_path' => $path,
+                'success' => true
             ]);
         } catch (\Exception $e) {
             \Log::error('Profile picture upload failed: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
+                'error_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ]);
+            
+            // Provide more helpful error message
+            $errorMessage = 'Failed to upload profile picture';
+            if (strpos($e->getMessage(), 'B2_URL') !== false || strpos($e->getMessage(), 'configuration') !== false) {
+                $errorMessage .= ': B2 storage is not configured. Please check your .env file for B2 credentials.';
+            } else {
+                $errorMessage .= ': ' . $e->getMessage();
+            }
+            
             return response()->json([
-                'message' => 'Failed to upload profile picture: ' . $e->getMessage()
+                'message' => $errorMessage,
+                'success' => false,
+                'error' => $e->getMessage()
             ], 500);
         }
     }
