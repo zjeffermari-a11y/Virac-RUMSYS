@@ -703,9 +703,10 @@ class SuperAdminDashboard {
                 if (!this.listenersInitialized.effectivityDateManagement) {
                     this.setupEffectivityDateManagementEventListeners();
                     this.listenersInitialized.effectivityDateManagement = true;
-                    this.loadPendingChanges();
-                    this.loadBillGenerationSchedules();
                 }
+                // Always load pending changes when section is shown (to handle hash navigation)
+                this.loadPendingChanges();
+                this.loadBillGenerationSchedules();
                 break;
         }
     }
@@ -6556,6 +6557,7 @@ class SuperAdminDashboard {
             this.pendingChanges = data.pending_changes || [];
 
             // Check if we need to prioritize a specific change
+            // Don't clear sessionStorage here - let renderPendingChanges handle it after rendering
             const focusChange = sessionStorage.getItem('pendingChangeFocus');
             if (focusChange) {
                 try {
@@ -6570,8 +6572,6 @@ class SuperAdminDashboard {
                         if (!aMatches && bMatches) return 1;
                         return 0;
                     });
-                    // Clear the focus after using it
-                    sessionStorage.removeItem('pendingChangeFocus');
                 } catch (e) {
                     console.error('Error parsing pendingChangeFocus:', e);
                     sessionStorage.removeItem('pendingChangeFocus');
@@ -6613,8 +6613,10 @@ class SuperAdminDashboard {
         if (focusChange) {
             try {
                 focusData = JSON.parse(focusChange);
+                console.log('Rendering with focus data:', focusData);
             } catch (e) {
                 console.error('Error parsing pendingChangeFocus:', e);
+                sessionStorage.removeItem('pendingChangeFocus');
             }
         }
 
@@ -6677,17 +6679,31 @@ class SuperAdminDashboard {
         
         // Scroll to focused change if it exists
         if (focusData) {
-            const focusedRow = tableBody.querySelector('tr.bg-yellow-50');
-            if (focusedRow) {
-                setTimeout(() => {
+            // Use a longer timeout to ensure DOM is fully rendered and section is visible
+            setTimeout(() => {
+                const focusedRow = tableBody.querySelector('tr.bg-yellow-50');
+                if (focusedRow) {
+                    // Scroll the row into view
                     focusedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Also scroll the container if needed
+                    const container = document.getElementById('pendingChangesContainer');
+                    if (container) {
+                        const containerRect = container.getBoundingClientRect();
+                        const rowRect = focusedRow.getBoundingClientRect();
+                        if (rowRect.top < containerRect.top || rowRect.bottom > containerRect.bottom) {
+                            container.scrollTop = focusedRow.offsetTop - container.offsetTop - 100;
+                        }
+                    }
                     // Clear focus after scrolling
+                    setTimeout(() => {
+                        sessionStorage.removeItem('pendingChangeFocus');
+                    }, 1000);
+                } else {
+                    // Clear focus if row not found after a delay
+                    console.warn('Focused row not found, clearing focus');
                     sessionStorage.removeItem('pendingChangeFocus');
-                }, 300);
-            } else {
-                // Clear focus if row not found
-                sessionStorage.removeItem('pendingChangeFocus');
-            }
+                }
+            }, 500);
         }
     }
 
@@ -7023,12 +7039,14 @@ class SuperAdminDashboard {
             }
 
             if (data.redirect) {
-                // Store pending change info if provided
+                // Store pending change info if provided - do this FIRST before any navigation
                 if (data.pendingChange && data.pendingChange.history_table && data.pendingChange.history_id) {
-                    sessionStorage.setItem('pendingChangeFocus', JSON.stringify({
+                    const focusData = {
                         history_table: data.pendingChange.history_table,
                         history_id: data.pendingChange.history_id
-                    }));
+                    };
+                    sessionStorage.setItem('pendingChangeFocus', JSON.stringify(focusData));
+                    console.log('Stored pendingChangeFocus:', focusData);
                 }
                 
                 this.showToast(data.message || 'Redirecting to Effectivity Date Management...', 'info');
@@ -7041,9 +7059,13 @@ class SuperAdminDashboard {
                         this.state.activeSection = 'effectivityDateManagementSection';
                         this.renderActiveSection();
                         // Initialize section listeners and load data
-                        this.initializeSection('effectivityDateManagementSection');
+                        // Add a small delay to ensure hash change is processed
+                        setTimeout(() => {
+                            this.initializeSection('effectivityDateManagementSection');
+                        }, 100);
                     } else {
                         // Full page redirect if we're on a different page
+                        // sessionStorage will persist across page loads
                         window.location.href = redirectUrl;
                     }
                 }, 1500);
