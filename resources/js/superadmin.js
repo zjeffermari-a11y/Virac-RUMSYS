@@ -6591,7 +6591,19 @@ class SuperAdminDashboard {
             if (data.redirect) {
                 this.showToast(data.message || 'Redirecting to Effectivity Date Management...', 'info');
                 setTimeout(() => {
-                    window.location.href = data.redirectUrl || '/superadmin#effectivityDateManagementSection';
+                    const redirectUrl = data.redirectUrl || '/superadmin#effectivityDateManagementSection';
+                    // If we're already on the superadmin page, just change the hash and show the section
+                    if (window.location.pathname === '/superadmin' || window.location.pathname === '/superadmin/') {
+                        window.location.hash = 'effectivityDateManagementSection';
+                        // Set active section and render it
+                        this.state.activeSection = 'effectivityDateManagementSection';
+                        this.renderActiveSection();
+                        // Initialize section listeners and load data
+                        this.initializeSection('effectivityDateManagementSection');
+                    } else {
+                        // Full page redirect if we're on a different page
+                        window.location.href = redirectUrl;
+                    }
                 }, 1500);
             } else {
                 this.showToast(data.message || 'Change saved successfully!', 'success');
