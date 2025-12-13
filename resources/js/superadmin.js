@@ -895,6 +895,32 @@ class SuperAdminDashboard {
         }
     }
 
+    async fetchAnnouncementSemaphoreCredits() {
+        if (!this.elements.announcementSemaphoreCreditBalance) return;
+
+        try {
+            const response = await fetch("/api/notification-templates/credits");
+            if (!response.ok) throw new Error("Failed to fetch credits");
+
+            const data = await response.json();
+            if (data.success) {
+                this.elements.announcementSemaphoreCreditBalance.textContent = data.credit_balance;
+            } else {
+                if (data.rate_limited) {
+                    this.elements.announcementSemaphoreCreditBalance.textContent = "Rate Limited";
+                    this.elements.announcementSemaphoreCreditBalance.title = "Too many requests. Please wait a few minutes before refreshing.";
+                } else {
+                    this.elements.announcementSemaphoreCreditBalance.textContent = "Error";
+                    this.elements.announcementSemaphoreCreditBalance.title = data.message || "Failed to fetch credits";
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching Semaphore credits for announcements:", error);
+            this.elements.announcementSemaphoreCreditBalance.textContent = "Error";
+            this.elements.announcementSemaphoreCreditBalance.title = "Network error. Please try again later.";
+        }
+    }
+
     render() {
         this.renderActiveSection();
     }
