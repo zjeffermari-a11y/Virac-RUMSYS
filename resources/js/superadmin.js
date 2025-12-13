@@ -6562,6 +6562,7 @@ class SuperAdminDashboard {
             if (focusChange) {
                 try {
                     const focusData = JSON.parse(focusChange);
+                    console.log('Found pendingChangeFocus, sorting changes:', focusData);
                     // Sort changes so the focused one appears first
                     this.pendingChanges.sort((a, b) => {
                         const aMatches = a.history_table === focusData.history_table && 
@@ -6572,6 +6573,7 @@ class SuperAdminDashboard {
                         if (!aMatches && bMatches) return 1;
                         return 0;
                     });
+                    console.log('Sorted pending changes, focused item should be first');
                 } catch (e) {
                     console.error('Error parsing pendingChangeFocus:', e);
                     sessionStorage.removeItem('pendingChangeFocus');
@@ -6679,9 +6681,11 @@ class SuperAdminDashboard {
         
         // Scroll to focused change if it exists
         if (focusData) {
+            console.log('Attempting to scroll to focused change');
             // Use a longer timeout to ensure DOM is fully rendered and section is visible
             setTimeout(() => {
                 const focusedRow = tableBody.querySelector('tr.bg-yellow-50');
+                console.log('Focused row found:', focusedRow);
                 if (focusedRow) {
                     // Scroll the row into view
                     focusedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -6696,14 +6700,17 @@ class SuperAdminDashboard {
                     }
                     // Clear focus after scrolling
                     setTimeout(() => {
+                        console.log('Clearing pendingChangeFocus after scroll');
                         sessionStorage.removeItem('pendingChangeFocus');
-                    }, 1000);
+                    }, 1500);
                 } else {
                     // Clear focus if row not found after a delay
-                    console.warn('Focused row not found, clearing focus');
+                    console.warn('Focused row not found, clearing focus. Available rows:', tableBody.querySelectorAll('tr').length);
                     sessionStorage.removeItem('pendingChangeFocus');
                 }
-            }, 500);
+            }, 800);
+        } else {
+            console.log('No focus data found in renderPendingChanges');
         }
     }
 
