@@ -27,10 +27,10 @@ class EffectivityDateController extends Controller
         $today = Carbon::today();
         $pendingChanges = [];
 
-        // 0. Get pending Rental Rate changes (stored in audit_trails)
+        // 0. Get ALL pending Rental Rate changes (stored in audit_trails)
         $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
         if ($hasDetailsColumn) {
-            // Get all recent rental rate audit entries
+            // Get all rental rate audit entries with future effectivity dates
             $rentalRateAudits = DB::table('audit_trails')
                 ->where('module', 'Rental Rates')
                 ->whereIn('action', ['Updated Rental Rate', 'Updated Rental Rates'])
@@ -214,48 +214,104 @@ class EffectivityDateController extends Controller
             }
         }
 
-        // 3. Get pending Billing Settings changes (Discounts, Surcharges, Monthly Interest Rate - 3 total)
+        // 3. Get pending Billing Settings changes (Discount Rate, Surcharge Rate, Monthly Interest Rate for Electricity - 3 total)
         $hasBillingSettingEffectivityDate = DB::getSchemaBuilder()->hasColumn('billing_setting_histories', 'effectivity_date');
         if ($hasBillingSettingEffectivityDate) {
-            // Get latest pending change for: Discount Rate, Surcharge Rate, Monthly Interest Rate
-            $billingSettingFields = [
-                'discount_rate' => 'Discount Rate',
-                'surcharge_rate' => 'Surcharge Rate', 
-                'monthly_interest_rate' => 'Monthly Interest Rate'
-            ];
-            
-            foreach ($billingSettingFields as $field => $fieldDisplayName) {
-                // Get the latest pending change for this field (any utility type)
-                $latestChange = DB::table('billing_setting_histories as bsh')
-                    ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
-                    ->where('bsh.field_changed', $field)
-                    ->whereNotNull('bsh.effectivity_date')
-                    ->whereDate('bsh.effectivity_date', '>=', $today)
-                    ->select(
-                        'bsh.id',
-                        'bs.utility_type',
-                        'bsh.field_changed',
-                        'bsh.old_value',
-                        'bsh.new_value',
-                        'bsh.effectivity_date',
-                        'bsh.changed_at'
-                    )
-                    ->orderBy('bsh.changed_at', 'desc')
-                    ->first();
+            // 1. Get latest Discount Rate change (any utility type)
+            $latestDiscount = DB::table('billing_setting_histories as bsh')
+                ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
+                ->where('bsh.field_changed', 'discount_rate')
+                ->whereNotNull('bsh.effectivity_date')
+                ->whereDate('bsh.effectivity_date', '>=', $today)
+                ->select(
+                    'bsh.id',
+                    'bs.utility_type',
+                    'bsh.field_changed',
+                    'bsh.old_value',
+                    'bsh.new_value',
+                    'bsh.effectivity_date',
+                    'bsh.changed_at'
+                )
+                ->orderBy('bsh.changed_at', 'desc')
+                ->first();
 
-                if ($latestChange) {
-                    $pendingChanges[] = [
-                        'id' => $latestChange->id,
-                        'change_type' => 'billing_setting',
-                        'category' => 'Billing Settings',
-                        'item_name' => "{$latestChange->utility_type} - {$fieldDisplayName}",
-                        'description' => "{$fieldDisplayName}: {$latestChange->old_value} → {$latestChange->new_value}",
-                        'effectivity_date' => $latestChange->effectivity_date,
-                        'changed_at' => $latestChange->changed_at,
-                        'history_table' => 'billing_setting_histories',
-                        'history_id' => $latestChange->id,
-                    ];
-                }
+            if ($latestDiscount) {
+                $pendingChanges[] = [
+                    'id' => $latestDiscount->id,
+                    'change_type' => 'billing_setting',
+                    'category' => 'Billing Settings',
+                    'item_name' => "{$latestDiscount->utility_type} - Discount Rate",
+                    'description' => "Discount Rate: {$latestDiscount->old_value} → {$latestDiscount->new_value}",
+                    'effectivity_date' => $latestDiscount->effectivity_date,
+                    'changed_at' => $latestDiscount->changed_at,
+                    'history_table' => 'billing_setting_histories',
+                    'history_id' => $latestDiscount->id,
+                ];
+            }
+
+            // 2. Get latest Surcharge Rate change (any utility type)
+            $latestSurcharge = DB::table('billing_setting_histories as bsh')
+                ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
+                ->where('bsh.field_changed', 'surcharge_rate')
+                ->whereNotNull('bsh.effectivity_date')
+                ->whereDate('bsh.effectivity_date', '>=', $today)
+                ->select(
+                    'bsh.id',
+                    'bs.utility_type',
+                    'bsh.field_changed',
+                    'bsh.old_value',
+                    'bsh.new_value',
+                    'bsh.effectivity_date',
+                    'bsh.changed_at'
+                )
+                ->orderBy('bsh.changed_at', 'desc')
+                ->first();
+
+            if ($latestSurcharge) {
+                $pendingChanges[] = [
+                    'id' => $latestSurcharge->id,
+                    'change_type' => 'billing_setting',
+                    'category' => 'Billing Settings',
+                    'item_name' => "{$latestSurcharge->utility_type} - Surcharge Rate",
+                    'description' => "Surcharge Rate: {$latestSurcharge->old_value} → {$latestSurcharge->new_value}",
+                    'effectivity_date' => $latestSurcharge->effectivity_date,
+                    'changed_at' => $latestSurcharge->changed_at,
+                    'history_table' => 'billing_setting_histories',
+                    'history_id' => $latestSurcharge->id,
+                ];
+            }
+
+            // 3. Get latest Monthly Interest Rate change for Electricity
+            $latestMonthlyInterest = DB::table('billing_setting_histories as bsh')
+                ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
+                ->where('bsh.field_changed', 'monthly_interest_rate')
+                ->where('bs.utility_type', 'Electricity')
+                ->whereNotNull('bsh.effectivity_date')
+                ->whereDate('bsh.effectivity_date', '>=', $today)
+                ->select(
+                    'bsh.id',
+                    'bs.utility_type',
+                    'bsh.field_changed',
+                    'bsh.old_value',
+                    'bsh.new_value',
+                    'bsh.effectivity_date',
+                    'bsh.changed_at'
+                )
+                ->orderBy('bsh.changed_at', 'desc')
+                ->first();
+
+            if ($latestMonthlyInterest) {
+                $pendingChanges[] = [
+                    'id' => $latestMonthlyInterest->id,
+                    'change_type' => 'billing_setting',
+                    'category' => 'Billing Settings',
+                    'item_name' => "Electricity - Monthly Interest Rate",
+                    'description' => "Monthly Interest Rate: {$latestMonthlyInterest->old_value} → {$latestMonthlyInterest->new_value}",
+                    'effectivity_date' => $latestMonthlyInterest->effectivity_date,
+                    'changed_at' => $latestMonthlyInterest->changed_at,
+                    'history_table' => 'billing_setting_histories',
+                    'history_id' => $latestMonthlyInterest->id,
+                ];
             }
         }
 
