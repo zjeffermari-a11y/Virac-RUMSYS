@@ -1157,9 +1157,26 @@ class SuperAdminDashboard {
 
         try {
             const response = await fetch(
-                `/api/audit-trails?${params.toString()}`
+                `/api/audit-trails?${params.toString()}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'include',
+                }
             );
-            if (!response.ok) throw new Error("Could not fetch audit trails.");
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Audit trails API error:", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                throw new Error(`Could not fetch audit trails: ${response.status} ${response.statusText}`);
+            }
 
             const data = await response.json();
 
