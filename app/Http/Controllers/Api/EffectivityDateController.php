@@ -31,35 +31,38 @@ class EffectivityDateController extends Controller
         // They can be added later if needed by parsing audit_trails details JSON
 
         // 1. Get pending Utility Rate changes
-        $utilityRateChanges = DB::table('rate_histories as rh')
-            ->join('rates as r', 'rh.rate_id', '=', 'r.id')
-            ->whereIn('r.utility_type', ['Electricity', 'Water'])
-            ->whereNotNull('rh.effectivity_date')
-            ->whereDate('rh.effectivity_date', '>=', $today)
-            ->select(
-                'rh.id',
-                DB::raw("'utility_rate' as change_type"),
-                'r.utility_type as item_name',
-                'rh.old_rate',
-                'rh.new_rate',
-                'rh.effectivity_date',
-                'rh.changed_at'
-            )
-            ->orderBy('rh.effectivity_date', 'asc')
-            ->get();
+        $hasRateEffectivityDate = DB::getSchemaBuilder()->hasColumn('rate_histories', 'effectivity_date');
+        if ($hasRateEffectivityDate) {
+            $utilityRateChanges = DB::table('rate_histories as rh')
+                ->join('rates as r', 'rh.rate_id', '=', 'r.id')
+                ->whereIn('r.utility_type', ['Electricity', 'Water'])
+                ->whereNotNull('rh.effectivity_date')
+                ->whereDate('rh.effectivity_date', '>=', $today)
+                ->select(
+                    'rh.id',
+                    DB::raw("'utility_rate' as change_type"),
+                    'r.utility_type as item_name',
+                    'rh.old_rate',
+                    'rh.new_rate',
+                    'rh.effectivity_date',
+                    'rh.changed_at'
+                )
+                ->orderBy('rh.effectivity_date', 'asc')
+                ->get();
 
-        foreach ($utilityRateChanges as $change) {
-            $pendingChanges[] = [
-                'id' => $change->id,
-                'change_type' => $change->change_type,
-                'category' => 'Utility Rates',
-                'item_name' => $change->item_name,
-                'description' => "Rate change: ₱{$change->old_rate} → ₱{$change->new_rate}",
-                'effectivity_date' => $change->effectivity_date,
-                'changed_at' => $change->changed_at,
-                'history_table' => 'rate_histories',
-                'history_id' => $change->id,
-            ];
+            foreach ($utilityRateChanges as $change) {
+                $pendingChanges[] = [
+                    'id' => $change->id,
+                    'change_type' => $change->change_type,
+                    'category' => 'Utility Rates',
+                    'item_name' => $change->item_name,
+                    'description' => "Rate change: ₱{$change->old_rate} → ₱{$change->new_rate}",
+                    'effectivity_date' => $change->effectivity_date,
+                    'changed_at' => $change->changed_at,
+                    'history_table' => 'rate_histories',
+                    'history_id' => $change->id,
+                ];
+            }
         }
 
         // 2. Get pending Schedule changes (Meter Reading, Due Date, Disconnection)
