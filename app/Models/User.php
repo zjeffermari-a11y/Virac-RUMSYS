@@ -217,20 +217,21 @@ class User extends Authenticatable
         }
         
         // Generate URL that works on both local and Laravel Cloud
-        $relativeUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($this->profile_picture);
-        $relativeUrl = ltrim($relativeUrl, '/');
+        $storageUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($this->profile_picture);
         
-        // Convert to absolute URL
-        $url = asset($relativeUrl);
+        // Check if it's already a full URL (starts with http:// or https://)
+        if (filter_var($storageUrl, FILTER_VALIDATE_URL)) {
+            $url = $storageUrl;
+        } else {
+            // It's a relative URL, make it absolute
+            // Remove leading slash to avoid double slashes
+            $relativePath = ltrim($storageUrl, '/');
+            $url = rtrim(config('app.url'), '/') . '/' . $relativePath;
+        }
         
         // Ensure HTTPS on production/cloud
         if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
             $url = str_replace('http://', 'https://', $url);
-        }
-        
-        // Fallback: if still relative, use full app URL
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            $url = rtrim(config('app.url'), '/') . '/' . ltrim($relativeUrl, '/');
         }
         
         return $url;

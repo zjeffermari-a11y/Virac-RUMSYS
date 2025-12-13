@@ -1196,7 +1196,7 @@ class SuperAdminDashboard {
                         this.auditTrails = [...data.data];
                     } else {
                         this.auditTrails.push(...data.data);
-                    }
+            }
                     this.auditTrailsHasMore = data.next_page_url !== null;
                     this.auditTrailsPage++;
                     this.renderAuditTrails();
@@ -2639,7 +2639,7 @@ class SuperAdminDashboard {
                         this.auditTrails = [...data.data];
                     } else {
                         this.auditTrails.push(...data.data);
-                    }
+            }
                     this.auditTrailsHasMore = data.next_page_url !== null;
                     this.auditTrailsPage++;
                     this.renderAuditTrails();
@@ -5246,19 +5246,33 @@ class SuperAdminDashboard {
                             container.appendChild(newImg);
                             img = newImg; // Update reference
                         } else {
-                            // Update existing image
+                            // Update existing image - force reload by clearing src first
                             img.onload = function() {
                                 this.classList.remove("hidden");
+                                this.style.display = '';
                                 if (placeholder) placeholder.classList.add("hidden");
                             };
                             img.onerror = function() {
                                 console.error("Failed to load profile picture:", imageUrl);
-                                this.style.display = 'none';
-                                if (placeholder) placeholder.classList.remove("hidden");
+                                console.error("Trying original URL without cache busting:", result.profile_picture_url);
+                                // Try without cache busting
+                                this.src = result.profile_picture_url;
+                                // If still fails, show placeholder
+                                this.onerror = function() {
+                                    this.style.display = 'none';
+                                    if (placeholder) {
+                                        placeholder.classList.remove("hidden");
+                                        placeholder.style.display = '';
+                                    }
+                                };
                             };
-                            img.src = imageUrl;
-                            img.classList.remove("hidden");
-                            if (placeholder) placeholder.classList.add("hidden");
+                            // Clear src first to force reload, then set new src
+                            img.src = '';
+                            setTimeout(() => {
+                                img.src = imageUrl;
+                                img.classList.remove("hidden");
+                                if (placeholder) placeholder.classList.add("hidden");
+                            }, 10);
                         }
                     }
                     

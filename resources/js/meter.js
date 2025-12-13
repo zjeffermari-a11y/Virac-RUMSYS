@@ -1979,15 +1979,22 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (response.ok) {
                             this.methods.showNotification(result.message || "Profile picture uploaded successfully!", "success");
                             if (img && result.profile_picture_url) {
-                                img.src = result.profile_picture_url;
+                                // Force reload by clearing src first
+                                img.src = '';
+                                setTimeout(() => {
+                                    img.src = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                                }, 10);
                             }
                             // Update sidebar profile picture
                             const sidebarImg = document.getElementById('sidebarProfilePicture');
                             const sidebarIcon = document.getElementById('sidebarProfileIcon');
                             if (sidebarImg && result.profile_picture_url) {
-                                sidebarImg.src = result.profile_picture_url;
-                                sidebarImg.classList.remove('hidden');
-                                if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                                sidebarImg.src = '';
+                                setTimeout(() => {
+                                    sidebarImg.src = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                                    sidebarImg.classList.remove('hidden');
+                                    if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                                }, 10);
                             }
                         } else {
                             this.methods.showNotification(result.message || "Failed to upload profile picture", "error");

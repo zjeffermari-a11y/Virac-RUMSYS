@@ -1118,9 +1118,12 @@ const MarketApp = {
                                 };
                             };
                             
-                            // Update the image source
-                            profileImg.src = imageUrl;
-                            profileImg.classList.remove("hidden");
+                            // Update the image source - force reload by clearing src first
+                            profileImg.src = '';
+                            setTimeout(() => {
+                                profileImg.src = imageUrl;
+                                profileImg.classList.remove("hidden");
+                            }, 10);
                             
                             // Hide placeholder if it still exists
                             if (placeholder && placeholder.parentNode) {

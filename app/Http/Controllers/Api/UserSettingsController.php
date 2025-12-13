@@ -133,36 +133,35 @@ class UserSettingsController extends Controller
             );
 
             // Generate absolute URL for the profile picture
-            // For Laravel Cloud compatibility, use asset() helper which handles both local and cloud
-            $relativeUrl = Storage::disk('public')->url($path);
+            // Storage::url() returns relative path like '/storage/profile-pictures/...'
+            $storageUrl = Storage::disk('public')->url($path);
             
-            // Convert to absolute URL
-            // Remove leading slash if present to avoid double slashes
-            $relativeUrl = ltrim($relativeUrl, '/');
-            
-            // Generate full URL using asset() or url() helper
-            $url = asset($relativeUrl);
+            // Check if it's already a full URL (starts with http:// or https://)
+            if (filter_var($storageUrl, FILTER_VALIDATE_URL)) {
+                $url = $storageUrl;
+            } else {
+                // It's a relative URL, make it absolute
+                // Remove leading slash to avoid double slashes
+                $relativePath = ltrim($storageUrl, '/');
+                $url = rtrim(config('app.url'), '/') . '/' . $relativePath;
+            }
             
             // Ensure HTTPS on production/cloud
             if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
                 $url = str_replace('http://', 'https://', $url);
             }
             
-            // Fallback: if still relative, use full app URL
-            if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                $url = rtrim(config('app.url'), '/') . '/' . ltrim($relativeUrl, '/');
-            }
-            
             \Log::info('Profile picture uploaded successfully', [
                 'user_id' => $user->id,
                 'path' => $path,
                 'url' => $url,
-                'relative_url' => $relativeUrl,
+                'storage_url' => $storageUrl,
                 'app_url' => config('app.url'),
                 'app_env' => config('app.env'),
                 'profile_picture_field' => $user->profile_picture,
                 'storage_exists' => Storage::disk('public')->exists($path),
-                'file_size' => Storage::disk('public')->size($path) ?? 'N/A'
+                'file_size' => Storage::disk('public')->size($path) ?? 'N/A',
+                'is_full_url' => filter_var($storageUrl, FILTER_VALIDATE_URL)
             ]);
             
             return response()->json([
