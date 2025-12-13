@@ -1328,13 +1328,6 @@ class SuperAdminDashboard {
             });
         }
 
-        // Debug sent messages button
-        const debugSentMessagesBtn = document.getElementById('debugSentMessagesBtn');
-        if (debugSentMessagesBtn) {
-            debugSentMessagesBtn.addEventListener('click', () => {
-                this.debugSentMessages();
-            });
-        }
     }
 
     async fetchSentMessages(page = 1) {
