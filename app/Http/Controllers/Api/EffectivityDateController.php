@@ -27,8 +27,43 @@ class EffectivityDateController extends Controller
         $today = Carbon::today();
         $pendingChanges = [];
 
-        // Note: Rental rates are stored in audit_trails, not rate_histories
-        // They can be added later if needed by parsing audit_trails details JSON
+        // 0. Get pending Rental Rate changes (stored in audit_trails)
+        $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
+        if ($hasDetailsColumn) {
+            $rentalRateChanges = DB::table('audit_trails')
+                ->where('module', 'Rental Rates')
+                ->where('action', 'Updated Rental Rate')
+                ->whereNotNull('details')
+                ->select('id', 'details', 'created_at')
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->filter(function ($audit) use ($today) {
+                    $details = json_decode($audit->details, true);
+                    if (!$details || !isset($details['effectivity_date'])) {
+                        return false;
+                    }
+                    $effectivityDate = Carbon::parse($details['effectivity_date']);
+                    return $effectivityDate->gte($today);
+                })
+                ->map(function ($audit) {
+                    $details = json_decode($audit->details, true);
+                    return [
+                        'id' => $audit->id,
+                        'change_type' => 'rental_rate',
+                        'category' => 'Rental Rates',
+                        'item_name' => $details['table_number'] ?? 'N/A',
+                        'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
+                        'effectivity_date' => $details['effectivity_date'],
+                        'changed_at' => $audit->created_at,
+                        'history_table' => 'audit_trails',
+                        'history_id' => $audit->id,
+                    ];
+                });
+
+            foreach ($rentalRateChanges as $change) {
+                $pendingChanges[] = $change;
+            }
+        }
 
         // 1. Get pending Utility Rate changes
         $hasRateEffectivityDate = DB::getSchemaBuilder()->hasColumn('rate_histories', 'effectivity_date');
@@ -167,7 +202,7 @@ class EffectivityDateController extends Controller
     {
 
         $validator = Validator::make($request->all(), [
-            'history_table' => 'required|string|in:rate_histories,schedule_histories,billing_setting_histories',
+            'history_table' => 'required|string|in:rate_histories,schedule_histories,billing_setting_histories,audit_trails',
             'history_id' => 'required|integer',
             'new_effectivity_date' => 'required|date',
         ]);
@@ -186,24 +221,43 @@ class EffectivityDateController extends Controller
             $currentMonthStart = $today->copy()->startOfMonth();
             $currentMonthEnd = $today->copy()->endOfMonth();
 
-            // Check if effectivity_date column exists
-            $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn($historyTable, 'effectivity_date');
-            if (!$hasEffectivityDate) {
-                return response()->json(['message' => 'Effectivity date column does not exist in this table.'], 400);
-            }
-
-            // Get the current effectivity date
+            // Get the current record
             $currentRecord = DB::table($historyTable)->where('id', $historyId)->first();
             if (!$currentRecord) {
                 return response()->json(['message' => 'Record not found.'], 404);
             }
 
-            $oldEffectivityDate = $currentRecord->effectivity_date;
+            $oldEffectivityDate = null;
 
-            // Update the effectivity date only - no bill regeneration
-            DB::table($historyTable)
-                ->where('id', $historyId)
-                ->update(['effectivity_date' => $newEffectivityDate]);
+            // Handle audit_trails differently (effectivity_date is in JSON details)
+            if ($historyTable === 'audit_trails') {
+                $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
+                if (!$hasDetailsColumn) {
+                    return response()->json(['message' => 'Details column does not exist in audit_trails.'], 400);
+                }
+
+                $details = json_decode($currentRecord->details, true) ?? [];
+                $oldEffectivityDate = $details['effectivity_date'] ?? null;
+
+                // Update the effectivity_date in the JSON details
+                $details['effectivity_date'] = $newEffectivityDate;
+                DB::table($historyTable)
+                    ->where('id', $historyId)
+                    ->update(['details' => json_encode($details)]);
+            } else {
+                // For other tables, check if effectivity_date column exists
+                $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn($historyTable, 'effectivity_date');
+                if (!$hasEffectivityDate) {
+                    return response()->json(['message' => 'Effectivity date column does not exist in this table.'], 400);
+                }
+
+                $oldEffectivityDate = $currentRecord->effectivity_date;
+
+                // Update the effectivity date only - no bill regeneration
+                DB::table($historyTable)
+                    ->where('id', $historyId)
+                    ->update(['effectivity_date' => $newEffectivityDate]);
+            }
 
             DB::commit();
 
@@ -243,6 +297,27 @@ class EffectivityDateController extends Controller
                             $currentRecord->old_value / 100, // Convert from percentage
                             $currentRecord->new_value / 100
                         );
+                    }
+                } elseif ($historyTable === 'audit_trails' && $currentRecord->module === 'Rental Rates') {
+                    // Get rental rate info from details JSON
+                    $details = json_decode($currentRecord->details, true) ?? [];
+                    if (isset($details['stall_id'])) {
+                        $stall = DB::table('stalls')->where('id', $details['stall_id'])->first();
+                        if ($stall) {
+                            // Create a simple object for the notification service
+                            $stallModel = (object) [
+                                'id' => $stall->id,
+                                'table_number' => $stall->table_number,
+                                'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
+                            ];
+                            $notificationService->sendRentalRateChangeNotification(
+                                $stallModel,
+                                $details['old_daily_rate'] ?? 0,
+                                $details['new_daily_rate'] ?? 0,
+                                $details['old_monthly_rate'] ?? null,
+                                $details['new_monthly_rate'] ?? null
+                            );
+                        }
                     }
                 }
             } catch (\Exception $e) {
