@@ -42,15 +42,13 @@ class EffectivityDateController extends Controller
             foreach ($rentalRateAudits as $audit) {
                 $details = json_decode($audit->details, true);
                 
-                // Debug: Log if details can't be parsed
+                // Skip if details can't be parsed
                 if (!$details) {
-                    Log::debug('Rental rate audit details not JSON', ['audit_id' => $audit->id, 'details_raw' => $audit->details]);
                     continue;
                 }
                 
                 // Check if effectivity_date exists in details
                 if (!isset($details['effectivity_date'])) {
-                    Log::debug('Rental rate audit missing effectivity_date', ['audit_id' => $audit->id, 'details_keys' => array_keys($details)]);
                     continue;
                 }
                 
@@ -58,75 +56,103 @@ class EffectivityDateController extends Controller
                     $effectivityDate = Carbon::parse($details['effectivity_date']);
                     // Only include if effectivity date is in the future (>= today)
                     if ($effectivityDate->gte($today)) {
-                        $pendingChanges[] = [
-                            'id' => $audit->id,
-                            'change_type' => 'rental_rate',
-                            'category' => 'Rental Rates',
-                            'item_name' => $details['table_number'] ?? 'N/A',
-                            'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
-                            'effectivity_date' => $details['effectivity_date'],
-                            'changed_at' => $audit->created_at,
-                            'history_table' => 'audit_trails',
-                            'history_id' => $audit->id,
-                        ];
-                    } else {
-                        Log::debug('Rental rate effectivity date is in the past', [
-                            'audit_id' => $audit->id,
-                            'effectivity_date' => $details['effectivity_date'],
-                            'today' => $today->format('Y-m-d')
-                        ]);
+                        // Check if this change hasn't been applied yet (stall rate != new_rate)
+                        $stallId = $details['stall_id'] ?? null;
+                        $newDailyRate = $details['new_daily_rate'] ?? null;
+                        
+                        $isPending = true;
+                        if ($stallId && $newDailyRate !== null) {
+                            $currentStallRate = DB::table('stalls')->where('id', $stallId)->value('daily_rate');
+                            // If the stall rate already matches the new rate, it's been applied
+                            if ($currentStallRate == $newDailyRate) {
+                                $isPending = false;
+                            }
+                        }
+                        
+                        if ($isPending) {
+                            $pendingChanges[] = [
+                                'id' => $audit->id,
+                                'change_type' => 'rental_rate',
+                                'category' => 'Rental Rates',
+                                'item_name' => $details['table_number'] ?? 'N/A',
+                                'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
+                                'effectivity_date' => $details['effectivity_date'],
+                                'changed_at' => $audit->created_at,
+                                'history_table' => 'audit_trails',
+                                'history_id' => $audit->id,
+                            ];
+                        }
                     }
                 } catch (\Exception $e) {
-                    Log::error('Error parsing rental rate effectivity date', [
-                        'audit_id' => $audit->id,
-                        'effectivity_date' => $details['effectivity_date'] ?? 'missing',
-                        'error' => $e->getMessage()
-                    ]);
+                    // Skip invalid dates
                     continue;
                 }
             }
         }
 
-        // 1. Get pending Utility Rate changes
+        // 1. Get pending Utility Rate changes (only latest per utility type)
         $hasRateEffectivityDate = DB::getSchemaBuilder()->hasColumn('rate_histories', 'effectivity_date');
         if ($hasRateEffectivityDate) {
-            $utilityRateChanges = DB::table('rate_histories as rh')
-                ->join('rates as r', 'rh.rate_id', '=', 'r.id')
-                ->whereIn('r.utility_type', ['Electricity', 'Water'])
-                ->whereNotNull('rh.effectivity_date')
-                ->whereDate('rh.effectivity_date', '>=', $today)
-                ->select(
-                    'rh.id',
-                    DB::raw("'utility_rate' as change_type"),
-                    'r.utility_type as item_name',
-                    'rh.old_rate',
-                    'rh.new_rate',
-                    'rh.effectivity_date',
-                    'rh.changed_at'
-                )
-                ->orderBy('rh.effectivity_date', 'asc')
-                ->get();
+            // Get the latest pending change for each utility type
+            $utilityTypes = ['Electricity', 'Water'];
+            foreach ($utilityTypes as $utilityType) {
+                // Get all pending changes for this utility type, then get the most recent one
+                $allChanges = DB::table('rate_histories as rh')
+                    ->join('rates as r', 'rh.rate_id', '=', 'r.id')
+                    ->where('r.utility_type', $utilityType)
+                    ->whereNotNull('rh.effectivity_date')
+                    ->whereDate('rh.effectivity_date', '>=', $today)
+                    ->select(
+                        'rh.id',
+                        'r.id as rate_id',
+                        'r.rate as current_rate',
+                        DB::raw("'utility_rate' as change_type"),
+                        'r.utility_type as item_name',
+                        'rh.old_rate',
+                        'rh.new_rate',
+                        'rh.effectivity_date',
+                        'rh.changed_at'
+                    )
+                    ->orderBy('rh.changed_at', 'desc')
+                    ->get();
 
-            foreach ($utilityRateChanges as $change) {
-                $pendingChanges[] = [
-                    'id' => $change->id,
-                    'change_type' => $change->change_type,
-                    'category' => 'Utility Rates',
-                    'item_name' => $change->item_name,
-                    'description' => "Rate change: ₱{$change->old_rate} → ₱{$change->new_rate}",
-                    'effectivity_date' => $change->effectivity_date,
-                    'changed_at' => $change->changed_at,
-                    'history_table' => 'rate_histories',
-                    'history_id' => $change->id,
-                ];
+                // Find the latest change that hasn't been applied yet (new_rate != current_rate)
+                $latestChange = null;
+                foreach ($allChanges as $change) {
+                    if ($change->new_rate != $change->current_rate) {
+                        $latestChange = $change;
+                        break;
+                    }
+                }
+
+                // If all changes are already applied, show the most recent pending one anyway
+                if (!$latestChange && $allChanges->isNotEmpty()) {
+                    $latestChange = $allChanges->first();
+                }
+
+                if ($latestChange) {
+                    $pendingChanges[] = [
+                        'id' => $latestChange->id,
+                        'change_type' => $latestChange->change_type,
+                        'category' => 'Utility Rates',
+                        'item_name' => $latestChange->item_name,
+                        'description' => "Rate change: ₱{$latestChange->old_rate} → ₱{$latestChange->new_rate}",
+                        'effectivity_date' => $latestChange->effectivity_date,
+                        'changed_at' => $latestChange->changed_at,
+                        'history_table' => 'rate_histories',
+                        'history_id' => $latestChange->id,
+                    ];
+                }
             }
         }
 
-        // 2. Get pending Schedule changes (Meter Reading, Due Date, Disconnection)
+        // 2. Get pending Schedule changes (Due Date & Disconnection - only latest of each type)
         $hasScheduleEffectivityDate = DB::getSchemaBuilder()->hasColumn('schedule_histories', 'effectivity_date');
         if ($hasScheduleEffectivityDate) {
-            $scheduleChanges = DB::table('schedule_histories as sh')
+            // Get latest Due Date change (any utility type)
+            $latestDueDate = DB::table('schedule_histories as sh')
                 ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
+                ->where('s.schedule_type', 'like', 'Due Date%')
                 ->whereNotNull('sh.effectivity_date')
                 ->whereDate('sh.effectivity_date', '>=', $today)
                 ->select(
@@ -138,64 +164,98 @@ class EffectivityDateController extends Controller
                     'sh.effectivity_date',
                     'sh.changed_at'
                 )
-                ->orderBy('sh.effectivity_date', 'asc')
-                ->get();
+                ->orderBy('sh.changed_at', 'desc')
+                ->first();
 
-            foreach ($scheduleChanges as $change) {
-                $category = 'Schedules';
-                if (str_contains($change->schedule_type, 'Due Date') || str_contains($change->schedule_type, 'Disconnection')) {
-                    $category = 'Due Date & Disconnection';
-                } elseif (str_contains($change->schedule_type, 'SMS')) {
-                    $category = 'SMS Schedules';
-                } elseif (str_contains($change->schedule_type, 'Meter Reading')) {
-                    $category = 'Meter Reading Schedule';
-                }
-
+            if ($latestDueDate) {
                 $pendingChanges[] = [
-                    'id' => $change->id,
+                    'id' => $latestDueDate->id,
                     'change_type' => 'schedule',
-                    'category' => $category,
-                    'item_name' => $change->schedule_type,
-                    'description' => "{$change->field_changed}: {$change->old_value} → {$change->new_value}",
-                    'effectivity_date' => $change->effectivity_date,
-                    'changed_at' => $change->changed_at,
+                    'category' => 'Due Date & Disconnection',
+                    'item_name' => $latestDueDate->schedule_type,
+                    'description' => "{$latestDueDate->field_changed}: {$latestDueDate->old_value} → {$latestDueDate->new_value}",
+                    'effectivity_date' => $latestDueDate->effectivity_date,
+                    'changed_at' => $latestDueDate->changed_at,
                     'history_table' => 'schedule_histories',
-                    'history_id' => $change->id,
+                    'history_id' => $latestDueDate->id,
+                ];
+            }
+
+            // Get latest Disconnection change (any utility type)
+            $latestDisconnection = DB::table('schedule_histories as sh')
+                ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
+                ->where('s.schedule_type', 'like', 'Disconnection%')
+                ->whereNotNull('sh.effectivity_date')
+                ->whereDate('sh.effectivity_date', '>=', $today)
+                ->select(
+                    'sh.id',
+                    's.schedule_type',
+                    'sh.field_changed',
+                    'sh.old_value',
+                    'sh.new_value',
+                    'sh.effectivity_date',
+                    'sh.changed_at'
+                )
+                ->orderBy('sh.changed_at', 'desc')
+                ->first();
+
+            if ($latestDisconnection) {
+                $pendingChanges[] = [
+                    'id' => $latestDisconnection->id,
+                    'change_type' => 'schedule',
+                    'category' => 'Due Date & Disconnection',
+                    'item_name' => $latestDisconnection->schedule_type,
+                    'description' => "{$latestDisconnection->field_changed}: {$latestDisconnection->old_value} → {$latestDisconnection->new_value}",
+                    'effectivity_date' => $latestDisconnection->effectivity_date,
+                    'changed_at' => $latestDisconnection->changed_at,
+                    'history_table' => 'schedule_histories',
+                    'history_id' => $latestDisconnection->id,
                 ];
             }
         }
 
-        // 3. Get pending Billing Settings changes
+        // 3. Get pending Billing Settings changes (Discounts, Surcharges, Monthly Interest Rate - 3 total)
         $hasBillingSettingEffectivityDate = DB::getSchemaBuilder()->hasColumn('billing_setting_histories', 'effectivity_date');
         if ($hasBillingSettingEffectivityDate) {
-            $billingSettingChanges = DB::table('billing_setting_histories as bsh')
-                ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
-                ->whereNotNull('bsh.effectivity_date')
-                ->whereDate('bsh.effectivity_date', '>=', $today)
-                ->select(
-                    'bsh.id',
-                    'bs.utility_type',
-                    'bsh.field_changed',
-                    'bsh.old_value',
-                    'bsh.new_value',
-                    'bsh.effectivity_date',
-                    'bsh.changed_at'
-                )
-                ->orderBy('bsh.effectivity_date', 'asc')
-                ->get();
+            // Get latest pending change for: Discount Rate, Surcharge Rate, Monthly Interest Rate
+            $billingSettingFields = [
+                'discount_rate' => 'Discount Rate',
+                'surcharge_rate' => 'Surcharge Rate', 
+                'monthly_interest_rate' => 'Monthly Interest Rate'
+            ];
+            
+            foreach ($billingSettingFields as $field => $fieldDisplayName) {
+                // Get the latest pending change for this field (any utility type)
+                $latestChange = DB::table('billing_setting_histories as bsh')
+                    ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
+                    ->where('bsh.field_changed', $field)
+                    ->whereNotNull('bsh.effectivity_date')
+                    ->whereDate('bsh.effectivity_date', '>=', $today)
+                    ->select(
+                        'bsh.id',
+                        'bs.utility_type',
+                        'bsh.field_changed',
+                        'bsh.old_value',
+                        'bsh.new_value',
+                        'bsh.effectivity_date',
+                        'bsh.changed_at'
+                    )
+                    ->orderBy('bsh.changed_at', 'desc')
+                    ->first();
 
-            foreach ($billingSettingChanges as $change) {
-                $pendingChanges[] = [
-                    'id' => $change->id,
-                    'change_type' => 'billing_setting',
-                    'category' => 'Billing Settings',
-                    'item_name' => "{$change->utility_type} - {$change->field_changed}",
-                    'description' => "{$change->field_changed}: {$change->old_value} → {$change->new_value}",
-                    'effectivity_date' => $change->effectivity_date,
-                    'changed_at' => $change->changed_at,
-                    'history_table' => 'billing_setting_histories',
-                    'history_id' => $change->id,
-                ];
+                if ($latestChange) {
+                    $pendingChanges[] = [
+                        'id' => $latestChange->id,
+                        'change_type' => 'billing_setting',
+                        'category' => 'Billing Settings',
+                        'item_name' => "{$latestChange->utility_type} - {$fieldDisplayName}",
+                        'description' => "{$fieldDisplayName}: {$latestChange->old_value} → {$latestChange->new_value}",
+                        'effectivity_date' => $latestChange->effectivity_date,
+                        'changed_at' => $latestChange->changed_at,
+                        'history_table' => 'billing_setting_histories',
+                        'history_id' => $latestChange->id,
+                    ];
+                }
             }
         }
 
