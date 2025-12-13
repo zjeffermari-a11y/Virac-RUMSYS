@@ -45,7 +45,7 @@ class StaffPortalController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture' => $user->profile_picture ? ($user->profile_picture_url ?? Storage::url($user->profile_picture)) : null,
+                    'profile_picture' => $user->profile_picture ? $user->profile_picture_url : null,
                 ];
             })
             ->sort(function ($a, $b) {

@@ -67,10 +67,10 @@ return [
             'region' => env('B2_REGION', 'us-east-005'),
             'bucket' => env('B2_BUCKET_NAME'),
             'endpoint' => env('B2_ENDPOINT'),
-
+            'url' => env('B2_URL'), // Public URL for the bucket (e.g., https://f005.backblazeb2.com/file/bucket-name/)
             'use_path_style_endpoint' => true,
-            'visibility' => 'private',
-            'throw' => true,
+            'visibility' => 'public', // Profile pictures should be publicly accessible
+            'throw' => false,
         ],
 
     ],

@@ -208,7 +208,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the profile picture URL
+     * Get the profile picture URL from Backblaze B2
      */
     public function getProfilePictureUrlAttribute(): ?string
     {
@@ -216,21 +216,11 @@ class User extends Authenticatable
             return null;
         }
         
-        // Generate URL that works on both local and Laravel Cloud
-        $storageUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($this->profile_picture);
+        // Generate URL from B2 - returns full public URL
+        $url = \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
         
-        // Check if it's already a full URL (starts with http:// or https://)
-        if (filter_var($storageUrl, FILTER_VALIDATE_URL)) {
-            $url = $storageUrl;
-        } else {
-            // It's a relative URL, make it absolute
-            // Remove leading slash to avoid double slashes
-            $relativePath = ltrim($storageUrl, '/');
-            $url = rtrim(config('app.url'), '/') . '/' . $relativePath;
-        }
-        
-        // Ensure HTTPS on production/cloud
-        if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
+        // Ensure HTTPS (B2 URLs should already be HTTPS)
+        if (strpos($url, 'http://') === 0) {
             $url = str_replace('http://', 'https://', $url);
         }
         

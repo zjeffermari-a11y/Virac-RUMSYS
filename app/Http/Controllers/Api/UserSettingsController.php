@@ -108,15 +108,22 @@ class UserSettingsController extends Controller
         ]);
 
         try {
-            // Delete old profile picture if exists
+            // Delete old profile picture if exists (from B2)
             if ($user->profile_picture) {
-                Storage::disk('public')->delete($user->profile_picture);
+                try {
+                    Storage::disk('b2')->delete($user->profile_picture);
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to delete old profile picture from B2', [
+                        'path' => $user->profile_picture,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
 
-            // Store the image
+            // Store the image in Backblaze B2
             $image = $request->file('profile_picture');
             $filename = 'profile_' . $user->id . '_' . time() . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('profile-pictures', $filename, 'public');
+            $path = $image->storeAs('profile-pictures', $filename, 'b2');
 
             // Update user record
             $user->profile_picture = $path;
@@ -132,36 +139,25 @@ class UserSettingsController extends Controller
                 ['user_id' => $user->id, 'path' => $path]
             );
 
-            // Generate absolute URL for the profile picture
-            // Storage::url() returns relative path like '/storage/profile-pictures/...'
-            $storageUrl = Storage::disk('public')->url($path);
+            // Generate absolute URL for the profile picture from B2
+            // B2 returns full public URLs when visibility is 'public'
+            $url = Storage::disk('b2')->url($path);
             
-            // Check if it's already a full URL (starts with http:// or https://)
-            if (filter_var($storageUrl, FILTER_VALIDATE_URL)) {
-                $url = $storageUrl;
-            } else {
-                // It's a relative URL, make it absolute
-                // Remove leading slash to avoid double slashes
-                $relativePath = ltrim($storageUrl, '/');
-                $url = rtrim(config('app.url'), '/') . '/' . $relativePath;
-            }
-            
-            // Ensure HTTPS on production/cloud
-            if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
+            // Ensure HTTPS (B2 URLs should already be HTTPS, but just in case)
+            if (strpos($url, 'http://') === 0) {
                 $url = str_replace('http://', 'https://', $url);
             }
             
-            \Log::info('Profile picture uploaded successfully', [
+            \Log::info('Profile picture uploaded successfully to B2', [
                 'user_id' => $user->id,
                 'path' => $path,
                 'url' => $url,
-                'storage_url' => $storageUrl,
                 'app_url' => config('app.url'),
                 'app_env' => config('app.env'),
                 'profile_picture_field' => $user->profile_picture,
-                'storage_exists' => Storage::disk('public')->exists($path),
-                'file_size' => Storage::disk('public')->size($path) ?? 'N/A',
-                'is_full_url' => filter_var($storageUrl, FILTER_VALIDATE_URL)
+                'storage_exists' => Storage::disk('b2')->exists($path),
+                'file_size' => Storage::disk('b2')->size($path) ?? 'N/A',
+                'is_full_url' => filter_var($url, FILTER_VALIDATE_URL)
             ]);
             
             return response()->json([
@@ -189,9 +185,9 @@ class UserSettingsController extends Controller
         
         if ($user->profile_picture) {
             try {
-                Storage::disk('public')->delete($user->profile_picture);
+                Storage::disk('b2')->delete($user->profile_picture);
             } catch (\Exception $e) {
-                \Log::warning('Failed to delete profile picture file: ' . $e->getMessage(), [
+                \Log::warning('Failed to delete profile picture from B2: ' . $e->getMessage(), [
                     'path' => $user->profile_picture,
                     'user_id' => $user->id
                 ]);

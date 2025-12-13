@@ -48,7 +48,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture' => $user->profile_picture ? ($user->profile_picture_url ?? Storage::url($user->profile_picture)) : null,
+                    'profile_picture' => $user->profile_picture ? $user->profile_picture_url : null,
                 ];
             });
     
@@ -782,22 +782,12 @@ class StaffController extends Controller
                 ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
             );
 
-            // Generate absolute URL for the profile picture
-            // Storage::url() returns relative path like '/storage/profile-pictures/...'
-            $storageUrl = Storage::disk('public')->url($path);
+            // Generate absolute URL for the profile picture from B2
+            // B2 returns full public URLs when visibility is 'public'
+            $url = Storage::disk('b2')->url($path);
             
-            // Check if it's already a full URL (starts with http:// or https://)
-            if (filter_var($storageUrl, FILTER_VALIDATE_URL)) {
-                $url = $storageUrl;
-            } else {
-                // It's a relative URL, make it absolute
-                // Remove leading slash to avoid double slashes
-                $relativePath = ltrim($storageUrl, '/');
-                $url = rtrim(config('app.url'), '/') . '/' . $relativePath;
-            }
-            
-            // Ensure HTTPS on production/cloud
-            if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
+            // Ensure HTTPS (B2 URLs should already be HTTPS)
+            if (strpos($url, 'http://') === 0) {
                 $url = str_replace('http://', 'https://', $url);
             }
             
@@ -829,7 +819,14 @@ class StaffController extends Controller
         }
         
         if ($vendor->profile_picture) {
-            Storage::disk('public')->delete($vendor->profile_picture);
+            try {
+                Storage::disk('b2')->delete($vendor->profile_picture);
+            } catch (\Exception $e) {
+                Log::warning('Failed to delete vendor profile picture from B2', [
+                    'path' => $vendor->profile_picture,
+                    'error' => $e->getMessage()
+                ]);
+            }
             $vendor->profile_picture = null;
             $vendor->save();
 
