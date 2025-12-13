@@ -14,6 +14,14 @@ class AuditTrailController extends Controller
   public function index(Request $request)
     {
         try {
+            // Check if user is authenticated
+            if (!auth()->check()) {
+                return response()->json([
+                    'error' => 'Unauthorized',
+                    'message' => 'Authentication required'
+                ], 401);
+            }
+            
             $query = DB::table('audit_trails as at')
                 ->join('users as u', 'at.user_id', '=', 'u.id')
                 ->join('roles as r', 'at.role_id', '=', 'r.id')
@@ -53,24 +61,41 @@ class AuditTrailController extends Controller
 
         // MODIFIED: Transform the date to an ISO-8601 string that JavaScript understands.
         $logs->getCollection()->transform(function ($item) {
-            // Assume the DB stores in UTC, format it to a string with timezone info.
-            $item->date_time = (new \DateTime($item->date_time, new \DateTimeZone('Asia/Manila')))->format(\DateTime::ATOM);
+            try {
+                // Assume the DB stores in UTC, format it to a string with timezone info.
+                if ($item->date_time) {
+                    $item->date_time = (new \DateTime($item->date_time, new \DateTimeZone('Asia/Manila')))->format(\DateTime::ATOM);
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Error formatting audit trail date', [
+                    'date_time' => $item->date_time ?? null,
+                    'error' => $e->getMessage()
+                ]);
+                $item->date_time = now()->format(\DateTime::ATOM);
+            }
             
             // Parse details JSON to extract effectivity_date for rate changes, schedules, and billing settings
-            if ($item->details && in_array($item->module, ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings'])) {
-                $details = json_decode($item->details, true);
-                if (is_array($details)) {
-                    // Extract effectivity_date from details
-                    if (isset($details['effectivity_date'])) {
-                        $item->effectivity_date = $details['effectivity_date'];
-                    } elseif (isset($details['changes']) && is_array($details['changes'])) {
-                        // For batch updates, get effectivity_date from first change or top level
-                        if (isset($details['changes'][0]['effectivity_date'])) {
-                            $item->effectivity_date = $details['changes'][0]['effectivity_date'];
-                        } elseif (isset($details['effectivity_date'])) {
+            if ($item->details && in_array($item->module, ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings', 'Announcements', 'Notification Templates', 'Effectivity Date Management', 'Utility Readings', 'Payments', 'User Settings'])) {
+                try {
+                    $details = json_decode($item->details, true);
+                    if (is_array($details)) {
+                        // Extract effectivity_date from details
+                        if (isset($details['effectivity_date'])) {
                             $item->effectivity_date = $details['effectivity_date'];
+                        } elseif (isset($details['changes']) && is_array($details['changes'])) {
+                            // For batch updates, get effectivity_date from first change or top level
+                            if (isset($details['changes'][0]['effectivity_date'])) {
+                                $item->effectivity_date = $details['changes'][0]['effectivity_date'];
+                            } elseif (isset($details['effectivity_date'])) {
+                                $item->effectivity_date = $details['effectivity_date'];
+                            }
                         }
                     }
+                } catch (\Exception $e) {
+                    \Log::warning('Error parsing audit trail details', [
+                        'details' => $item->details,
+                        'error' => $e->getMessage()
+                    ]);
                 }
             }
             
@@ -78,5 +103,16 @@ class AuditTrailController extends Controller
         });
 
         return response()->json($logs);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching audit trails', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => 'Failed to fetch audit trails',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

@@ -2559,9 +2559,27 @@ class SuperAdminDashboard {
 
         try {
             const response = await fetch(
-                `/api/audit-trails?${params.toString()}`
+                `/api/audit-trails?${params.toString()}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    },
+                    credentials: 'include',
+                }
             );
-            if (!response.ok) throw new Error("Could not fetch audit trails.");
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Audit trails API error:", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                throw new Error(`Could not fetch audit trails: ${response.status} ${response.statusText}`);
+            }
 
             const data = await response.json();
             
@@ -5143,6 +5161,8 @@ class SuperAdminDashboard {
                     
                     // Update profile picture with the URL from server
                     if (result.profile_picture_url) {
+                        const imageUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                        
                         // Ensure we have the img element
                         if (!img) {
                             // Create img element if it doesn't exist
@@ -5150,18 +5170,27 @@ class SuperAdminDashboard {
                             newImg.id = "profilePictureImg";
                             newImg.alt = "Profile Picture";
                             newImg.className = "w-full h-full object-cover";
+                            newImg.src = imageUrl;
+                            newImg.onerror = function() {
+                                console.error("Failed to load profile picture:", imageUrl);
+                                this.style.display = 'none';
+                                if (placeholder) placeholder.classList.remove("hidden");
+                            };
                             if (placeholder) placeholder.classList.add("hidden");
                             container.appendChild(newImg);
-                            // Update reference
-                            const updatedImg = document.getElementById("profilePictureImg");
-                            if (updatedImg) {
-                                updatedImg.src = result.profile_picture_url;
-                                updatedImg.classList.remove("hidden");
-                            }
+                            img = newImg; // Update reference
                         } else {
-                            // Add cache busting parameter to ensure fresh image
-                            const urlWithCache = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
-                            img.src = urlWithCache;
+                            // Update existing image
+                            img.onload = function() {
+                                this.classList.remove("hidden");
+                                if (placeholder) placeholder.classList.add("hidden");
+                            };
+                            img.onerror = function() {
+                                console.error("Failed to load profile picture:", imageUrl);
+                                this.style.display = 'none';
+                                if (placeholder) placeholder.classList.remove("hidden");
+                            };
+                            img.src = imageUrl;
                             img.classList.remove("hidden");
                             if (placeholder) placeholder.classList.add("hidden");
                         }
@@ -5170,11 +5199,38 @@ class SuperAdminDashboard {
                     // Update sidebar profile picture
                     const sidebarImg = document.querySelector('#sidebarProfileImage img');
                     const sidebarIcon = document.getElementById('sidebarProfileIcon');
-                    if (sidebarImg && result.profile_picture_url) {
+                    if (result.profile_picture_url) {
                         const sidebarUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
-                        sidebarImg.src = sidebarUrl;
-                        sidebarImg.classList.remove('hidden');
-                        if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                        
+                        if (sidebarImg) {
+                            sidebarImg.onload = function() {
+                                this.classList.remove('hidden');
+                                if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                            };
+                            sidebarImg.onerror = function() {
+                                console.error("Failed to load sidebar profile picture:", sidebarUrl);
+                                this.style.display = 'none';
+                                if (sidebarIcon) sidebarIcon.classList.remove('hidden');
+                            };
+                            sidebarImg.src = sidebarUrl;
+                            sidebarImg.classList.remove('hidden');
+                            if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                        } else {
+                            // Create sidebar image if it doesn't exist
+                            const newSidebarImg = document.createElement("img");
+                            newSidebarImg.src = sidebarUrl;
+                            newSidebarImg.alt = "Profile";
+                            newSidebarImg.className = "w-full h-full object-cover";
+                            newSidebarImg.onerror = function() {
+                                this.style.display = 'none';
+                                if (sidebarIcon) sidebarIcon.classList.remove('hidden');
+                            };
+                            const sidebarContainer = document.getElementById('sidebarProfileImage');
+                            if (sidebarContainer) {
+                                sidebarContainer.appendChild(newSidebarImg);
+                                if (sidebarIcon) sidebarIcon.classList.add('hidden');
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error("Profile picture upload error:", error);

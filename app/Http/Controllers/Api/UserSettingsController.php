@@ -133,12 +133,18 @@ class UserSettingsController extends Controller
             );
 
             // Generate absolute URL for the profile picture
-            // Use asset() directly for cloud compatibility
-            $url = asset('storage/' . $path);
+            // Use Storage::url() which works on both local and cloud
+            $url = Storage::disk('public')->url($path);
             
-            // Ensure it's an absolute URL
+            // For Laravel Cloud, ensure it's a full URL
             if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                $url = url('storage/' . $path);
+                // If it's a relative URL, make it absolute
+                $url = url($url);
+            }
+            
+            // Ensure HTTPS on cloud
+            if (config('app.env') === 'production' && strpos($url, 'http://') === 0) {
+                $url = str_replace('http://', 'https://', $url);
             }
             
             \Log::info('Profile picture uploaded successfully', [
