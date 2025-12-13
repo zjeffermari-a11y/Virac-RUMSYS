@@ -22,25 +22,39 @@ class AuditTrailController extends Controller
                 ], 401);
             }
             
+            // Check if details column exists
+            $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
+            
+            // Build select fields - use LEFT JOINs to handle orphaned records gracefully
+            $selectFields = [
+                'at.id',
+                'at.created_at as date_time',
+                'at.user_id',
+                'at.role_id',
+                'at.action',
+                'at.module',
+                'at.result',
+                DB::raw('COALESCE(u.name, \'[Deleted User]\') as user_name'),
+                DB::raw('COALESCE(r.name, \'[Deleted Role]\') as user_role')
+            ];
+            
+            // Only include details if column exists
+            if ($hasDetailsColumn) {
+                $selectFields[] = 'at.details';
+            }
+            
             $query = DB::table('audit_trails as at')
-                ->join('users as u', 'at.user_id', '=', 'u.id')
-                ->join('roles as r', 'at.role_id', '=', 'r.id')
-                ->select(
-                    'at.created_at as date_time',
-                    'u.name as user_name',
-                    'r.name as user_role',
-                    'at.action',
-                    'at.module',
-                    'at.result',
-                    'at.details'
-                );
+                ->leftJoin('users as u', 'at.user_id', '=', 'u.id')
+                ->leftJoin('roles as r', 'at.role_id', '=', 'r.id')
+                ->select($selectFields);
 
         // Search by user name or action
         if ($request->filled('search')) {
             $searchTerm = $request->input('search');
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('u.name', 'LIKE', "%{$searchTerm}%")
-                  ->orWhere('at.action', 'LIKE', "%{$searchTerm}%");
+                  ->orWhere('at.action', 'LIKE', "%{$searchTerm}%")
+                  ->orWhere(DB::raw('COALESCE(u.name, \'[Deleted User]\')'), 'LIKE', "%{$searchTerm}%");
             });
         }
 
@@ -60,7 +74,7 @@ class AuditTrailController extends Controller
         $logs = $query->orderBy('at.created_at', 'desc')->paginate(25);
 
         // MODIFIED: Transform the date to an ISO-8601 string that JavaScript understands.
-        $logs->getCollection()->transform(function ($item) {
+        $logs->getCollection()->transform(function ($item) use ($hasDetailsColumn) {
             try {
                 // Assume the DB stores in UTC, format it to a string with timezone info.
                 if ($item->date_time) {
@@ -75,7 +89,8 @@ class AuditTrailController extends Controller
             }
             
             // Parse details JSON to extract effectivity_date for rate changes, schedules, and billing settings
-            if ($item->details && in_array($item->module, ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings', 'Announcements', 'Notification Templates', 'Effectivity Date Management', 'Utility Readings', 'Payments', 'User Settings'])) {
+            // Only if details column exists and has value
+            if ($hasDetailsColumn && isset($item->details) && $item->details && in_array($item->module, ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings', 'Announcements', 'Notification Templates', 'Effectivity Date Management', 'Utility Readings', 'Payments', 'User Settings'])) {
                 try {
                     $details = json_decode($item->details, true);
                     if (is_array($details)) {
@@ -93,7 +108,7 @@ class AuditTrailController extends Controller
                     }
                 } catch (\Exception $e) {
                     \Log::warning('Error parsing audit trail details', [
-                        'details' => $item->details,
+                        'details' => $item->details ?? null,
                         'error' => $e->getMessage()
                     ]);
                 }
@@ -106,12 +121,20 @@ class AuditTrailController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error fetching audit trails', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ]);
             
+            // Return a more user-friendly error message
             return response()->json([
                 'error' => 'Failed to fetch audit trails',
-                'message' => $e->getMessage()
+                'message' => 'An error occurred while loading audit trail data. Please try again or contact support if the issue persists.',
+                'data' => [],
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => 25,
+                'total' => 0
             ], 500);
         }
     }

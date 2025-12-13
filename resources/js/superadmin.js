@@ -1168,17 +1168,44 @@ class SuperAdminDashboard {
                 }
             );
             
-            if (!response.ok) {
-                const errorText = await response.text();
+            // Try to parse JSON response
+            let data;
+            try {
+                const responseText = await response.text();
+                data = responseText ? JSON.parse(responseText) : {};
+            } catch (parseError) {
+                console.error("Failed to parse audit trails response:", parseError);
+                throw new Error(`Invalid response from server: ${response.status} ${response.statusText}`);
+            }
+
+            // Check if response has error
+            if (!response.ok || data.error) {
+                const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
                 console.error("Audit trails API error:", {
                     status: response.status,
                     statusText: response.statusText,
-                    body: errorText
+                    error: data.error,
+                    message: data.message,
+                    data: data
                 });
-                throw new Error(`Could not fetch audit trails: ${response.status} ${response.statusText}`);
+                
+                // If we have partial data, still try to display it
+                if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+                    console.warn("Received partial data despite error, displaying available records");
+                    if (this.auditTrailsPage === 1) {
+                        this.auditTrails = [...data.data];
+                    } else {
+                        this.auditTrails.push(...data.data);
+                    }
+                    this.auditTrailsHasMore = data.next_page_url !== null;
+                    this.auditTrailsPage++;
+                    this.renderAuditTrails();
+                    this.showToast(`Warning: ${errorMessage}`, "warning");
+                } else {
+                    throw new Error(errorMessage);
+                }
+                return;
             }
-
-            const data = await response.json();
 
             this.auditTrails.push(...data.data);
             this.auditTrailsHasMore = data.next_page_url !== null;
@@ -1186,7 +1213,10 @@ class SuperAdminDashboard {
             this.renderAuditTrails();
         } catch (error) {
             console.error("Failed to fetch audit trails:", error);
-            this.showToast("Failed to load audit trail data.", "error");
+            const errorMessage = error.message || "Failed to load audit trail data.";
+            this.showToast(errorMessage, "error");
+            this.auditTrails = [];
+            this.renderAuditTrails();
         } finally {
             this.isFetchingAuditTrails = false;
             if (this.elements.auditTrailsLoader) {
@@ -2571,17 +2601,36 @@ class SuperAdminDashboard {
                 }
             );
             
-            if (!response.ok) {
-                const errorText = await response.text();
+            const data = await response.json();
+            
+            // Check if response has error
+            if (!response.ok || data.error) {
+                const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
                 console.error("Audit trails API error:", {
                     status: response.status,
                     statusText: response.statusText,
-                    body: errorText
+                    error: data.error,
+                    message: data.message,
+                    data: data
                 });
-                throw new Error(`Could not fetch audit trails: ${response.status} ${response.statusText}`);
+                
+                // If we have partial data, still try to display it
+                if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+                    console.warn("Received partial data despite error, displaying available records");
+                    if (this.auditTrailsPage === 1) {
+                        this.auditTrails = [...data.data];
+                    } else {
+                        this.auditTrails.push(...data.data);
+                    }
+                    this.auditTrailsHasMore = data.next_page_url !== null;
+                    this.auditTrailsPage++;
+                    this.renderAuditTrails();
+                    this.showToast(`Warning: ${errorMessage}`, "warning");
+                } else {
+                    throw new Error(errorMessage);
+                }
+                return;
             }
-
-            const data = await response.json();
             
             // Debug logging
             console.log("Audit trails response:", {
@@ -2612,7 +2661,14 @@ class SuperAdminDashboard {
             this.renderAuditTrails();
         } catch (error) {
             console.error("Failed to fetch audit trails:", error);
-            this.showToast("Failed to load audit trail data.", "error");
+            const errorMessage = error.message || "Failed to load audit trail data.";
+            this.showToast(errorMessage, "error");
+            
+            // Clear table and show empty state
+            if (this.elements.auditTrailsTableBody) {
+                this.auditTrails = [];
+                this.renderAuditTrails();
+            }
         } finally {
             this.isFetchingAuditTrails = false;
             if (this.elements.auditTrailsLoader) {
