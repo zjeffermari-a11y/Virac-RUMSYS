@@ -267,36 +267,63 @@ class EffectivityDateController extends Controller
      */
     public function getBillGenerationSchedules()
     {
-        $schedules = DB::table('schedules')
-            ->whereIn('schedule_type', ['Bill Generation', 'Apply Pending Changes'])
-            ->select('id', 'schedule_type', 'description', 'schedule_day')
-            ->get()
-            ->map(function ($schedule) {
-                return [
-                    'id' => $schedule->id,
-                    'type' => $schedule->schedule_type,
-                    'time' => $schedule->description ?? ($schedule->schedule_type === 'Bill Generation' ? '07:00' : '06:00'),
-                    'day' => $schedule->schedule_day ?? ($schedule->schedule_type === 'Bill Generation' ? 1 : null),
-                ];
-            });
+        try {
+            // Check if schedule_day column exists
+            $hasScheduleDay = DB::getSchemaBuilder()->hasColumn('schedules', 'schedule_day');
+            
+            $selectFields = ['id', 'schedule_type', 'description'];
+            if ($hasScheduleDay) {
+                $selectFields[] = 'schedule_day';
+            }
+            
+            $schedules = DB::table('schedules')
+                ->whereIn('schedule_type', ['Bill Generation', 'Apply Pending Changes'])
+                ->select($selectFields)
+                ->get()
+                ->map(function ($schedule) use ($hasScheduleDay) {
+                    return [
+                        'id' => $schedule->id,
+                        'type' => $schedule->schedule_type,
+                        'time' => $schedule->description ?? ($schedule->schedule_type === 'Bill Generation' ? '07:00' : '06:00'),
+                        'day' => ($hasScheduleDay && isset($schedule->schedule_day)) ? $schedule->schedule_day : ($schedule->schedule_type === 'Bill Generation' ? 1 : null),
+                    ];
+                });
 
-        // If schedules don't exist, return defaults
-        $result = [
-            'billGeneration' => $schedules->firstWhere('type', 'Bill Generation') ?? [
-                'id' => null,
-                'type' => 'Bill Generation',
-                'time' => '07:00',
-                'day' => 1,
-            ],
-            'applyPendingChanges' => $schedules->firstWhere('type', 'Apply Pending Changes') ?? [
-                'id' => null,
-                'type' => 'Apply Pending Changes',
-                'time' => '06:00',
-                'day' => null,
-            ],
-        ];
+            // If schedules don't exist, return defaults
+            $result = [
+                'billGeneration' => $schedules->firstWhere('type', 'Bill Generation') ?? [
+                    'id' => null,
+                    'type' => 'Bill Generation',
+                    'time' => '07:00',
+                    'day' => 1,
+                ],
+                'applyPendingChanges' => $schedules->firstWhere('type', 'Apply Pending Changes') ?? [
+                    'id' => null,
+                    'type' => 'Apply Pending Changes',
+                    'time' => '06:00',
+                    'day' => null,
+                ],
+            ];
 
-        return response()->json($result);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error loading bill generation schedules: ' . $e->getMessage());
+            // Return defaults on error
+            return response()->json([
+                'billGeneration' => [
+                    'id' => null,
+                    'type' => 'Bill Generation',
+                    'time' => '07:00',
+                    'day' => 1,
+                ],
+                'applyPendingChanges' => [
+                    'id' => null,
+                    'type' => 'Apply Pending Changes',
+                    'time' => '06:00',
+                    'day' => null,
+                ],
+            ]);
+        }
     }
 
     /**
