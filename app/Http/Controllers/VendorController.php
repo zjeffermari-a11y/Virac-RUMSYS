@@ -32,8 +32,24 @@ class VendorController extends Controller
 
         $vendor->load('stall.section');
 
+        $today = Carbon::today();
+        $currentMonthStart = $today->copy()->startOfMonth();
+        $currentMonthEnd = $today->copy()->endOfMonth();
+        
+        // Include unpaid bills OR paid bills from current month
         $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
-            ->where('status', 'unpaid')
+            ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
+                $query->where('status', 'unpaid')
+                    ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
+                        $q->where('status', 'paid')
+                            ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                $paymentQuery->whereBetween('payment_date', [
+                                    $currentMonthStart->toDateString(),
+                                    $currentMonthEnd->toDateString()
+                                ]);
+                            });
+                    });
+            })
             ->with('payment:id,billing_id,amount_paid,payment_date')
             ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
             ->orderBy('due_date', 'desc')
@@ -265,11 +281,16 @@ class VendorController extends Controller
             return $cachedResult;
         }
 
+        $today = Carbon::today();
+        $currentMonthStart = $today->copy()->startOfMonth();
+        
         // Optimized query: Start from payments table for better index usage
+        // Exclude payments from current month (they stay in outstanding balance)
         $baseQuery = DB::table('payments')
             ->join('billing', 'payments.billing_id', '=', 'billing.id')
             ->where('billing.stall_id', $vendor->stall->id)
-            ->where('billing.status', 'paid');
+            ->where('billing.status', 'paid')
+            ->where('payments.payment_date', '<', $currentMonthStart->toDateString());
 
         // Use date range instead of whereYear/whereMonth for better index usage
         if ($year) {

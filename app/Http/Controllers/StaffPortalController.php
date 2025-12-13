@@ -111,8 +111,25 @@ class StaffPortalController extends Controller
 
     public function outstandingBillsPartial(User $vendor): View
     {
+        $today = Carbon::today();
+        $currentMonthStart = $today->copy()->startOfMonth();
+        $currentMonthEnd = $today->copy()->endOfMonth();
+        
+        // Include unpaid bills OR paid bills from current month
         $outstandingBills = $vendor->billings()
-            ->where('status', 'unpaid')
+            ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
+                $query->where('status', 'unpaid')
+                    ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
+                        $q->where('status', 'paid')
+                            ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                $paymentQuery->whereBetween('payment_date', [
+                                    $currentMonthStart->toDateString(),
+                                    $currentMonthEnd->toDateString()
+                                ]);
+                            });
+                    });
+            })
+            ->with('payment')
             ->get();
 
         // Get billing settings for penalty/interest calculations
@@ -173,8 +190,15 @@ class StaffPortalController extends Controller
 
     public function paymentHistoryPartial(User $vendor): View
     {
+        $today = Carbon::today();
+        $currentMonthStart = $today->copy()->startOfMonth();
+        
+        // Only show paid bills from previous months (before current month)
         $paymentHistory = $vendor->billings()
             ->where('status', 'paid')
+            ->whereHas('payment', function($query) use ($currentMonthStart) {
+                $query->where('payment_date', '<', $currentMonthStart->toDateString());
+            })
             ->with('payment')
             ->latest('period_end')
             ->get();
@@ -287,8 +311,24 @@ class StaffPortalController extends Controller
         
         $vendor->load('stall.section');
 
+        $today = Carbon::today();
+        $currentMonthStart = $today->copy()->startOfMonth();
+        $currentMonthEnd = $today->copy()->endOfMonth();
+        
+        // Include unpaid bills OR paid bills from current month
         $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
-            ->where('status', 'unpaid')
+            ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
+                $query->where('status', 'unpaid')
+                    ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
+                        $q->where('status', 'paid')
+                            ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                $paymentQuery->whereBetween('payment_date', [
+                                    $currentMonthStart->toDateString(),
+                                    $currentMonthEnd->toDateString()
+                                ]);
+                            });
+                    });
+            })
             ->with('payment')
             ->orderBy('due_date', 'desc')
             ->get();
