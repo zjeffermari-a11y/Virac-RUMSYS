@@ -159,12 +159,34 @@ class BillingSettingsController extends Controller
                 Cache::forget('billing_settings');
 
                 if (!empty($allChanges)) {
-                    AuditLogger::log(
-                        'Updated Billing Settings',
-                        'Billing Settings',
-                        'Success',
-                        ['changes' => $allChanges, 'effectivity_date' => $effectivityDate]
-                    );
+                    // Group changes by utility type and create specific action names
+                    $changesByUtility = [];
+                    foreach ($allChanges as $change) {
+                        $setting = BillingSetting::find($change['billing_setting_id']);
+                        if ($setting) {
+                            $utilityType = $setting->utility_type;
+                            if (!isset($changesByUtility[$utilityType])) {
+                                $changesByUtility[$utilityType] = [];
+                            }
+                            $changesByUtility[$utilityType][] = $change['field_changed'];
+                        }
+                    }
+                    
+                    // Create specific action names for each utility type
+                    foreach ($changesByUtility as $utilityType => $fields) {
+                        $fieldsList = implode(", ", array_unique($fields));
+                        $actionName = "Updated {$utilityType} Billing Settings ({$fieldsList})";
+                        
+                        AuditLogger::log(
+                            $actionName,
+                            'Billing Settings',
+                            'Success',
+                            ['utility_type' => $utilityType, 'fields_changed' => $fields, 'changes' => array_filter($allChanges, function($change) use ($utilityType) {
+                                $setting = BillingSetting::find($change['billing_setting_id']);
+                                return $setting && $setting->utility_type === $utilityType;
+                            }), 'effectivity_date' => $effectivityDate]
+                        );
+                    }
                 }
             });
 

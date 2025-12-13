@@ -130,11 +130,17 @@ class ScheduleController extends Controller
                         $pendingChangeId = $historyId;
                     }
 
+                    // Extract utility type from schedule type (e.g., "Meter Reading - Electricity" -> "Electricity")
+                    $utilityType = str_replace('Meter Reading - ', '', $schedule->schedule_type);
+                    
+                    // Create specific action name
+                    $actionName = "Updated {$utilityType} Meter Reading Schedule";
+                    
                     AuditLogger::log(
-                        'Updated Meter Reading Schedule',
+                        $actionName,
                         'Schedules',
                         'Success',
-                        ['schedule_id' => $scheduleId, 'old_day' => $oldDay, 'new_day' => $newDay, 'effectivity_date' => $effectivityDate]
+                        ['schedule_id' => $scheduleId, 'utility_type' => $utilityType, 'old_day' => $oldDay, 'new_day' => $newDay, 'effectivity_date' => $effectivityDate]
                     );
                 }
             });
@@ -315,11 +321,25 @@ class ScheduleController extends Controller
                             $pendingChangeId = $scheduleHistoryId;
                         }
 
+                        // Extract utility type and schedule type for specific action name
+                        $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $type);
+                        $scheduleType = '';
+                        if (strpos($type, 'Due Date') !== false) {
+                            $scheduleType = 'Due Date';
+                        } elseif (strpos($type, 'Disconnection') !== false) {
+                            $scheduleType = 'Disconnection';
+                        } elseif (strpos($type, 'Meter Reading') !== false) {
+                            $scheduleType = 'Meter Reading';
+                        }
+                        
+                        // Create specific action name
+                        $actionName = "Updated {$utilityType} {$scheduleType} Schedule";
+                        
                         AuditLogger::log(
-                            'Updated Billing Schedule',
+                            $actionName,
                             'Schedules',
                             'Success',
-                            ['type' => $type, 'old_value' => $oldDay, 'new_value' => $newDay, 'effectivity_date' => $effectivityDate]
+                            ['type' => $type, 'utility_type' => $utilityType, 'schedule_type' => $scheduleType, 'old_value' => $oldDay, 'new_value' => $newDay, 'effectivity_date' => $effectivityDate]
                         );
 
                         // Send SMS if effective today (run in background)
@@ -537,8 +557,20 @@ class ScheduleController extends Controller
                             ]);
                         }
 
+                        // Create specific action name based on schedule type
+                        $actionName = '';
+                        if ($type === 'SMS - Billing Statements') {
+                            $actionName = 'Updated Billing Statement SMS Schedule';
+                        } elseif ($type === 'SMS - Payment Reminders') {
+                            $actionName = 'Updated Payment Reminder SMS Schedule';
+                        } elseif ($type === 'SMS - Overdue Alerts') {
+                            $actionName = 'Updated Overdue Alert SMS Schedule';
+                        } else {
+                            $actionName = 'Updated SMS Schedule';
+                        }
+                        
                         AuditLogger::log(
-                            'Updated SMS Schedule',
+                            $actionName,
                             'Schedules',
                             'Success',
                             [

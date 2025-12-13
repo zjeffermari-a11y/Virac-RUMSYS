@@ -2709,19 +2709,15 @@ class SuperAdminDashboard {
                 );
                 const resultClass =
                     resultClasses[log.result] || "text-gray-600";
-                // Format effectivity date for rate changes
+                // Format effectivity date for billing management modules
                 let effectivityDateCell = '';
-                if (log.effectivity_date && (log.module === 'Rental Rates' || log.module === 'Utility Rates')) {
-                    try {
-                        const effectivityDate = new Date(log.effectivity_date);
-                        const formattedEffectivityDate = effectivityDate.toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                        });
-                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium">${formattedEffectivityDate}</td>`;
-                    } catch (e) {
-                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3">${log.effectivity_date || 'N/A'}</td>`;
+                const billingModules = ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings', 'Effectivity Date Management'];
+                if (log.effectivity_date && billingModules.includes(log.module)) {
+                    // Backend already formats it as "Today" or "M d, Y", so just display it
+                    if (log.effectivity_date === 'Today') {
+                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium font-semibold">Today</td>`;
+                    } else {
+                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium">${log.effectivity_date}</td>`;
                     }
                 } else {
                     effectivityDateCell = '<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3">-</td>';

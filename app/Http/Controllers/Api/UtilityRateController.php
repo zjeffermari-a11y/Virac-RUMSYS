@@ -188,11 +188,13 @@ class UtilityRateController extends Controller
                     'effectivity_date' => $effectivityDate,
                 ]);
 
+                // Make action name specific to utility type (Water/Electricity)
+                $utilityType = $rate->utility_type;
                 AuditLogger::log(
-                    'Updated Utility Rate',
+                    "Updated {$utilityType} Rate",
                     'Utility Rates',
                     'Success',
-                    ['rate_id' => $id, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue, 'effectivity_date' => $effectivityDate]
+                    ['rate_id' => $id, 'utility_type' => $utilityType, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue, 'effectivity_date' => $effectivityDate]
                 );
 
                 // Send SMS notification and regenerate bills in background
@@ -221,11 +223,13 @@ class UtilityRateController extends Controller
                     'effectivity_date' => $effectivityDate,
                 ]);
 
+                // Make action name specific to utility type (Water/Electricity)
+                $utilityType = $rate->utility_type;
                 AuditLogger::log(
-                    'Updated Utility Rate',
+                    "Updated {$utilityType} Rate",
                     'Utility Rates',
                     'Success',
-                    ['rate_id' => $id, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue, 'effectivity_date' => $effectivityDate]
+                    ['rate_id' => $id, 'utility_type' => $utilityType, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue, 'effectivity_date' => $effectivityDate]
                 );
                 
                 // Store history_id for redirect
@@ -373,17 +377,34 @@ class UtilityRateController extends Controller
                     }
                 }
 
+                // Build audit details with utility type information
                 $auditDetails = ['count' => count($rates), 'changes' => []];
                 foreach ($rates as $rateData) {
-                    if (isset($rateData['effectivityDate'])) {
-                        $auditDetails['changes'][] = [
+                    $currentRate = DB::table('rates')->where('id', $rateData['id'])->first();
+                    if ($currentRate) {
+                        $changeDetail = [
                             'rate_id' => $rateData['id'],
-                            'effectivity_date' => $rateData['effectivityDate']
+                            'utility_type' => $currentRate->utility_type,
                         ];
+                        if (isset($rateData['effectivityDate'])) {
+                            $changeDetail['effectivity_date'] = $rateData['effectivityDate'];
+                        }
+                        $auditDetails['changes'][] = $changeDetail;
                     }
                 }
+                
+                // Create specific action names for each utility type
+                $utilityTypes = array_unique(array_column($auditDetails['changes'], 'utility_type'));
+                if (count($utilityTypes) === 1) {
+                    // Single utility type - make it specific
+                    $actionName = "Batch Updated {$utilityTypes[0]} Rates";
+                } else {
+                    // Multiple utility types - list them
+                    $actionName = "Batch Updated Utility Rates (" . implode(", ", $utilityTypes) . ")";
+                }
+                
                 AuditLogger::log(
-                    'Batch Updated Utility Rates',
+                    $actionName,
                     'Utility Rates',
                     'Success',
                     $auditDetails

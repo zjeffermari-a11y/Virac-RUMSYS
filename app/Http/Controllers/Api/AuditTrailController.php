@@ -108,14 +108,31 @@ class AuditTrailController extends Controller
                     $details = json_decode($item->details, true);
                     if (is_array($details)) {
                         // Extract effectivity_date from details
+                        $effectivityDate = null;
                         if (isset($details['effectivity_date'])) {
-                            $item->effectivity_date = $details['effectivity_date'];
+                            $effectivityDate = $details['effectivity_date'];
                         } elseif (isset($details['changes']) && is_array($details['changes'])) {
                             // For batch updates, get effectivity_date from first change or top level
                             if (isset($details['changes'][0]['effectivity_date'])) {
-                                $item->effectivity_date = $details['changes'][0]['effectivity_date'];
+                                $effectivityDate = $details['changes'][0]['effectivity_date'];
                             } elseif (isset($details['effectivity_date'])) {
-                                $item->effectivity_date = $details['effectivity_date'];
+                                $effectivityDate = $details['effectivity_date'];
+                            }
+                        }
+                        
+                        // Format effectivity date: show "Today" if it's today, otherwise show the date
+                        if ($effectivityDate) {
+                            $today = \Carbon\Carbon::today()->format('Y-m-d');
+                            if ($effectivityDate === $today) {
+                                $item->effectivity_date = 'Today';
+                            } else {
+                                // Format the date nicely
+                                try {
+                                    $date = \Carbon\Carbon::parse($effectivityDate);
+                                    $item->effectivity_date = $date->format('M d, Y');
+                                } catch (\Exception $e) {
+                                    $item->effectivity_date = $effectivityDate;
+                                }
                             }
                         }
                     }
