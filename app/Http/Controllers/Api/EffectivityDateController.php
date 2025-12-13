@@ -56,32 +56,18 @@ class EffectivityDateController extends Controller
                     $effectivityDate = Carbon::parse($details['effectivity_date']);
                     // Only include if effectivity date is in the future (>= today)
                     if ($effectivityDate->gte($today)) {
-                        // Check if this change hasn't been applied yet (stall rate != new_rate)
-                        $stallId = $details['stall_id'] ?? null;
-                        $newDailyRate = $details['new_daily_rate'] ?? null;
-                        
-                        $isPending = true;
-                        if ($stallId && $newDailyRate !== null) {
-                            $currentStallRate = DB::table('stalls')->where('id', $stallId)->value('daily_rate');
-                            // If the stall rate already matches the new rate, it's been applied
-                            if ($currentStallRate == $newDailyRate) {
-                                $isPending = false;
-                            }
-                        }
-                        
-                        if ($isPending) {
-                            $pendingChanges[] = [
-                                'id' => $audit->id,
-                                'change_type' => 'rental_rate',
-                                'category' => 'Rental Rates',
-                                'item_name' => $details['table_number'] ?? 'N/A',
-                                'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
-                                'effectivity_date' => $details['effectivity_date'],
-                                'changed_at' => $audit->created_at,
-                                'history_table' => 'audit_trails',
-                                'history_id' => $audit->id,
-                            ];
-                        }
+                        // Show all rental rate changes with future dates (don't check if applied)
+                        $pendingChanges[] = [
+                            'id' => $audit->id,
+                            'change_type' => 'rental_rate',
+                            'category' => 'Rental Rates',
+                            'item_name' => $details['table_number'] ?? 'N/A',
+                            'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
+                            'effectivity_date' => $details['effectivity_date'],
+                            'changed_at' => $audit->created_at,
+                            'history_table' => 'audit_trails',
+                            'history_id' => $audit->id,
+                        ];
                     }
                 } catch (\Exception $e) {
                     // Skip invalid dates
@@ -90,22 +76,20 @@ class EffectivityDateController extends Controller
             }
         }
 
-        // 1. Get pending Utility Rate changes (only latest per utility type)
+        // 1. Get pending Utility Rate changes (latest per utility type with future dates)
         $hasRateEffectivityDate = DB::getSchemaBuilder()->hasColumn('rate_histories', 'effectivity_date');
         if ($hasRateEffectivityDate) {
-            // Get the latest pending change for each utility type
+            // Get the latest pending change for each utility type (regardless of whether applied)
             $utilityTypes = ['Electricity', 'Water'];
             foreach ($utilityTypes as $utilityType) {
-                // Get all pending changes for this utility type, then get the most recent one
-                $allChanges = DB::table('rate_histories as rh')
+                // Get the most recent change with future effectivity date
+                $latestChange = DB::table('rate_histories as rh')
                     ->join('rates as r', 'rh.rate_id', '=', 'r.id')
                     ->where('r.utility_type', $utilityType)
                     ->whereNotNull('rh.effectivity_date')
                     ->whereDate('rh.effectivity_date', '>=', $today)
                     ->select(
                         'rh.id',
-                        'r.id as rate_id',
-                        'r.rate as current_rate',
                         DB::raw("'utility_rate' as change_type"),
                         'r.utility_type as item_name',
                         'rh.old_rate',
@@ -114,21 +98,7 @@ class EffectivityDateController extends Controller
                         'rh.changed_at'
                     )
                     ->orderBy('rh.changed_at', 'desc')
-                    ->get();
-
-                // Find the latest change that hasn't been applied yet (new_rate != current_rate)
-                $latestChange = null;
-                foreach ($allChanges as $change) {
-                    if ($change->new_rate != $change->current_rate) {
-                        $latestChange = $change;
-                        break;
-                    }
-                }
-
-                // If all changes are already applied, show the most recent pending one anyway
-                if (!$latestChange && $allChanges->isNotEmpty()) {
-                    $latestChange = $allChanges->first();
-                }
+                    ->first();
 
                 if ($latestChange) {
                     $pendingChanges[] = [
