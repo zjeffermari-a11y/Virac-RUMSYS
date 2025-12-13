@@ -509,7 +509,7 @@
                         class="text-xl text-market-primary underline decoration-dotted">25th</strong>
                     day of every month.
                 </p>
-                <button id="editScheduleBtn"
+                <button id="editMeterReadingScheduleBtn"
                     class="bg-blue-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-600 transition-all duration-200 flex items-center gap-2 transition-transform transform hover:scale-105 active:scale-95">
                     <i class="fas fa-edit"></i>
                     <span>Edit Schedule</span>
@@ -526,12 +526,12 @@
                         class="w-full sm:w-32 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
                         placeholder="e.g., 25">
                     <div class="flex items-center gap-2">
-                        <button id="saveScheduleBtn"
+                        <button id="saveMeterReadingScheduleBtn"
                             class="bg-green-500 text-white px-6 py-2 rounded-xl font-medium hover:bg-green-600 transition-all duration-200 flex items-center gap-2">
                             <i class="fas fa-save"></i>
                             <span>Save</span>
                         </button>
-                        <button id="cancelScheduleBtn"
+                        <button id="cancelMeterReadingScheduleBtn"
                             class="bg-gray-500 text-white px-6 py-2 rounded-xl font-medium hover:bg-gray-600 transition-all duration-200 flex items-center gap-2">
                             <i class="fas fa-times"></i>
                             <span>Cancel</span>
@@ -710,6 +710,10 @@
                         class="notification-tab text-gray-500 hover:text-gray-700 px-3 py-2 text-lg font-medium">
                         Overdue Alert
                     </button>
+                    <button data-tab="sentMessages"
+                        class="notification-tab text-gray-500 hover:text-gray-700 px-3 py-2 text-lg font-medium">
+                        Sent Messages
+                    </button>
                 </nav>
             </div>
 
@@ -812,10 +816,120 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- Sent Messages Tab Content --}}
+                <div data-content="sentMessages" class="notification-tab-content hidden">
+                    <div class="mb-4">
+                        <p class="text-gray-600 mb-4">View all sent SMS messages for bill statements, payment reminders, overdue alerts, and policy changes with effectivity dates.</p>
+                        
+                        {{-- Filters Section --}}
+                        <div class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                    <i class="fas fa-filter text-market-primary"></i>Filters
+                                </h4>
+                                <button id="clearSentMessagesFiltersBtn" class="text-sm text-gray-600 hover:text-gray-800 underline">
+                                    Clear All
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {{-- Message Type Filter --}}
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Message Type</label>
+                                    <select id="filterMessageType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-market-primary focus:border-market-primary">
+                                        <option value="">All Types</option>
+                                        <option value="Bill Statement">Bill Statement</option>
+                                        <option value="Payment Reminder">Payment Reminder</option>
+                                        <option value="Overdue Bill Alert">Overdue Bill Alert</option>
+                                        <option value="Rate Change Notification">Rate Change Notification</option>
+                                        <option value="Schedule Change Notification">Schedule Change Notification</option>
+                                        <option value="Billing Setting Change Notification">Billing Setting Change Notification</option>
+                                        <option value="Rental Rate Change Notification">Rental Rate Change Notification</option>
+                                        <option value="Policy Change Notification">Policy Change Notification</option>
+                                    </select>
+                                </div>
+                                
+                                {{-- Date From Filter --}}
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Date From</label>
+                                    <input type="date" id="filterDateFrom" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-market-primary focus:border-market-primary">
+                                </div>
+                                
+                                {{-- Date To Filter --}}
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Date To</label>
+                                    <input type="date" id="filterDateTo" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-market-primary focus:border-market-primary">
+                                </div>
+                                
+                                {{-- Recipient Search --}}
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Search Recipient</label>
+                                    <input type="text" id="filterRecipient" placeholder="Name or contact number..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-market-primary focus:border-market-primary">
+                                </div>
+                            </div>
+                            <div class="mt-3 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <button id="applySentMessagesFiltersBtn" class="bg-market-primary text-white px-4 py-2 rounded-lg hover:bg-market-secondary transition-colors text-sm">
+                                        <i class="fas fa-search mr-2"></i>Apply Filters
+                                    </button>
+                                    <span id="sentMessagesFilterCount" class="text-xs text-gray-600"></span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div id="sentMessagesTotalCount" class="text-sm text-gray-600"></div>
+                                    <button id="refreshSentMessagesBtn" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm border border-gray-300">
+                                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <div class="overflow-x-auto" style="max-height: 600px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #cbd5e0 #f7fafc;">
+                            <style>
+                                .overflow-x-auto::-webkit-scrollbar {
+                                    width: 8px;
+                                    height: 8px;
+                                }
+                                .overflow-x-auto::-webkit-scrollbar-track {
+                                    background: #f7fafc;
+                                }
+                                .overflow-x-auto::-webkit-scrollbar-thumb {
+                                    background: #cbd5e0;
+                                    border-radius: 4px;
+                                }
+                                .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+                                    background: #a0aec0;
+                                }
+                            </style>
+                            <table class="w-full border-collapse">
+                                <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date & Time</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Recipient</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Message</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sentMessagesTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center py-8 text-gray-500">
+                                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                            <p>Loading sent messages...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="sentMessagesLoader" class="text-center py-4 hidden border-t border-gray-200">
+                            <i class="fas fa-spinner fa-spin text-market-primary"></i> Loading...
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {{-- Placeholder Guide and Save Button --}}
-            <div class="mt-8 pt-6 border-t border-gray-200">
+            <div id="placeholderGuideSection" class="mt-8 pt-6 border-t border-gray-200">
                 <div class="flex items-center justify-between mb-4">
                     <h4 class="text-lg font-semibold text-gray-800">Available Placeholders</h4>
                     <input type="text" id="placeholderSearch" placeholder="Search placeholders..." 
@@ -930,11 +1044,10 @@
                         <span>Save All Templates</span>
                     </button>
                 </div>
-
             </div>
         </div>
 
-        <div class="mt-12">
+        <div id="smsSendingScheduleSection" class="mt-12">
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h3 class="text-xl font-bold text-gray-800">SMS Sending Schedule</h3>
@@ -1330,7 +1443,7 @@
         @include('layouts.partials.content-header', ['title' => 'Announcements'])
 
         <div class="space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-250px)]">
+            <div class="grid grid-cols-1 gap-8 h-[calc(100vh-250px)]">
                 {{-- Left Column: Create Announcement Form --}}
                 <div class="flex flex-col min-h-0">
                     <div class="bg-white rounded-2xl shadow-lg p-6 h-full flex flex-col">
@@ -1410,13 +1523,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="mb-4">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="checkbox" id="announcementIsActive" checked
-                                        class="form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
-                                    <span class="text-gray-700">Publish Immediately</span>
-                                </label>
-                            </div>
+                            {{-- Publish Immediately option removed --}}
                             <div class="mt-auto pt-2">
                             <button type="submit" id="saveAnnouncementBtn"
                                 class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
@@ -1428,12 +1535,20 @@
                     </div>
                 </div>
 
-                {{-- Right Column: Draft Announcements --}}
-                <div class="flex flex-col min-h-0">
+                {{-- Right Column: Draft Announcements - DISABLED --}}
+                {{-- Draft announcements feature has been removed --}}
+                <div class="flex flex-col min-h-0 hidden">
                     <div class="bg-white rounded-2xl shadow-lg p-6 h-full flex flex-col">
                         <div class="flex items-center justify-between mb-4 flex-shrink-0">
                             <h3 class="text-xl font-semibold text-gray-800">Draft Announcements</h3>
-                            <span id="draftAnnouncementsCount" class="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-full">0</span>
+                            <div class="flex items-center gap-2">
+                                <span id="draftAnnouncementsCount" class="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-full">0</span>
+                                <button id="deleteAllDraftsBtn" 
+                                    class="bg-red-500 text-white text-xs px-3 py-1 rounded-lg font-medium hover:bg-red-600 transition-colors hidden"
+                                    title="Delete All Drafts">
+                                    <i class="fas fa-trash-alt mr-1"></i>Delete All
+                                </button>
+                            </div>
                         </div>
                         <div id="draftAnnouncementsList" class="space-y-2 flex-1 overflow-y-auto pr-2 min-h-0">
                             {{-- Draft announcements will be populated by JS --}}

@@ -67,14 +67,22 @@ class ScheduleController extends Controller
                     ]);
 
                     // Create a history log for the change
-                    DB::table('schedule_histories')->insert([
+                    $historyData = [
                         'schedule_id' => $scheduleId,
                         'field_changed' => 'schedule_day',
                         'old_value' => $oldDay,
                         'new_value' => $newDay,
                         'changed_by' => Auth::id() ?? 1, // Fallback to user 1 for testing
-                        'effectivity_date' => $effectivityDate,
-                    ]);
+                        'changed_at' => now(),
+                    ];
+                    
+                    // Only add effectivity_date if the column exists
+                    $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn('schedule_histories', 'effectivity_date');
+                    if ($hasEffectivityDate) {
+                        $historyData['effectivity_date'] = $effectivityDate;
+                    }
+                    
+                    DB::table('schedule_histories')->insert($historyData);
 
                     AuditLogger::log(
                         'Updated Meter Reading Schedule',

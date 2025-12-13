@@ -216,7 +216,6 @@ class AnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
-            'is_active' => 'boolean',
             'recipients' => 'nullable|array',
             'recipients.staff' => 'boolean',
             'recipients.meter_reader_clerk' => 'boolean',
@@ -226,13 +225,13 @@ class AnnouncementController extends Controller
             'recipients.vendor_ids.*' => 'integer|exists:users,id',
         ]);
 
+        // Publish Immediately feature removed - always create as inactive (draft)
+        $validated['is_active'] = false;
+
         $announcement = Announcement::create($validated);
 
-        // Send SMS and create in-app notifications to selected recipients if announcement is active
-        if ($announcement->is_active) {
-            $this->sendAnnouncementSms($announcement, $smsService);
-            $this->createAnnouncementNotifications($announcement);
-        }
+        // Announcements are always created as drafts - no automatic sending
+        // Admin must manually activate them later
 
         return response()->json($announcement, 201);
     }
@@ -242,7 +241,7 @@ class AnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
             'content' => 'sometimes|string',
-            'is_active' => 'boolean',
+            'is_active' => 'boolean', // Still allow updating is_active manually (for activation)
             'recipients' => 'nullable|array',
             'recipients.staff' => 'boolean',
             'recipients.meter_reader_clerk' => 'boolean',
@@ -257,6 +256,7 @@ class AnnouncementController extends Controller
 
         // Send SMS and create in-app notifications if announcement was just activated
         // When is_active changes from false to true, send notifications and SMS
+        // This allows manual activation via the "Send" button
         if ($announcement->is_active && !$wasActive) {
             $this->sendAnnouncementSms($announcement, $smsService);
             $this->createAnnouncementNotifications($announcement);

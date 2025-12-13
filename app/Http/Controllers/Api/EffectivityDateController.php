@@ -47,33 +47,69 @@ class EffectivityDateController extends Controller
                     continue;
                 }
                 
-                // Check if effectivity_date exists in details
-                if (!isset($details['effectivity_date']) || empty($details['effectivity_date'])) {
+                // Get effectivity_date from top level or from changes array
+                $effectivityDate = null;
+                if (isset($details['effectivity_date']) && !empty($details['effectivity_date'])) {
+                    $effectivityDate = $details['effectivity_date'];
+                } elseif (isset($details['changes']) && is_array($details['changes']) && count($details['changes']) > 0) {
+                    // For batch updates, get effectivity_date from first change
+                    if (isset($details['changes'][0]['effectivity_date'])) {
+                        $effectivityDate = $details['changes'][0]['effectivity_date'];
+                    }
+                }
+                
+                if (!$effectivityDate) {
                     continue;
                 }
                 
                 try {
-                    $effectivityDate = Carbon::parse($details['effectivity_date']);
+                    $parsedDate = Carbon::parse($effectivityDate);
                     // Only include if effectivity date is in the future (>= today)
-                    if ($effectivityDate->gte($today)) {
-                        // Show all rental rate changes with future dates
-                        $pendingChanges[] = [
-                            'id' => $audit->id,
-                            'change_type' => 'rental_rate',
-                            'category' => 'Rental Rates',
-                            'item_name' => $details['table_number'] ?? 'N/A',
-                            'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
-                            'effectivity_date' => $details['effectivity_date'],
-                            'changed_at' => $audit->created_at,
-                            'history_table' => 'audit_trails',
-                            'history_id' => $audit->id,
-                        ];
+                    if ($parsedDate->gte($today)) {
+                        // Check if this is a batch update with multiple changes
+                        if (isset($details['changes']) && is_array($details['changes']) && count($details['changes']) > 0) {
+                            // For batch updates, create an entry for each change
+                            foreach ($details['changes'] as $change) {
+                                // Use effectivity_date from change or fallback to top level
+                                $changeEffectivityDate = $change['effectivity_date'] ?? $effectivityDate;
+                                
+                                // Only add if this specific change has rate information
+                                if (isset($change['old_daily_rate']) && isset($change['new_daily_rate'])) {
+                                    $pendingChanges[] = [
+                                        'id' => $audit->id . '_' . ($change['id'] ?? ''),
+                                        'change_type' => 'rental_rate',
+                                        'category' => 'Rental Rates',
+                                        'item_name' => $change['table_number'] ?? 'N/A',
+                                        'description' => "Stall {$change['table_number']}: ₱{$change['old_daily_rate']}/day → ₱{$change['new_daily_rate']}/day",
+                                        'effectivity_date' => $changeEffectivityDate,
+                                        'changed_at' => $audit->created_at,
+                                        'history_table' => 'audit_trails',
+                                        'history_id' => $audit->id,
+                                    ];
+                                }
+                            }
+                        } else {
+                            // Single update - use top-level details
+                            if (isset($details['old_daily_rate']) && isset($details['new_daily_rate'])) {
+                                $pendingChanges[] = [
+                                    'id' => $audit->id,
+                                    'change_type' => 'rental_rate',
+                                    'category' => 'Rental Rates',
+                                    'item_name' => $details['table_number'] ?? 'N/A',
+                                    'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
+                                    'effectivity_date' => $effectivityDate,
+                                    'changed_at' => $audit->created_at,
+                                    'history_table' => 'audit_trails',
+                                    'history_id' => $audit->id,
+                                ];
+                            }
+                        }
                     }
                 } catch (\Exception $e) {
                     // Log error for debugging but continue
                     Log::debug('Error parsing rental rate effectivity date', [
                         'audit_id' => $audit->id,
-                        'effectivity_date' => $details['effectivity_date'] ?? 'missing',
+                        'effectivity_date' => $effectivityDate ?? 'missing',
                         'error' => $e->getMessage()
                     ]);
                     continue;
@@ -289,6 +325,22 @@ class EffectivityDateController extends Controller
                 ];
             }
         }
+
+        // Deduplicate: Keep only the latest change for each unique item (category + item_name)
+        // Group by unique key and keep the most recent one (based on changed_at)
+        $deduplicated = [];
+        foreach ($pendingChanges as $change) {
+            $uniqueKey = $change['category'] . '|' . $change['item_name'];
+            
+            // If we haven't seen this item before, or this change is more recent, keep it
+            if (!isset($deduplicated[$uniqueKey]) || 
+                Carbon::parse($change['changed_at'])->gt(Carbon::parse($deduplicated[$uniqueKey]['changed_at']))) {
+                $deduplicated[$uniqueKey] = $change;
+            }
+        }
+        
+        // Convert back to array (remove keys)
+        $pendingChanges = array_values($deduplicated);
 
         // Sort all pending changes by effectivity date
         usort($pendingChanges, function ($a, $b) {

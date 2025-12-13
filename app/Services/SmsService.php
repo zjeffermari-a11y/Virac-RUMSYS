@@ -366,6 +366,8 @@ class SmsService
             $currentMonth = $today->format('Y-m');
             
             if ($todayDay <= 15 && $rentBillMonth === $currentMonth && $rentSettings && (float)$rentSettings->discount_rate > 0) {
+                // Discount calculation: Original Price - (Original Price * discount_rate)
+                // Equivalent to: Original Price * (1 - discount_rate)
                 $rentDiscount = $rentBill->amount * (float)$rentSettings->discount_rate;
             }
             
@@ -513,8 +515,49 @@ class SmsService
                 'message_id' => $result['message_id'] ?? 'N/A',
                 'response' => $result['response'] ?? []
             ]);
+            
+            // Store SMS message in notifications table for tracking
+            try {
+                $adminUser = \App\Models\User::whereHas('role', function($query) {
+                    $query->where('name', 'Admin');
+                })->first();
+                
+                $smsTitle = $this->getSmsTitle($templateName);
+                
+                DB::table('notifications')->insert([
+                    'recipient_id' => $user->id,
+                    'sender_id' => $adminUser ? $adminUser->id : null,
+                    'channel' => 'sms',
+                    'title' => $smsTitle,
+                    'message' => json_encode([
+                        'text' => $finalMessage,
+                        'type' => $templateName,
+                        'template_name' => $templateName,
+                    ]),
+                    'status' => 'sent',
+                    'sent_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } catch (\Exception $e) {
+                Log::error("Failed to store SMS notification: " . $e->getMessage());
+            }
         }
         
         return $result;
+    }
+
+    /**
+     * Get SMS title based on template name
+     */
+    private function getSmsTitle(string $templateName): string
+    {
+        $titles = [
+            'bill_statement' => 'Bill Statement',
+            'payment_reminder' => 'Payment Reminder',
+            'overdue_alert' => 'Overdue Bill Alert',
+        ];
+        
+        return $titles[$templateName] ?? 'SMS Notification';
     }
 }

@@ -9,9 +9,14 @@ class AnnouncementService
 {
     /**
      * Generate a draft announcement when utility rates change
+     * DISABLED: Draft announcements feature removed
      */
     public function createRateChangeAnnouncement(string $utilityType, float $oldRate, float $newRate, float $oldMonthlyRate = null, float $newMonthlyRate = null, ?string $effectivityDate = null): ?Announcement
     {
+        // Draft announcements feature disabled - return null to prevent creation
+        return null;
+        
+        /* DISABLED CODE - Draft announcements removed
         $rateChange = $newRate - $oldRate;
         $rateChangePercent = $oldRate > 0 ? (($rateChange / $oldRate) * 100) : 0;
         $direction = $rateChange > 0 ? 'increased' : ($rateChange < 0 ? 'decreased' : 'unchanged');
@@ -49,13 +54,19 @@ class AnnouncementService
             'related_section' => $utilityType === 'Water' ? 'Wet Section' : null, // Water only for wet section
             'is_active' => false, // Draft - needs to be activated manually
         ]);
+        */
     }
 
     /**
      * Generate a draft announcement when billing settings change
+     * DISABLED: Draft announcements feature removed
      */
     public function createBillingSettingChangeAnnouncement(string $utilityType, string $settingName, float $oldValue, float $newValue): ?Announcement
     {
+        // Draft announcements feature disabled - return null to prevent creation
+        return null;
+        
+        /* DISABLED CODE - Draft announcements removed
         $settingLabels = [
             'discount_rate' => 'Discount Rate',
             'surcharge_rate' => 'Surcharge Rate',
@@ -92,13 +103,19 @@ class AnnouncementService
             'related_section' => $utilityType === 'Water' ? 'Wet Section' : null,
             'is_active' => false, // Draft - needs to be activated manually
         ]);
+        */
     }
 
     /**
      * Generate a draft announcement when due date or disconnection date changes
+     * DISABLED: Draft announcements feature removed
      */
     public function createDateScheduleChangeAnnouncement(string $scheduleType, string $utilityType, string $oldDay, string $newDay): ?Announcement
     {
+        // Draft announcements feature disabled - return null to prevent creation
+        return null;
+        
+        /* DISABLED CODE - Draft announcements removed
         $isDueDate = str_contains($scheduleType, 'Due Date');
         $label = $isDueDate ? 'Due Date' : 'Disconnection Date';
         
@@ -127,13 +144,19 @@ class AnnouncementService
             'related_section' => $utilityType === 'Water' ? 'Wet Section' : null,
             'is_active' => false, // Draft - needs to be activated manually
         ]);
+        */
     }
 
     /**
      * Generate a draft announcement when rental rate changes for a specific stall
+     * DISABLED: Draft announcements feature removed
      */
     public function createRentalRateChangeAnnouncement(\App\Models\Stall $stall, float $oldDailyRate, float $newDailyRate, float $oldMonthlyRate = null, float $newMonthlyRate = null): ?Announcement
     {
+        // Draft announcements feature disabled - return null to prevent creation
+        return null;
+        
+        /* DISABLED CODE - Draft announcements removed
         $dailyRateChange = $newDailyRate - $oldDailyRate;
         $dailyRateChangePercent = $oldDailyRate > 0 ? (($dailyRateChange / $oldDailyRate) * 100) : 0;
         $direction = $dailyRateChange > 0 ? 'increased' : ($dailyRateChange < 0 ? 'decreased' : 'unchanged');
@@ -201,6 +224,7 @@ class AnnouncementService
             ]);
             throw $e;
         }
+        */
     }
 }
 

@@ -101,9 +101,10 @@ class VendorController extends Controller
                     if ($todayDay <= 15) {
                         $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
                         if ($billMonth === $currentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
-                            $discountAmount = $bill->original_amount * (float)$settings->discount_rate;
-                            $bill->display_amount_due = $bill->original_amount - $discountAmount;
-                            $bill->discount_applied = $discountAmount;
+                            // Discount calculation: Original Price - (Original Price * discount_rate)
+                            // Equivalent to: Original Price * (1 - discount_rate)
+                            $bill->display_amount_due = $bill->original_amount - ($bill->original_amount * (float)$settings->discount_rate);
+                            $bill->discount_applied = $bill->original_amount * (float)$settings->discount_rate;
                         }
                     }
 
@@ -231,6 +232,8 @@ class VendorController extends Controller
                 $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
 
                 if ($billMonth === $currentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
+                    // Discount calculation: Original Price - (Original Price * discount_rate)
+                    // Equivalent to: Original Price * (1 - discount_rate)
                     $discountAmount = $bill->original_amount * (float)$settings->discount_rate;
                     $current_total_due -= $discountAmount;
                     $bill->discount_applied = $discountAmount;
@@ -349,8 +352,9 @@ class VendorController extends Controller
                 $paymentMonth = $paymentDate->format('Y-m');
 
                 if ($billMonth === $paymentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
-                    $discountAmount = $originalAmount * (float)$settings->discount_rate;
-                    $finalAmount = $originalAmount - $discountAmount;
+                    // Discount calculation: Original Price - (Original Price * discount_rate)
+                    // Equivalent to: Original Price * (1 - discount_rate)
+                    $finalAmount = $originalAmount - ($originalAmount * (float)$settings->discount_rate);
                 }
             }
             

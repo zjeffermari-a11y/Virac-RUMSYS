@@ -48,9 +48,6 @@ class SuperAdminDashboard {
             window.INITIAL_STATE?.unreadNotificationsCount || 0;
 
         // New properties for SMS Schedules
-        this.smsSchedules = window.INITIAL_STATE?.smsSchedules || [];
-        this.smsScheduleHistory =
-            window.INITIAL_STATE?.smsScheduleHistory?.data || [];
         this.readingEditRequests =
             window.INITIAL_STATE?.editRequests?.data?.map((req) => ({
                 id: req.id,
@@ -138,6 +135,19 @@ class SuperAdminDashboard {
             discountsSurchargesPenaltySection: false,
             profileSection: false,
         };
+        this.fetchingSentMessages = false;
+        this.sentMessagesFilters = {
+            type: '',
+            date_from: '',
+            date_to: '',
+            recipient: ''
+        };
+        this.smsSchedules = window.INITIAL_STATE?.smsSchedules || [];
+        this.smsScheduleHistory =
+            window.INITIAL_STATE?.smsScheduleHistory?.data || [];
+        this.smsScheduleHistoryPage = 2;
+        this.smsScheduleHistoryHasMore =
+            !!window.INITIAL_STATE?.smsScheduleHistory?.next_page_url;
         this.listenersInitialized = {
             rentalRates: false,
             utilityRates: false,
@@ -250,9 +260,9 @@ class SuperAdminDashboard {
             scheduleEdit: document.getElementById("scheduleEdit"),
             scheduleDayDisplay: document.getElementById("scheduleDayDisplay"),
             scheduleDayInput: document.getElementById("scheduleDayInput"),
-            editScheduleBtn: document.getElementById("editScheduleBtn"),
-            saveScheduleBtn: document.getElementById("saveScheduleBtn"),
-            cancelScheduleBtn: document.getElementById("cancelScheduleBtn"),
+            editScheduleBtn: document.getElementById("editMeterReadingScheduleBtn"),
+            saveScheduleBtn: document.getElementById("saveMeterReadingScheduleBtn"),
+            cancelScheduleBtn: document.getElementById("cancelMeterReadingScheduleBtn"),
             scheduleHistoryTableBody: document.getElementById(
                 "scheduleHistoryTableBody"
             ),
@@ -438,10 +448,11 @@ class SuperAdminDashboard {
             createAnnouncementForm: document.getElementById("createAnnouncementForm"),
             announcementTitle: document.getElementById("announcementTitle"),
             announcementContent: document.getElementById("announcementContent"),
-            announcementIsActive: document.getElementById("announcementIsActive"),
+            // announcementIsActive removed - publish immediately feature disabled
             saveAnnouncementBtn: document.getElementById("saveAnnouncementBtn"),
             sentAnnouncementsList: document.getElementById("sentAnnouncementsList"),
             draftAnnouncementsList: document.getElementById("draftAnnouncementsList"),
+            deleteAllDraftsBtn: document.getElementById("deleteAllDraftsBtn"),
 
             // Settings Elements
             changePasswordForm: document.getElementById("changePasswordForm"),
@@ -536,12 +547,6 @@ class SuperAdminDashboard {
             this.elements.readingEditRequestsContainer,
             this.elements.readingEditRequestsLoader,
             this.fetchReadingEditRequests
-        );
-        // New infinite scroll for SMS schedule history
-        this.setupInfiniteScroll(
-            this.elements.smsScheduleHistoryContainer,
-            this.elements.smsScheduleHistoryLoader,
-            this.fetchSmsScheduleHistory
         );
 
         this.filterAndRenderRates();
@@ -1214,12 +1219,30 @@ class SuperAdminDashboard {
                     "border-b-2",
                     "border-market-primary"
                 );
-                this.elements.notificationTabContents.forEach((content) => {
+                // Re-query tab contents to include dynamically added content
+                const allTabContents = document.querySelectorAll('.notification-tab-content');
+                allTabContents.forEach((content) => {
                     content.classList.toggle(
                         "hidden",
                         content.dataset.content !== tabId
                     );
                 });
+                
+                // Load sent messages when "Sent Messages" tab is clicked
+                if (tabId === 'sentMessages') {
+                    this.fetchSentMessages();
+                    // Hide placeholder guide and SMS schedule sections
+                    const placeholderSection = document.getElementById('placeholderGuideSection');
+                    const smsScheduleSection = document.getElementById('smsSendingScheduleSection');
+                    if (placeholderSection) placeholderSection.classList.add('hidden');
+                    if (smsScheduleSection) smsScheduleSection.classList.add('hidden');
+                } else {
+                    // Show placeholder guide and SMS schedule sections for other tabs
+                    const placeholderSection = document.getElementById('placeholderGuideSection');
+                    const smsScheduleSection = document.getElementById('smsSendingScheduleSection');
+                    if (placeholderSection) placeholderSection.classList.remove('hidden');
+                    if (smsScheduleSection) smsScheduleSection.classList.remove('hidden');
+                }
             });
         });
 
@@ -1281,15 +1304,211 @@ class SuperAdminDashboard {
         }
 
         // --- New SMS Schedule Listeners ---
-        this.elements.editSmsSchedulesBtn.addEventListener("click", () =>
-            this.toggleSmsSchedulesEditMode(true)
-        );
-        this.elements.cancelSmsSchedulesBtn.addEventListener("click", () =>
-            this.toggleSmsSchedulesEditMode(false)
-        );
-        this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
-            this.saveSmsSchedules()
-        );
+        if (this.elements.editSmsSchedulesBtn) {
+            this.elements.editSmsSchedulesBtn.addEventListener("click", () =>
+                this.toggleSmsSchedulesEditMode(true)
+            );
+        }
+        if (this.elements.cancelSmsSchedulesBtn) {
+            this.elements.cancelSmsSchedulesBtn.addEventListener("click", () =>
+                this.toggleSmsSchedulesEditMode(false)
+            );
+        }
+        if (this.elements.saveSmsSchedulesBtn) {
+            this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
+                this.saveSmsSchedules()
+            );
+        }
+
+        // Refresh sent messages button
+        const refreshSentMessagesBtn = document.getElementById('refreshSentMessagesBtn');
+        if (refreshSentMessagesBtn) {
+            refreshSentMessagesBtn.addEventListener('click', () => {
+                this.fetchSentMessages();
+            });
+        }
+    }
+
+    async fetchSentMessages(page = 1) {
+        const tableBody = document.getElementById('sentMessagesTableBody');
+        const loader = document.getElementById('sentMessagesLoader');
+        
+        if (!tableBody) return;
+        
+        // Prevent multiple simultaneous requests
+        if (this.fetchingSentMessages) {
+            return;
+        }
+        this.fetchingSentMessages = true;
+        
+        try {
+            if (page === 1) {
+                loader?.classList.remove('hidden');
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-8 text-gray-500">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p>Loading sent messages...</p>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            // Build query string with filters
+            const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: '50'
+            });
+
+            if (this.sentMessagesFilters.type) {
+                params.append('type', this.sentMessagesFilters.type);
+            }
+            if (this.sentMessagesFilters.date_from) {
+                params.append('date_from', this.sentMessagesFilters.date_from);
+            }
+            if (this.sentMessagesFilters.date_to) {
+                params.append('date_to', this.sentMessagesFilters.date_to);
+            }
+            if (this.sentMessagesFilters.recipient) {
+                params.append('recipient', this.sentMessagesFilters.recipient);
+            }
+
+            const response = await fetch(`/api/notification-templates/sent-messages?${params.toString()}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP ${response.status}: Failed to fetch sent messages`);
+            }
+            
+            const data = await response.json();
+            
+            // Update total count display
+            const totalCountEl = document.getElementById('sentMessagesTotalCount');
+            if (totalCountEl) {
+                totalCountEl.textContent = `Total: ${data.total} message${data.total !== 1 ? 's' : ''}`;
+            }
+
+            // Update filter count
+            const filterCountEl = document.getElementById('sentMessagesFilterCount');
+            if (filterCountEl) {
+                const activeFilters = Object.values(this.sentMessagesFilters).filter(f => f !== '').length;
+                if (activeFilters > 0) {
+                    filterCountEl.textContent = `${activeFilters} filter${activeFilters !== 1 ? 's' : ''} active`;
+                    filterCountEl.classList.remove('hidden');
+                } else {
+                    filterCountEl.textContent = '';
+                    filterCountEl.classList.add('hidden');
+                }
+            }
+            
+            if (data.data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-8 text-gray-500">
+                            <i class="fas fa-inbox text-3xl mb-2 opacity-30"></i>
+                            <p>No sent messages found.</p>
+                            ${Object.values(this.sentMessagesFilters).some(f => f !== '') ? 
+                                '<p class="text-sm mt-2">Try adjusting your filters.</p>' : ''}
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tableBody.innerHTML = data.data.map((msg) => {
+                const date = new Date(msg.date_time);
+                const dateStr = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+                const timeStr = date.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                
+                // Determine message type badge color
+                let typeBadgeClass = 'bg-blue-100 text-blue-700';
+                if (msg.type.includes('Overdue')) {
+                    typeBadgeClass = 'bg-red-100 text-red-700';
+                } else if (msg.type.includes('Payment Reminder')) {
+                    typeBadgeClass = 'bg-yellow-100 text-yellow-700';
+                } else if (msg.type.includes('Change') || msg.type.includes('Policy')) {
+                    typeBadgeClass = 'bg-purple-100 text-purple-700';
+                }
+                
+                return `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3 text-sm text-gray-700">
+                            <div>${dateStr}</div>
+                            <div class="text-xs text-gray-500">${timeStr}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-700">
+                            <div class="font-medium">${this.escapeHtml(msg.recipient_name)}</div>
+                            <div class="text-xs text-gray-500">${this.escapeHtml(msg.recipient_contact)}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium ${typeBadgeClass}">
+                                ${this.escapeHtml(msg.type)}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-700">
+                            <div class="max-w-md">
+                                <div class="message-preview">${this.escapeHtml(msg.display_message)}</div>
+                                ${msg.message.length > 150 ? `
+                                    <button class="text-market-primary text-xs mt-1 hover:underline view-full-message" 
+                                        data-message="${this.escapeHtml(msg.message)}">
+                                        View full message
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                Sent
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Add event listeners for "View full message" buttons
+            tableBody.querySelectorAll('.view-full-message').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const fullMessage = e.target.dataset.message;
+                    if (fullMessage) {
+                        alert(fullMessage);
+                    }
+                });
+            });
+            
+        } catch (error) {
+            console.error('Error fetching sent messages:', error);
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
+                        <p>Failed to load sent messages.</p>
+                        <p class="text-sm mt-1">${error.message}</p>
+                    </td>
+                </tr>
+            `;
+        } finally {
+            loader?.classList.add('hidden');
+            this.fetchingSentMessages = false;
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     updateCharacterCount(editorElement) {
@@ -2904,15 +3123,77 @@ class SuperAdminDashboard {
     }
 
     setupScheduleEventListeners() {
-        this.elements.editScheduleBtn.addEventListener("click", () =>
-            this.toggleScheduleEditMode(true)
-        );
-        this.elements.cancelScheduleBtn.addEventListener("click", () =>
-            this.toggleScheduleEditMode(false)
-        );
-        this.elements.saveScheduleBtn.addEventListener("click", () =>
-            this.saveMeterReadingSchedule()
-        );
+        // Re-query elements in case they weren't found during initial cache
+        const editBtn = document.getElementById("editMeterReadingScheduleBtn");
+        const cancelBtn = document.getElementById("cancelMeterReadingScheduleBtn");
+        const saveBtn = document.getElementById("saveMeterReadingScheduleBtn");
+        const scheduleView = document.getElementById("scheduleView");
+        const scheduleEdit = document.getElementById("scheduleEdit");
+        const scheduleDayInput = document.getElementById("scheduleDayInput");
+        
+        // Update cached elements
+        if (editBtn) this.elements.editScheduleBtn = editBtn;
+        if (cancelBtn) this.elements.cancelScheduleBtn = cancelBtn;
+        if (saveBtn) this.elements.saveScheduleBtn = saveBtn;
+        if (scheduleView) this.elements.scheduleView = scheduleView;
+        if (scheduleEdit) this.elements.scheduleEdit = scheduleEdit;
+        if (scheduleDayInput) this.elements.scheduleDayInput = scheduleDayInput;
+        
+        if (!this.elements.editScheduleBtn) {
+            console.error('editMeterReadingScheduleBtn element not found. Available IDs:', 
+                Array.from(document.querySelectorAll('[id*="Schedule"]')).map(el => el.id));
+            return;
+        }
+        if (!this.elements.cancelScheduleBtn) {
+            console.error('cancelMeterReadingScheduleBtn element not found');
+            return;
+        }
+        if (!this.elements.saveScheduleBtn) {
+            console.error('saveMeterReadingScheduleBtn element not found');
+            return;
+        }
+        
+        // Use event delegation or direct binding - remove any existing listeners first
+        const editHandler = () => {
+            console.log('Edit button clicked');
+            try {
+                this.toggleMeterReadingScheduleEditMode(true);
+            } catch (error) {
+                console.error('Error in toggleMeterReadingScheduleEditMode:', error);
+            }
+        };
+        
+        const cancelHandler = () => {
+            console.log('Cancel button clicked');
+            this.toggleMeterReadingScheduleEditMode(false);
+        };
+        
+        const saveHandler = () => {
+            console.log('Save button clicked');
+            this.saveMeterReadingSchedule();
+        };
+        
+        // Remove old listeners if they exist (store handlers on element)
+        if (this.elements.editScheduleBtn._editHandler) {
+            this.elements.editScheduleBtn.removeEventListener("click", this.elements.editScheduleBtn._editHandler);
+        }
+        if (this.elements.cancelScheduleBtn._cancelHandler) {
+            this.elements.cancelScheduleBtn.removeEventListener("click", this.elements.cancelScheduleBtn._cancelHandler);
+        }
+        if (this.elements.saveScheduleBtn._saveHandler) {
+            this.elements.saveScheduleBtn.removeEventListener("click", this.elements.saveScheduleBtn._saveHandler);
+        }
+        
+        // Store handlers and add listeners
+        this.elements.editScheduleBtn._editHandler = editHandler;
+        this.elements.cancelScheduleBtn._cancelHandler = cancelHandler;
+        this.elements.saveScheduleBtn._saveHandler = saveHandler;
+        
+        this.elements.editScheduleBtn.addEventListener("click", editHandler);
+        this.elements.cancelScheduleBtn.addEventListener("click", cancelHandler);
+        this.elements.saveScheduleBtn.addEventListener("click", saveHandler);
+        
+        console.log('Schedule event listeners set up successfully');
     }
 
     async fetchMeterReadingSchedule() {
@@ -3569,9 +3850,59 @@ class SuperAdminDashboard {
             .join("");
     }
 
-    toggleScheduleEditMode(isEditing) {
-        this.elements.scheduleView.classList.toggle("hidden", isEditing);
-        this.elements.scheduleEdit.classList.toggle("hidden", !isEditing);
+    toggleMeterReadingScheduleEditMode(isEditing) {
+        console.log('toggleMeterReadingScheduleEditMode called with:', isEditing);
+        
+        // Re-query elements if they're null
+        const scheduleView = document.getElementById("scheduleView");
+        const scheduleEdit = document.getElementById("scheduleEdit");
+        
+        console.log('Elements found - scheduleView:', !!scheduleView, 'scheduleEdit:', !!scheduleEdit);
+        
+        if (!scheduleView) {
+            console.error('scheduleView element not found. Searching for elements with "schedule" in ID:');
+            console.log(Array.from(document.querySelectorAll('[id*="schedule"]')).map(el => el.id));
+            return;
+        }
+        if (!scheduleEdit) {
+            console.error('scheduleEdit element not found. Searching for elements with "schedule" in ID:');
+            console.log(Array.from(document.querySelectorAll('[id*="schedule"]')).map(el => el.id));
+            return;
+        }
+        
+        // Update cached elements
+        this.elements.scheduleView = scheduleView;
+        this.elements.scheduleEdit = scheduleEdit;
+        
+        console.log('Before toggle - scheduleView classes:', scheduleView.className);
+        console.log('Before toggle - scheduleEdit classes:', scheduleEdit.className);
+        
+        // Toggle visibility
+        if (isEditing) {
+            scheduleView.classList.add("hidden");
+            scheduleEdit.classList.remove("hidden");
+            console.log('After toggle (editing) - scheduleView hidden:', scheduleView.classList.contains("hidden"));
+            console.log('After toggle (editing) - scheduleEdit hidden:', scheduleEdit.classList.contains("hidden"));
+            
+            // Focus on the input field
+            const scheduleDayInput = document.getElementById("scheduleDayInput");
+            if (scheduleDayInput) {
+                // Set the current day value
+                const currentDay = this.currentSchedule?.day || this.currentSchedule?.description || 15;
+                scheduleDayInput.value = currentDay;
+                setTimeout(() => {
+                    scheduleDayInput.focus();
+                    scheduleDayInput.select();
+                }, 100);
+            } else {
+                console.error('scheduleDayInput not found');
+            }
+        } else {
+            scheduleView.classList.remove("hidden");
+            scheduleEdit.classList.add("hidden");
+            console.log('After toggle (viewing) - scheduleView hidden:', scheduleView.classList.contains("hidden"));
+            console.log('After toggle (viewing) - scheduleEdit hidden:', scheduleEdit.classList.contains("hidden"));
+        }
     }
 
     async saveMeterReadingSchedule() {
@@ -3599,13 +3930,20 @@ class SuperAdminDashboard {
         // 1. Immediately update the UI
         this.currentSchedule.day = newDay;
         this.renderMeterReadingSchedule(); // Update the view text
-        this.toggleScheduleEditMode(false); // Switch back to view mode
+        this.toggleMeterReadingScheduleEditMode(false); // Switch back to view mode
 
         // 2. Immediately create and display a temporary history log
+        // Calculate default effectivity date (1st of next month) for optimistic display
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1);
+        const defaultEffectivityDate = nextMonth.toISOString().split('T')[0];
+        
         const optimisticLog = {
             old_value: oldSchedule.day,
             new_value: newDay,
             changed_at: new Date().toISOString(), // Use browser time for instant display
+            effectivity_date: defaultEffectivityDate, // Default to 1st of next month
         };
         this.scheduleHistory.unshift(optimisticLog);
         this.renderScheduleHistoryTable();
@@ -5242,22 +5580,7 @@ class SuperAdminDashboard {
                     });
                 }
 
-                // Handle "Publish Immediately" checkbox to update button text
-                const publishImmediatelyCheckbox = document.getElementById('announcementIsActive');
-                if (publishImmediatelyCheckbox) {
-                    publishImmediatelyCheckbox.addEventListener('change', (e) => {
-                        const btn = this.elements.saveAnnouncementBtn;
-                        const isEditMode = btn?.dataset.editId ? true : false;
-                        this.updateAnnouncementButtonText(e.target.checked, isEditMode);
-                    });
-                }
-
-                // Initial button text update
-                if (publishImmediatelyCheckbox) {
-                    const btn = this.elements.saveAnnouncementBtn;
-                    const isEditMode = btn?.dataset.editId ? true : false;
-                    this.updateAnnouncementButtonText(publishImmediatelyCheckbox.checked, isEditMode);
-                }
+                // Publish Immediately feature removed - announcements are always created as inactive
             }
         }
 
@@ -5269,6 +5592,13 @@ class SuperAdminDashboard {
                     const id = deleteBtn.dataset.id;
                     this.confirmDeleteAnnouncement(id);
                 }
+            });
+        }
+        
+        // Event listener for delete all drafts button
+        if (this.elements.deleteAllDraftsBtn) {
+            this.elements.deleteAllDraftsBtn.addEventListener("click", () => {
+                this.confirmDeleteAllDrafts();
             });
         }
         
@@ -5356,7 +5686,7 @@ class SuperAdminDashboard {
     }
 
     async fetchAnnouncements() {
-        if (!this.elements.sentAnnouncementsList || !this.elements.draftAnnouncementsList) return;
+        if (!this.elements.sentAnnouncementsList) return;
 
         try {
             const response = await fetch("/api/admin/announcements");
@@ -5364,12 +5694,11 @@ class SuperAdminDashboard {
 
             const announcements = await response.json();
             
-            // Separate sent and draft announcements
+            // Only show sent announcements (draft feature removed)
             const sentAnnouncements = announcements.filter(a => a.is_active);
-            const draftAnnouncements = announcements.filter(a => !a.is_active);
             
             this.renderSentAnnouncements(sentAnnouncements);
-            this.renderDraftAnnouncements(draftAnnouncements);
+            // Draft announcements feature removed - no longer rendering drafts
             this.dataLoaded.announcementSection = true;
         } catch (error) {
             console.error("Error fetching announcements:", error);
@@ -5549,16 +5878,14 @@ class SuperAdminDashboard {
         if (!this.elements.announcementContent) {
             this.elements.announcementContent = document.getElementById("announcementContent");
         }
-        if (!this.elements.announcementIsActive) {
-            this.elements.announcementIsActive = document.getElementById("announcementIsActive");
-        }
         if (!this.elements.saveAnnouncementBtn) {
             this.elements.saveAnnouncementBtn = document.getElementById("saveAnnouncementBtn");
         }
         
         const title = this.elements.announcementTitle?.value || '';
         let content = this.elements.announcementContent?.value || '';
-        const isActive = this.elements.announcementIsActive?.checked || false;
+        // Publish Immediately feature removed - always create as inactive
+        const isActive = false;
         const btn = this.elements.saveAnnouncementBtn;
         
         if (!btn) {
@@ -5687,9 +6014,7 @@ class SuperAdminDashboard {
             if (this.elements.announcementContent) {
                 this.elements.announcementContent.value = '';
             }
-            if (this.elements.announcementIsActive) {
-                this.elements.announcementIsActive.checked = false;
-            }
+            // Publish Immediately feature removed
             
             // Reset recipient checkboxes - uncheck all
             const staffCheckbox = document.getElementById('recipientStaff');
@@ -5722,7 +6047,7 @@ class SuperAdminDashboard {
             }
             
             // Update button text
-            this.updateAnnouncementButtonText(false, false);
+            this.updateAnnouncementButtonText(false);
             
             this.fetchAnnouncements(); // Refresh list
 
@@ -5731,27 +6056,21 @@ class SuperAdminDashboard {
             this.showToast(editId ? "Failed to update announcement." : "Failed to post announcement.", "error");
         } finally {
             btn.disabled = false;
-            // Reset button text based on edit mode and publish immediately
-            const isActive = this.elements.announcementIsActive?.checked || false;
+            // Reset button text - Publish Immediately feature removed
             const isEditMode = btn.dataset.editId ? true : false;
-            this.updateAnnouncementButtonText(isActive, isEditMode);
+            this.updateAnnouncementButtonText(isEditMode);
         }
     }
 
     updateAnnouncementButtonText(isPublishImmediately, isEditMode = false) {
         const btn = this.elements.saveAnnouncementBtn;
         if (!btn) return;
-
-        if (isPublishImmediately) {
-            // Show "Send" when publish immediately is checked
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Send</span>';
+        
+        // Publish Immediately feature removed - always show "Save" or "Update"
+        if (isEditMode) {
+            btn.innerHTML = '<i class="fas fa-save"></i> <span>Update Announcement</span>';
         } else {
-            // Show "Update Announcement" or "Post Announcement" when not checked
-            if (isEditMode) {
-                btn.innerHTML = '<i class="fas fa-save"></i> <span>Update Announcement</span>';
-            } else {
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Post Announcement</span>';
-            }
+            btn.innerHTML = '<i class="fas fa-save"></i> <span>Save Announcement</span>';
         }
     }
 
@@ -5814,6 +6133,64 @@ class SuperAdminDashboard {
         }
     }
 
+    confirmDeleteAllDrafts() {
+        if (!confirm("Are you sure you want to delete ALL draft announcements? This action cannot be undone.")) {
+            return;
+        }
+        this.deleteAllDrafts();
+    }
+
+    async deleteAllDrafts() {
+        try {
+            // First, get all draft announcements
+            const response = await fetch("/api/admin/announcements");
+            if (!response.ok) throw new Error("Failed to fetch announcements");
+
+            const announcements = await response.json();
+            const draftAnnouncements = announcements.filter(a => !a.is_active);
+
+            if (draftAnnouncements.length === 0) {
+                this.showToast("No draft announcements to delete", "info");
+                return;
+            }
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+            if (!csrfToken) {
+                console.error("CSRF token not found");
+                this.showToast("Error: CSRF token not found. Please refresh the page.", "error");
+                return;
+            }
+
+            // Delete all drafts
+            const deletePromises = draftAnnouncements.map(announcement => 
+                fetch(`/api/admin/announcements/${announcement.id}`, {
+                    method: "DELETE",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "X-CSRF-TOKEN": csrfToken,
+                    },
+                    credentials: 'same-origin',
+                })
+            );
+
+            const results = await Promise.allSettled(deletePromises);
+            const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+            const failed = results.length - successful;
+
+            if (failed === 0) {
+                this.showToast(`Successfully deleted ${successful} draft announcement(s)`, "success");
+            } else {
+                this.showToast(`Deleted ${successful} draft(s), but ${failed} failed`, "warning");
+            }
+
+            this.fetchAnnouncements();
+        } catch (error) {
+            console.error("Error deleting all drafts:", error);
+            this.showToast(error.message || "Failed to delete all drafts", "error");
+        }
+    }
+
     async editDraftAnnouncement(id) {
         try {
             console.log("Edit button clicked, fetching announcement ID:", id);
@@ -5860,9 +6237,7 @@ class SuperAdminDashboard {
             // Populate the form with announcement data
             this.elements.announcementTitle.value = announcement.title || '';
             this.elements.announcementContent.value = announcement.content || '';
-            if (this.elements.announcementIsActive) {
-                this.elements.announcementIsActive.checked = announcement.is_active || false;
-            }
+            // Publish Immediately feature removed - announcements are always inactive when edited
             
             // Trigger input events to ensure any listeners are notified
             this.elements.announcementTitle.dispatchEvent(new Event('input', { bubbles: true }));
@@ -5916,9 +6291,8 @@ class SuperAdminDashboard {
             const btn = this.elements.saveAnnouncementBtn;
             if (btn) {
                 btn.dataset.editId = id;
-                // Update button text based on publish immediately checkbox
-                const isActive = this.elements.announcementIsActive?.checked || false;
-                this.updateAnnouncementButtonText(isActive, true);
+                // Update button text - Publish Immediately feature removed
+                this.updateAnnouncementButtonText(true);
             }
             
             // Scroll to form

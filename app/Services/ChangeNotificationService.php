@@ -83,6 +83,32 @@ class ChangeNotificationService
                     $result = $this->smsService->send($contactNumber, $personalizedMessage);
                     if ($result['success']) {
                         $successCount++;
+                        
+                        // Store SMS message in notifications table
+                        try {
+                            $adminUser = \App\Models\User::whereHas('role', function($query) {
+                                $query->where('name', 'Admin');
+                            })->first();
+                            
+                            $smsTitle = $this->getSmsTitleForChange($baseMessage);
+                            
+                            DB::table('notifications')->insert([
+                                'recipient_id' => $user->id,
+                                'sender_id' => $adminUser ? $adminUser->id : null,
+                                'channel' => 'sms',
+                                'title' => $smsTitle,
+                                'message' => json_encode([
+                                    'text' => $personalizedMessage,
+                                    'type' => 'change_notification',
+                                ]),
+                                'status' => 'sent',
+                                'sent_at' => now(),
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error("Failed to store SMS notification: " . $e->getMessage());
+                        }
                     } else {
                         $failCount++;
                         Log::warning("Failed to send SMS to user {$user->id}: {$result['message']}");
@@ -630,6 +656,24 @@ class ChangeNotificationService
                 Log::error("Error regenerating bills in background: " . $e->getMessage());
             }
         });
+    }
+
+    /**
+     * Get SMS title based on message content
+     */
+    private function getSmsTitleForChange(string $message): string
+    {
+        if (str_contains($message, 'RATE CHANGE') || str_contains($message, 'Rate Update')) {
+            return 'Rate Change Notification';
+        } elseif (str_contains($message, 'DUE DATE CHANGE') || str_contains($message, 'DISCONNECTION')) {
+            return 'Schedule Change Notification';
+        } elseif (str_contains($message, 'BILLING SETTING CHANGE')) {
+            return 'Billing Setting Change Notification';
+        } elseif (str_contains($message, 'RENTAL RATE')) {
+            return 'Rental Rate Change Notification';
+        }
+        
+        return 'Policy Change Notification';
     }
 }
 

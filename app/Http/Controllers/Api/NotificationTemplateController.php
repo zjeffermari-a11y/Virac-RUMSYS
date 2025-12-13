@@ -191,4 +191,147 @@ class NotificationTemplateController extends Controller
         }
         return $defaults;
     }
+
+    /**
+     * Get all sent SMS messages (bill statements, payment reminders, overdue alerts, effectivity date changes)
+     */
+    public function getSentMessages(Request $request)
+    {
+        $page = $request->input('page', 1);
+        $perPage = $request->input('per_page', 50); // Increased default for better scrolling
+        
+        // Get filters from request
+        $messageType = $request->input('type');
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+        $recipientSearch = $request->input('recipient');
+        
+        // Filter by message type based on title
+        $messageTypes = [
+            'Bill Statement',
+            'Payment Reminder',
+            'Overdue Bill Alert',
+            'Rate Change Notification',
+            'Schedule Change Notification',
+            'Billing Setting Change Notification',
+            'Rental Rate Change Notification',
+            'Policy Change Notification',
+        ];
+        
+        // Build base query - if recipient filter is needed, join users from the start
+        if ($recipientSearch) {
+            $baseQuery = DB::table('notifications as n')
+                ->join('users as recipient', 'n.recipient_id', '=', 'recipient.id')
+                ->where('n.channel', 'sms')
+                ->where('n.status', 'sent')
+                ->whereIn('n.title', $messageTypes)
+                ->where(function($query) use ($recipientSearch) {
+                    $query->where('recipient.name', 'like', "%{$recipientSearch}%")
+                          ->orWhere('recipient.contact_number', 'like', "%{$recipientSearch}%");
+                });
+        } else {
+            $baseQuery = DB::table('notifications as n')
+                ->where('n.channel', 'sms')
+                ->where('n.status', 'sent')
+                ->whereIn('n.title', $messageTypes);
+        }
+        
+        // Apply filters
+        if ($messageType) {
+            $baseQuery->where('n.title', $messageType);
+        }
+        
+        if ($dateFrom) {
+            $baseQuery->where(function($query) use ($dateFrom) {
+                $query->whereDate('n.sent_at', '>=', $dateFrom)
+                      ->orWhere(function($q) use ($dateFrom) {
+                          $q->whereNull('n.sent_at')
+                            ->whereDate('n.created_at', '>=', $dateFrom);
+                      });
+            });
+        }
+        
+        if ($dateTo) {
+            $baseQuery->where(function($query) use ($dateTo) {
+                $query->whereDate('n.sent_at', '<=', $dateTo)
+                      ->orWhere(function($q) use ($dateTo) {
+                          $q->whereNull('n.sent_at')
+                            ->whereDate('n.created_at', '<=', $dateTo);
+                      });
+            });
+        }
+        
+        // Get notification IDs with filters applied
+        $notificationIds = $baseQuery
+            ->select('n.id')
+            ->orderBy('n.sent_at', 'desc')
+            ->orderBy('n.created_at', 'desc')
+            ->pluck('id');
+        
+        $total = $notificationIds->count();
+        
+        if ($total === 0) {
+            return response()->json([
+                'data' => [],
+                'current_page' => (int) $page,
+                'per_page' => $perPage,
+                'total' => 0,
+                'last_page' => 0,
+            ]);
+        }
+        
+        // Get paginated IDs
+        $paginatedIds = $notificationIds->slice(($page - 1) * $perPage, $perPage)->values();
+        
+        // Now join with users only for the paginated results
+        $messages = DB::table('notifications as n')
+            ->join('users as recipient', 'n.recipient_id', '=', 'recipient.id')
+            ->leftJoin('users as sender', 'n.sender_id', '=', 'sender.id')
+            ->whereIn('n.id', $paginatedIds)
+            ->select(
+                'n.id',
+                'n.title',
+                'n.message',
+                'n.sent_at',
+                'n.created_at',
+                'recipient.name as recipient_name',
+                'recipient.contact_number as recipient_contact',
+                'sender.name as sender_name'
+            )
+            ->orderBy('n.sent_at', 'desc')
+            ->orderBy('n.created_at', 'desc')
+            ->get();
+        
+        // Parse message JSON and format data
+        $formattedMessages = $messages->map(function ($message) {
+            $messageData = json_decode($message->message, true);
+            $messageText = is_array($messageData) && isset($messageData['text']) 
+                ? $messageData['text'] 
+                : (is_string($message->message) ? $message->message : '');
+            
+            // Truncate long messages for display
+            $displayMessage = strlen($messageText) > 150 
+                ? substr($messageText, 0, 150) . '...' 
+                : $messageText;
+            
+            return [
+                'id' => $message->id,
+                'date_time' => $message->sent_at ?? $message->created_at,
+                'recipient_name' => $message->recipient_name ?? 'N/A',
+                'recipient_contact' => $message->recipient_contact ?? 'N/A',
+                'type' => $message->title,
+                'message' => $messageText,
+                'display_message' => $displayMessage,
+                'sender_name' => $message->sender_name ?? 'System',
+            ];
+        });
+        
+        return response()->json([
+            'data' => $formattedMessages,
+            'current_page' => (int) $page,
+            'per_page' => $perPage,
+            'total' => $total,
+            'last_page' => (int) ceil($total / $perPage),
+        ]);
+    }
 }

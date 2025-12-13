@@ -95,6 +95,7 @@ use App\Http\Controllers\Api\NotificationTemplateController;
 Route::get('/notification-templates/credits', [NotificationTemplateController::class, 'getCredits']);
 Route::get('/notification-templates', [NotificationTemplateController::class, 'index']);
 Route::post('/notification-templates', [NotificationTemplateController::class, 'update']);
+Route::get('/notification-templates/sent-messages', [NotificationTemplateController::class, 'getSentMessages']);
 
 
 
@@ -150,7 +151,7 @@ Route::prefix('admin/announcements')->middleware(['auth:sanctum', 'role:Admin'])
 
 use App\Http\Controllers\Api\EffectivityDateController;
 
-Route::prefix('admin/effectivity-dates')->middleware(['auth', 'role:Admin'])->group(function () {
+Route::prefix('admin/effectivity-dates')->middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::get('/pending-changes', [EffectivityDateController::class, 'getPendingChanges']);
     Route::get('/debug-rental-rates', [EffectivityDateController::class, 'debugRentalRates']);
     Route::put('/update', [EffectivityDateController::class, 'updateEffectivityDate']);

@@ -309,8 +309,9 @@ class StaffController extends Controller
                 $paymentMonth = $paymentDate->format('Y-m');
 
                 if ($billMonth === $paymentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
-                    $discountAmount = $originalAmount * (float)$settings->discount_rate;
-                    $finalAmount = $originalAmount - $discountAmount;
+                    // Discount calculation: Original Price - (Original Price * discount_rate)
+                    // Equivalent to: Original Price * (1 - discount_rate)
+                    $finalAmount = $originalAmount - ($originalAmount * (float)$settings->discount_rate);
                 }
             }
             
