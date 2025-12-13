@@ -43,10 +43,19 @@ class AuditTrailController extends Controller
                 $selectFields[] = 'at.details';
             }
             
+            // Use database-agnostic query builder
             $query = DB::table('audit_trails as at')
                 ->leftJoin('users as u', 'at.user_id', '=', 'u.id')
                 ->leftJoin('roles as r', 'at.role_id', '=', 'r.id')
                 ->select($selectFields);
+            
+            // Log query for debugging (only in non-production)
+            if (config('app.debug')) {
+                \Log::debug('Audit trail query', [
+                    'driver' => DB::getDriverName(),
+                    'has_details_column' => $hasDetailsColumn,
+                ]);
+            }
 
         // Search by user name or action
         if ($request->filled('search')) {
@@ -63,11 +72,15 @@ class AuditTrailController extends Controller
             $query->where('at.role_id', $request->input('role'));
         }
 
-        // Filter by date range
+        // Filter by date range - use database-agnostic approach with Laravel's date methods
         if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween(DB::raw('DATE(at.created_at)'), [
-                $request->input('start_date'),
-                $request->input('end_date')
+            $startDate = \Carbon\Carbon::parse($request->input('start_date'))->startOfDay();
+            $endDate = \Carbon\Carbon::parse($request->input('end_date'))->endOfDay();
+            
+            // Use whereBetween with full datetime to avoid database-specific DATE() functions
+            $query->whereBetween('at.created_at', [
+                $startDate->toDateTimeString(),
+                $endDate->toDateTimeString()
             ]);
         }
 

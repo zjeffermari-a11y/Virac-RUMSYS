@@ -31,7 +31,7 @@ class AuditLogger
             }
 
             if (is_array($details) || is_object($details)) {
-                $details = json_encode($details);
+                $details = json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
 
             $auditTrail = AuditTrail::create([
@@ -41,12 +41,28 @@ class AuditLogger
                 'module' => substr($module, 0, 50),
                 'result' => substr($result, 0, 50),
                 'details' => $details,
+                'created_at' => now(), // Explicitly set created_at for database compatibility
+            ]);
+
+            // Log success for debugging
+            Log::debug("AuditLogger: Successfully created audit log", [
+                'id' => $auditTrail->id,
+                'action' => $action,
+                'module' => $module,
+                'user_id' => $user->id,
             ]);
 
             return $auditTrail->id;
 
         } catch (\Exception $e) {
-            Log::error("AuditLogger Error: " . $e->getMessage());
+            Log::error("AuditLogger Error", [
+                'message' => $e->getMessage(),
+                'action' => $action,
+                'module' => $module,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return null;
         }
     }
