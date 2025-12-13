@@ -30,38 +30,40 @@ class EffectivityDateController extends Controller
         // 0. Get pending Rental Rate changes (stored in audit_trails)
         $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
         if ($hasDetailsColumn) {
-            $rentalRateChanges = DB::table('audit_trails')
+            $rentalRateAudits = DB::table('audit_trails')
                 ->where('module', 'Rental Rates')
-                ->where('action', 'Updated Rental Rate')
+                ->whereIn('action', ['Updated Rental Rate', 'Updated Rental Rates'])
                 ->whereNotNull('details')
                 ->select('id', 'details', 'created_at')
                 ->orderBy('created_at', 'desc')
-                ->get()
-                ->filter(function ($audit) use ($today) {
-                    $details = json_decode($audit->details, true);
-                    if (!$details || !isset($details['effectivity_date'])) {
-                        return false;
-                    }
-                    $effectivityDate = Carbon::parse($details['effectivity_date']);
-                    return $effectivityDate->gte($today);
-                })
-                ->map(function ($audit) {
-                    $details = json_decode($audit->details, true);
-                    return [
-                        'id' => $audit->id,
-                        'change_type' => 'rental_rate',
-                        'category' => 'Rental Rates',
-                        'item_name' => $details['table_number'] ?? 'N/A',
-                        'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
-                        'effectivity_date' => $details['effectivity_date'],
-                        'changed_at' => $audit->created_at,
-                        'history_table' => 'audit_trails',
-                        'history_id' => $audit->id,
-                    ];
-                });
+                ->get();
 
-            foreach ($rentalRateChanges as $change) {
-                $pendingChanges[] = $change;
+            foreach ($rentalRateAudits as $audit) {
+                $details = json_decode($audit->details, true);
+                if (!$details || !isset($details['effectivity_date'])) {
+                    continue;
+                }
+                
+                try {
+                    $effectivityDate = Carbon::parse($details['effectivity_date']);
+                    // Only include if effectivity date is in the future
+                    if ($effectivityDate->gte($today)) {
+                        $pendingChanges[] = [
+                            'id' => $audit->id,
+                            'change_type' => 'rental_rate',
+                            'category' => 'Rental Rates',
+                            'item_name' => $details['table_number'] ?? 'N/A',
+                            'description' => "Stall {$details['table_number']}: ₱{$details['old_daily_rate']}/day → ₱{$details['new_daily_rate']}/day",
+                            'effectivity_date' => $details['effectivity_date'],
+                            'changed_at' => $audit->created_at,
+                            'history_table' => 'audit_trails',
+                            'history_id' => $audit->id,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // Skip invalid dates
+                    continue;
+                }
             }
         }
 
