@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
 use App\Models\BillingSetting;
 use Illuminate\Support\Facades\Auth;
+use App\Services\AuditLogger;
 
 class NotificationController extends Controller
 {
@@ -77,6 +78,16 @@ class NotificationController extends Controller
             $u->dueDate = $targetDate->endOfMonth()->format('F d, Y');
         }
 
+        // Log print action
+        if (Auth::check()) {
+            AuditLogger::log(
+                'Printed Billing Statement',
+                'Reports',
+                'Success',
+                ['user_id' => $user->id, 'user_name' => $user->name, 'month' => $month]
+            );
+        }
+
         return view('printing.print', [
             'users' => $users, // Pass the collection of users
             'billingSettings' => $billingSettings,
@@ -141,6 +152,18 @@ class NotificationController extends Controller
             $user->totalAmountDue = $currentBills->sum('amount_after_due');
             $user->statementMonth = $statementMonth;
             $user->dueDate = $today->endOfMonth()->format('F d, Y');
+        }
+
+        // Log bulk print action
+        if (Auth::check()) {
+            $userNames = $users->pluck('name')->toArray();
+            $userIds = $users->pluck('id')->toArray();
+            AuditLogger::log(
+                'Bulk Printed Billing Statements',
+                'Reports',
+                'Success',
+                ['user_count' => count($users), 'user_ids' => $userIds, 'user_names' => $userNames, 'month' => $statementMonth]
+            );
         }
 
         return view('printing.print', [

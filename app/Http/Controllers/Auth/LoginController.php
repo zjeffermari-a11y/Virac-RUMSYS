@@ -50,6 +50,17 @@ class LoginController extends Controller
             }
         }
 
+        // Log failed login attempt
+        DB::table('audit_trails')->insert([
+            'user_id' => null, // No user ID for failed login
+            'role_id' => 1, // Default role for failed attempts
+            'action' => 'Failed Login Attempt',
+            'module' => 'Authentication',
+            'result' => 'Failed',
+            'details' => json_encode(['username' => $request->input('username')]),
+            'created_at' => now(),
+        ]);
+
         return back()->withErrors([
             'username' => 'Invalid username or password.',
         ])->onlyInput('username');
@@ -57,6 +68,20 @@ class LoginController extends Controller
 
     public function logout(Request $request)
         {
+        $user = Auth::user();
+        
+        // Log logout before logging out
+        if ($user) {
+            DB::table('audit_trails')->insert([
+                'user_id' => $user->id,
+                'role_id' => $user->role_id,
+                'action' => 'User Logout',
+                'module' => 'Authentication',
+                'result' => 'Success',
+                'created_at' => now(),
+            ]);
+        }
+        
         Auth::logout(); // Logs out the user
         // Invalidate and regenerate session
         $request->session()->invalidate();

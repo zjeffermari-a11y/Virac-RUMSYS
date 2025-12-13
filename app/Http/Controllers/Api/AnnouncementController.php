@@ -207,6 +207,17 @@ class AnnouncementController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+            
+            // Log announcement dismissal (only for admin actions, not user dismissals)
+            // User dismissals are personal preferences, not system changes
+            if ($user->role && $user->role->name === 'Admin') {
+                AuditLogger::log(
+                    'Dismissed Announcement',
+                    'Announcements',
+                    'Success',
+                    ['announcement_id' => $announcement->id, 'announcement_title' => $announcement->title]
+                );
+            }
         }
 
         return response()->json(['message' => 'Announcement dismissed successfully']);
@@ -289,6 +300,18 @@ class AnnouncementController extends Controller
         // When is_active changes from false to true, send notifications and SMS
         // This allows manual activation via the "Send" button
         if ($announcement->is_active && !$wasActive) {
+            // Log announcement activation/sending separately
+            AuditLogger::log(
+                'Activated and Sent Announcement',
+                'Announcements',
+                'Success',
+                [
+                    'announcement_id' => $announcement->id,
+                    'title' => $announcement->title,
+                    'recipients' => $announcement->recipients ?? []
+                ]
+            );
+            
             $this->sendAnnouncementSms($announcement, $smsService);
             $this->createAnnouncementNotifications($announcement);
         }

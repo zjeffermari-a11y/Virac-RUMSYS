@@ -201,9 +201,12 @@ class RentalRateController extends Controller
                     $dailyRateChanged = abs($oldDailyRate - $newDailyRate) > $epsilon;
                     $monthlyRateChanged = abs($oldMonthlyRate - $newMonthlyRate) > $epsilon;
                     $tableNumberChanged = $oldTableNumber !== $stallData['tableNumber'];
+                    $oldArea = (float) ($stall->area ?? 0);
+                    $newArea = (float) ($stallData['area'] ?? 0);
+                    $areaChanged = abs($oldArea - $newArea) > $epsilon;
                     
                     // Only store change details for audit log if something actually changed
-                    if ($dailyRateChanged || $monthlyRateChanged || $tableNumberChanged) {
+                    if ($dailyRateChanged || $monthlyRateChanged || $tableNumberChanged || $areaChanged) {
                         $auditDetails['changes'][] = [
                             'id' => $stall->id,
                             'table_number' => $stallData['tableNumber'],
@@ -213,6 +216,8 @@ class RentalRateController extends Controller
                             'new_daily_rate' => $newDailyRate,
                             'old_monthly_rate' => $oldMonthlyRate,
                             'new_monthly_rate' => $newMonthlyRate,
+                            'old_area' => $oldArea,
+                            'new_area' => $newArea,
                             'effectivity_date' => $effectivityDate,
                         ];
                     }
@@ -298,11 +303,39 @@ class RentalRateController extends Controller
         // Check if rate will change
         $newDailyRate = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
         $rateChanged = $oldDailyRate !== $newDailyRate;
+        
+        // Check if table number or area will change
+        $oldTableNumber = $stallModel->table_number;
+        $oldArea = $stallModel->area;
+        $tableNumberChanged = isset($validatedData['tableNumber']) && $validatedData['tableNumber'] !== $oldTableNumber;
+        $areaChanged = isset($validatedData['area']) && abs((float)$validatedData['area'] - (float)$oldArea) > 0.01;
 
-        if (!$rateChanged && !isset($validatedData['tableNumber']) && !isset($validatedData['area'])) {
-            // No change, just update if other fields changed
+        if (!$rateChanged && !$tableNumberChanged && !$areaChanged) {
+            // No change at all, just return
+            return response()->json(['message' => 'No changes detected.']);
+        }
+        
+        // If only table number or area changed (no rate change), log it separately
+        if (!$rateChanged && ($tableNumberChanged || $areaChanged)) {
             $stallModel->update(array_filter($validatedData));
-            return response()->json(['message' => 'Rental rate updated successfully!']);
+            $stallModel->refresh();
+            
+            AuditLogger::log(
+                'Updated Stall Information',
+                'Rental Rates',
+                'Success',
+                [
+                    'stall_id' => $stallModel->id,
+                    'table_number' => $stallModel->table_number,
+                    'old_table_number' => $oldTableNumber,
+                    'new_table_number' => $stallModel->table_number,
+                    'old_area' => $oldArea,
+                    'new_area' => $stallModel->area,
+                    'section' => $stallModel->section->name ?? 'N/A',
+                ]
+            );
+            
+            return response()->json(['message' => 'Stall information updated successfully!']);
         }
 
         // Rate changed - check if we need to show modal

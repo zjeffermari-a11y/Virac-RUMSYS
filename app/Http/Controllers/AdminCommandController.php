@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use App\Services\AuditLogger;
 
 class AdminCommandController extends Controller
 {
@@ -78,6 +81,42 @@ class AdminCommandController extends Controller
             Artisan::call($command);
             $output = Artisan::output();
             
+            // Log to audit trail if user is authenticated
+            $user = Auth::user();
+            if ($user) {
+                    $commandNames = [
+                    'billing:generate' => 'Manually Generated Monthly Bills',
+                    'sms:send-billing-statements' => 'Manually Sent Billing Statements',
+                    'sms:send-overdue-alerts' => 'Manually Sent Overdue Alerts',
+                    'sms:send-payment-reminders' => 'Manually Sent Payment Reminders'
+                ];
+                
+                AuditLogger::log(
+                    $commandNames[$command] ?? "Executed Command: {$command}",
+                    'System Operations',
+                    'Success',
+                    ['command' => $command, 'ip' => $request->ip()]
+                );
+            } else {
+                // Log as system operation if no user
+                $commandNames = [
+                    'billing:generate' => 'Manually Generated Monthly Bills',
+                    'sms:send-billing-statements' => 'Manually Sent Billing Statements',
+                    'sms:send-overdue-alerts' => 'Manually Sent Overdue Alerts',
+                    'sms:send-payment-reminders' => 'Manually Sent Payment Reminders'
+                ];
+                
+                DB::table('audit_trails')->insert([
+                    'user_id' => 1, // System user
+                    'role_id' => 1, // Admin role
+                    'action' => $commandNames[$command] ?? "Executed Command: {$command}",
+                    'module' => 'System Operations',
+                    'result' => 'Success',
+                    'details' => json_encode(['command' => $command, 'ip' => $request->ip(), 'triggered_by' => 'system']),
+                    'created_at' => now(),
+                ]);
+            }
+            
             Log::info('Admin command executed', [
                 'command' => $command,
                 'ip' => $request->ip()
@@ -146,6 +185,8 @@ class AdminCommandController extends Controller
         $results = [];
         
         try {
+            $user = Auth::user();
+            
             // 1. Generate monthly bills
             Artisan::call('billing:generate');
             $results[] = [
@@ -153,6 +194,16 @@ class AdminCommandController extends Controller
                 'success' => true,
                 'output' => Artisan::output()
             ];
+            
+            // Log bill generation
+            if ($user) {
+                AuditLogger::log(
+                    'Manually Executed All Monthly Tasks',
+                    'System Operations',
+                    'Success',
+                    ['tasks' => ['Generate Monthly Bills', 'Send Billing Statements', 'Send Overdue Alerts'], 'ip' => $request->ip()]
+                );
+            }
             
             // Small delay to ensure bills are generated before sending statements
             sleep(2);
