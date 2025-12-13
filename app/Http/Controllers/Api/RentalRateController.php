@@ -320,28 +320,38 @@ class RentalRateController extends Controller
 
         // Process based on effectiveToday
         DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService) {
-            $stallModel->update(array_filter($validatedData));
-            $stallModel->refresh();
-            
-            $newMonthlyRate = (float) $stallModel->monthly_rate;
+            // Calculate new monthly rate first
+            $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
+            $newMonthlyRateValue = isset($validatedData['monthlyRate']) ? (float) $validatedData['monthlyRate'] : ($newDailyRateValue * 30);
             
             if ($effectiveToday) {
                 // Effective today - update immediately, send SMS
                 $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
                 
+                // Update the stall
+                $stallModel->update(array_filter($validatedData));
+                $stallModel->refresh();
+                
                 // Send SMS notification and regenerate bills in background
-                register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate) {
+                register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
                     $notificationService->sendRentalRateChangeNotification(
                         $stallModel,
                         $oldDailyRate,
-                        $newDailyRate,
+                        $newDailyRateValue,
                         $oldMonthlyRate,
-                        $newMonthlyRate
+                        $newMonthlyRateValue
                     );
                 });
             } else {
-                // Not effective today - save with default future date
+                // Not effective today - DON'T update the stall yet, just save to audit with future date
                 $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
+                // Only update non-rate fields (like tableNumber, area) if they changed
+                $nonRateUpdates = array_filter($validatedData, function($key) {
+                    return !in_array($key, ['dailyRate', 'monthlyRate']);
+                }, ARRAY_FILTER_USE_KEY);
+                if (!empty($nonRateUpdates)) {
+                    $stallModel->update($nonRateUpdates);
+                }
             }
             
             // Store audit details
@@ -350,9 +360,9 @@ class RentalRateController extends Controller
                 'table_number' => $stallModel->table_number,
                 'section' => $stallModel->section->name ?? 'N/A',
                 'old_daily_rate' => $oldDailyRate,
-                'new_daily_rate' => $newDailyRate,
+                'new_daily_rate' => $effectiveToday ? $newDailyRate : $newDailyRateValue,
                 'old_monthly_rate' => $oldMonthlyRate,
-                'new_monthly_rate' => $newMonthlyRate,
+                'new_monthly_rate' => $effectiveToday ? $newMonthlyRate : $newMonthlyRateValue,
                 'effectivity_date' => $effectivityDate,
             ];
             
