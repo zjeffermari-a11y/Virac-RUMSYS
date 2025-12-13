@@ -232,7 +232,7 @@
                 </form>
 
                 <p class="mt-6 text-center text-xs text-gray-500">
-                    &copy; 2025 Virac Public Market Management System. All rights reserved.
+                    &copy; 2025 Rent and Utility Management System. All rights reserved.
                 </p>
             </div>
         </div>
