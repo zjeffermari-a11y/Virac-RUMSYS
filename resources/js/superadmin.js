@@ -2744,10 +2744,10 @@ class SuperAdminDashboard {
         // Replace all on first page, append on subsequent pages
         if (this.auditTrailsPage === 2) {
             // First page - replace all
-            tableBody.innerHTML = rowsHtml.join('');
+            tableBody.innerHTML = rowsHtml;
         } else {
             // Subsequent pages - append
-            tableBody.insertAdjacentHTML("beforeend", rowsHtml.join(''));
+            tableBody.insertAdjacentHTML("beforeend", rowsHtml);
         }
     }
 
