@@ -32,11 +32,12 @@ class ScheduleController extends Controller
     /**
      * Update the meter reading schedule.
      */
-    public function update(Request $request, $scheduleId)
+    public function update(Request $request, $scheduleId, ChangeNotificationService $notificationService)
     {
         $validator = Validator::make($request->all(), [
             'day' => 'required|integer|min:1|max:31',
             'effectivityDate' => 'nullable|date',
+            'effectiveToday' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -44,7 +45,10 @@ class ScheduleController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $scheduleId) {
+            $effectiveToday = $request->input('effectiveToday');
+            $pendingChangeId = null;
+
+            DB::transaction(function () use ($request, $scheduleId, $effectiveToday, $notificationService, &$pendingChangeId) {
                 $schedule = DB::table('schedules')->where('id', $scheduleId)->first();
                 if (!$schedule) {
                     throw new \Exception('Schedule not found.');
@@ -53,26 +57,43 @@ class ScheduleController extends Controller
                 $oldDay = $schedule->description;
                 $newDay = $request->input('day');
                 
-                // Default to 1st of next month since bills are generated monthly on the 1st
-                $effectivityDate = isset($request->effectivityDate) && $request->effectivityDate
-                    ? \Carbon\Carbon::parse($request->effectivityDate)->format('Y-m-d')
-                    : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
+                // Determine effectivity date based on effectiveToday
+                $effectivityDate = $effectiveToday
+                    ? \Carbon\Carbon::now()->format('Y-m-d')
+                    : (isset($request->effectivityDate) && $request->effectivityDate
+                        ? \Carbon\Carbon::parse($request->effectivityDate)->format('Y-m-d')
+                        : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d'));
 
                 // Only proceed if the day has actually changed
                 if ($oldDay != $newDay) {
-                    // Update the schedule's description (which stores the day)
-                    DB::table('schedules')->where('id', $scheduleId)->update([
-                        'description' => $newDay,
-                        'updated_at' => now(),
-                    ]);
+                    if ($effectiveToday) {
+                        // Effective today - update main table immediately and send SMS
+                        DB::table('schedules')->where('id', $scheduleId)->update([
+                            'description' => $newDay,
+                            'updated_at' => now(),
+                        ]);
+
+                        // Send SMS notification in background
+                        register_shutdown_function(function() use ($notificationService, $oldDay, $newDay) {
+                            $notificationService->sendScheduleChangeNotification(
+                                'Meter Reading',
+                                'Electricity',
+                                $oldDay,
+                                $newDay
+                            );
+                        });
+                    } else {
+                        // Not effective today - save to history with future date, don't update main table, don't send SMS yet
+                        // Don't update main table yet
+                    }
 
                     // Create a history log for the change
                     $historyData = [
                         'schedule_id' => $scheduleId,
-                        'field_changed' => 'schedule_day',
+                        'field_changed' => 'Meter Reading',
                         'old_value' => $oldDay,
                         'new_value' => $newDay,
-                        'changed_by' => Auth::id() ?? 1, // Fallback to user 1 for testing
+                        'changed_by' => Auth::id() ?? 1,
                         'changed_at' => now(),
                     ];
                     
@@ -82,7 +103,12 @@ class ScheduleController extends Controller
                         $historyData['effectivity_date'] = $effectivityDate;
                     }
                     
-                    DB::table('schedule_histories')->insert($historyData);
+                    $historyId = DB::table('schedule_histories')->insertGetId($historyData);
+                    
+                    // Store history_id for redirect if not effective today
+                    if (!$effectiveToday) {
+                        $pendingChangeId = $historyId;
+                    }
 
                     AuditLogger::log(
                         'Updated Meter Reading Schedule',
@@ -100,7 +126,19 @@ class ScheduleController extends Controller
             return response()->json(['message' => $e->getMessage()], 404);
         }
 
-        return response()->json(['message' => 'Schedule updated successfully!']);
+        if ($effectiveToday) {
+            return response()->json(['message' => 'Meter reading schedule updated and notifications sent!']);
+        } else {
+            return response()->json([
+                'message' => 'Please adjust effectivity date in Effectivity Date Management',
+                'redirect' => true,
+                'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                'pendingChange' => [
+                    'history_table' => 'schedule_histories',
+                    'history_id' => $pendingChangeId,
+                ],
+            ]);
+        }
     }
 
     /**

@@ -3953,33 +3953,78 @@ class SuperAdminDashboard {
 
         // 3. Save to the server in the background
         try {
+            const headers = {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-CSRF-TOKEN": document
+                    .querySelector('meta[name="csrf-token"]')
+                    .getAttribute("content"),
+            };
+            const body = JSON.stringify({ day: newDay });
+
             const response = await fetch(
                 `/api/schedules/meter-reading/${this.currentSchedule.id}`,
                 {
                     method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Accept: "application/json",
-                        "X-CSRF-TOKEN": document
-                            .querySelector('meta[name="csrf-token"]')
-                            .getAttribute("content"),
-                    },
-                    body: JSON.stringify({ day: newDay }),
+                    headers,
+                    body,
                 }
             );
+
+            // Check for change detection (modal)
+            const changeResult = await this.handleChangeDetection(response, `/api/schedules/meter-reading/${this.currentSchedule.id}`, "PUT", headers, body);
+            if (changeResult.intercepted) {
+                // Rollback UI changes since we're showing modal
+                this.currentSchedule = oldSchedule;
+                this.scheduleHistory = oldHistory;
+                this.renderMeterReadingSchedule();
+                this.renderScheduleHistoryTable();
+                return; // Modal is showing, wait for user confirmation
+            }
+
             if (!response.ok) {
                 throw new Error(
-                    (await response.json()).message ||
+                    changeResult.data.message ||
                     "Failed to update schedule."
                 );
             }
 
-            // On success, show confirmation and silently refresh history for server-authoritative data
-            this.showToast("Schedule updated successfully!", "success");
-            this.scheduleHistory = [];
-            this.scheduleHistoryPage = 1;
-            this.scheduleHistoryHasMore = true;
-            await this.fetchMeterReadingScheduleHistory();
+            const data = changeResult.data;
+
+            // Handle redirect if needed
+            if (data.redirect) {
+                // Store pending change info if provided
+                if (data.pendingChange && data.pendingChange.history_table && data.pendingChange.history_id) {
+                    const focusData = {
+                        history_table: data.pendingChange.history_table,
+                        history_id: data.pendingChange.history_id
+                    };
+                    sessionStorage.setItem('pendingChangeFocus', JSON.stringify(focusData));
+                    console.log('Stored pendingChangeFocus:', focusData);
+                }
+                
+                this.showToast(data.message || 'Redirecting to Effectivity Date Management...', 'info');
+                setTimeout(() => {
+                    const redirectUrl = data.redirectUrl || '/superadmin#effectivityDateManagementSection';
+                    if (window.location.pathname === '/superadmin' || window.location.pathname === '/superadmin/') {
+                        window.location.hash = 'effectivityDateManagementSection';
+                        this.state.activeSection = 'effectivityDateManagementSection';
+                        this.renderActiveSection();
+                        setTimeout(() => {
+                            this.initializeSection('effectivityDateManagementSection');
+                        }, 100);
+                    } else {
+                        window.location.href = redirectUrl;
+                    }
+                }, 1500);
+            } else {
+                // On success, show confirmation and silently refresh history for server-authoritative data
+                this.showToast(data.message || "Schedule updated successfully!", "success");
+                this.scheduleHistory = [];
+                this.scheduleHistoryPage = 1;
+                this.scheduleHistoryHasMore = true;
+                await this.fetchMeterReadingScheduleHistory();
+            }
         } catch (error) {
             // On failure, roll back UI changes and show an error
             this.showToast(error.message, "error");

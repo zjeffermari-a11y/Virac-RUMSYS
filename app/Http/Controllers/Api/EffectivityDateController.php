@@ -223,6 +223,38 @@ class EffectivityDateController extends Controller
                     'history_id' => $latestDisconnection->id,
                 ];
             }
+
+            // Get latest Meter Reading schedule change
+            $latestMeterReading = DB::table('schedule_histories as sh')
+                ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
+                ->where('s.schedule_type', 'Meter Reading')
+                ->whereNotNull('sh.effectivity_date')
+                ->whereDate('sh.effectivity_date', '>=', $today)
+                ->select(
+                    'sh.id',
+                    's.schedule_type',
+                    'sh.field_changed',
+                    'sh.old_value',
+                    'sh.new_value',
+                    'sh.effectivity_date',
+                    'sh.changed_at'
+                )
+                ->orderBy('sh.changed_at', 'desc')
+                ->first();
+
+            if ($latestMeterReading) {
+                $pendingChanges[] = [
+                    'id' => $latestMeterReading->id,
+                    'change_type' => 'schedule',
+                    'category' => 'Meter Reading Schedule',
+                    'item_name' => $latestMeterReading->schedule_type,
+                    'description' => "{$latestMeterReading->field_changed}: {$latestMeterReading->old_value} → {$latestMeterReading->new_value}",
+                    'effectivity_date' => $latestMeterReading->effectivity_date,
+                    'changed_at' => $latestMeterReading->changed_at,
+                    'history_table' => 'schedule_histories',
+                    'history_id' => $latestMeterReading->id,
+                ];
+            }
         }
 
         // 3. Get pending Billing Settings changes (Discount Rate, Surcharge Rate, Monthly Interest Rate for Electricity - 3 total)
@@ -505,13 +537,23 @@ class EffectivityDateController extends Controller
                     // Get schedule info
                     $schedule = DB::table('schedules')->where('id', $currentRecord->schedule_id)->first();
                     if ($schedule) {
-                        $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $schedule->schedule_type);
-                        $notificationService->sendScheduleChangeNotification(
-                            $schedule->schedule_type,
-                            $utilityType,
-                            $currentRecord->old_value,
-                            $currentRecord->new_value
-                        );
+                        // Handle Meter Reading schedule differently
+                        if ($schedule->schedule_type === 'Meter Reading') {
+                            $notificationService->sendScheduleChangeNotification(
+                                'Meter Reading',
+                                'Electricity',
+                                $currentRecord->old_value,
+                                $currentRecord->new_value
+                            );
+                        } else {
+                            $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $schedule->schedule_type);
+                            $notificationService->sendScheduleChangeNotification(
+                                $schedule->schedule_type,
+                                $utilityType,
+                                $currentRecord->old_value,
+                                $currentRecord->new_value
+                            );
+                        }
                     }
                 } elseif ($historyTable === 'billing_setting_histories') {
                     // Get billing setting info
