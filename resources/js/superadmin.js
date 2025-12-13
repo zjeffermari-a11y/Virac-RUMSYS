@@ -6607,7 +6607,27 @@ class SuperAdminDashboard {
         const tableBody = document.getElementById('pendingChangesTableBody');
         if (!tableBody) return;
 
+        // Check if there's a focused change to highlight
+        const focusChange = sessionStorage.getItem('pendingChangeFocus');
+        let focusData = null;
+        if (focusChange) {
+            try {
+                focusData = JSON.parse(focusChange);
+            } catch (e) {
+                console.error('Error parsing pendingChangeFocus:', e);
+            }
+        }
+
         tableBody.innerHTML = this.pendingChanges.map(change => {
+            // Check if this is the focused change
+            const isFocused = focusData && 
+                            change.history_table === focusData.history_table && 
+                            parseInt(change.history_id) === parseInt(focusData.history_id);
+            
+            const rowClass = isFocused 
+                ? 'hover:bg-gray-50 transition-colors bg-yellow-50 border-l-4 border-yellow-400' 
+                : 'hover:bg-gray-50 transition-colors';
+
             const effectivityDate = new Date(change.effectivity_date);
             const formattedEffectivityDate = effectivityDate.toLocaleDateString('en-US', {
                 year: 'numeric',
