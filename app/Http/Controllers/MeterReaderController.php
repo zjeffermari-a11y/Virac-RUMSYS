@@ -53,12 +53,17 @@ class MeterReaderController extends Controller
 
                 $readingsToCreate = [];
                 foreach ($stallsNeedingReading as $stallId) {
+                    $previousReading = $lastReadings->get($stallId)->previous_reading ?? 0;
+                    $currentReading = 0;
+                    $consumption = $currentReading - $previousReading;
+                    
                     $readingsToCreate[] = [
                         'stall_id' => $stallId,
                         'utility_type' => 'Electricity',
                         'reading_date' => $billingPeriodMonth->endOfMonth()->toDateString(),
-                        'previous_reading' => $lastReadings->get($stallId)->previous_reading ?? 0,
-                        'current_reading' => 0,
+                        'previous_reading' => $previousReading,
+                        'current_reading' => $currentReading,
+                        'consumption' => $consumption,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];

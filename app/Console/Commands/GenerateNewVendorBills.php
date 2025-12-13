@@ -148,7 +148,11 @@ class GenerateNewVendorBills extends Command
                     // Use a consistent date for the reading record, e.g., the end of the current month.
                     'reading_date' => $rentPeriodEnd->toDateString() 
                 ],
-                ['previous_reading' => 0, 'current_reading' => 0]
+                [
+                    'previous_reading' => 0, 
+                    'current_reading' => 0,
+                    'consumption' => 0 // consumption = current_reading - previous_reading = 0 - 0 = 0
+                ]
             );
             $this->info("  ✓ Initial Electricity reading record for current month processed.");
         }
