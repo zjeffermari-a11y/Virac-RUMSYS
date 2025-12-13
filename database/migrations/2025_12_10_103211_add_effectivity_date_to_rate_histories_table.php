@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('rate_histories', function (Blueprint $table) {
-            $table->date('effectivity_date')->nullable()->after('changed_at');
+            if (!Schema::hasColumn('rate_histories', 'effectivity_date')) {
+                $table->date('effectivity_date')->nullable()->after('changed_at');
+            }
         });
     }
 
@@ -22,7 +24,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('rate_histories', function (Blueprint $table) {
-            $table->dropColumn('effectivity_date');
+            if (Schema::hasColumn('rate_histories', 'effectivity_date')) {
+                $table->dropColumn('effectivity_date');
+            }
         });
     }
 };
