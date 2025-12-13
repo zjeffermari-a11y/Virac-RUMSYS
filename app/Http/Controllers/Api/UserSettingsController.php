@@ -133,25 +133,36 @@ class UserSettingsController extends Controller
             );
 
             // Generate absolute URL for the profile picture
-            // Use Storage::url() which works on both local and cloud
-            $url = Storage::disk('public')->url($path);
+            // For Laravel Cloud compatibility, use asset() helper which handles both local and cloud
+            $relativeUrl = Storage::disk('public')->url($path);
             
-            // For Laravel Cloud, ensure it's a full URL
-            if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                // If it's a relative URL, make it absolute
-                $url = url($url);
+            // Convert to absolute URL
+            // Remove leading slash if present to avoid double slashes
+            $relativeUrl = ltrim($relativeUrl, '/');
+            
+            // Generate full URL using asset() or url() helper
+            $url = asset($relativeUrl);
+            
+            // Ensure HTTPS on production/cloud
+            if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
+                $url = str_replace('http://', 'https://', $url);
             }
             
-            // Ensure HTTPS on cloud
-            if (config('app.env') === 'production' && strpos($url, 'http://') === 0) {
-                $url = str_replace('http://', 'https://', $url);
+            // Fallback: if still relative, use full app URL
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                $url = rtrim(config('app.url'), '/') . '/' . ltrim($relativeUrl, '/');
             }
             
             \Log::info('Profile picture uploaded successfully', [
                 'user_id' => $user->id,
                 'path' => $path,
                 'url' => $url,
-                'profile_picture_field' => $user->profile_picture
+                'relative_url' => $relativeUrl,
+                'app_url' => config('app.url'),
+                'app_env' => config('app.env'),
+                'profile_picture_field' => $user->profile_picture,
+                'storage_exists' => Storage::disk('public')->exists($path),
+                'file_size' => Storage::disk('public')->size($path) ?? 'N/A'
             ]);
             
             return response()->json([

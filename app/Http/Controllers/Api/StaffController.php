@@ -48,7 +48,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture' => $user->profile_picture ? Storage::url($user->profile_picture) : null,
+                    'profile_picture' => $user->profile_picture ? ($user->profile_picture_url ?? Storage::url($user->profile_picture)) : null,
                 ];
             });
     
@@ -783,10 +783,24 @@ class StaffController extends Controller
             );
 
             // Generate absolute URL for the profile picture
-            $url = Storage::disk('public')->url($path);
-            // Ensure it's an absolute URL
+            // For Laravel Cloud compatibility, use asset() helper which handles both local and cloud
+            $relativeUrl = Storage::disk('public')->url($path);
+            
+            // Convert to absolute URL
+            // Remove leading slash if present to avoid double slashes
+            $relativeUrl = ltrim($relativeUrl, '/');
+            
+            // Generate full URL using asset() or url() helper
+            $url = asset($relativeUrl);
+            
+            // Ensure HTTPS on production/cloud
+            if (config('app.env') === 'production' || strpos(config('app.url'), 'https://') === 0) {
+                $url = str_replace('http://', 'https://', $url);
+            }
+            
+            // Fallback: if still relative, use full app URL
             if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                $url = asset($url);
+                $url = rtrim(config('app.url'), '/') . '/' . ltrim($relativeUrl, '/');
             }
             
             return response()->json([
