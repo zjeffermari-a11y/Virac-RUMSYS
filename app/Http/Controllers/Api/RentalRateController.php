@@ -320,7 +320,7 @@ class RentalRateController extends Controller
 
         // Process based on effectiveToday
         DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService) {
-            // Calculate new monthly rate first
+            // Calculate new rates
             $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
             $newMonthlyRateValue = isset($validatedData['monthlyRate']) ? (float) $validatedData['monthlyRate'] : ($newDailyRateValue * 30);
             
@@ -354,15 +354,15 @@ class RentalRateController extends Controller
                 }
             }
             
-            // Store audit details
+            // Store audit details - always use the calculated values
             $auditDetails = [
                 'stall_id' => $stallModel->id,
                 'table_number' => $stallModel->table_number,
                 'section' => $stallModel->section->name ?? 'N/A',
                 'old_daily_rate' => $oldDailyRate,
-                'new_daily_rate' => $effectiveToday ? $newDailyRate : $newDailyRateValue,
+                'new_daily_rate' => $newDailyRateValue,
                 'old_monthly_rate' => $oldMonthlyRate,
-                'new_monthly_rate' => $effectiveToday ? $newMonthlyRate : $newMonthlyRateValue,
+                'new_monthly_rate' => $newMonthlyRateValue,
                 'effectivity_date' => $effectivityDate,
             ];
             

@@ -30,7 +30,7 @@ class EffectivityDateController extends Controller
         // 0. Get ALL pending Rental Rate changes (stored in audit_trails)
         $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
         if ($hasDetailsColumn) {
-            // Get all rental rate audit entries with future effectivity dates
+            // Get all rental rate audit entries
             $rentalRateAudits = DB::table('audit_trails')
                 ->where('module', 'Rental Rates')
                 ->whereIn('action', ['Updated Rental Rate', 'Updated Rental Rates'])
@@ -43,12 +43,12 @@ class EffectivityDateController extends Controller
                 $details = json_decode($audit->details, true);
                 
                 // Skip if details can't be parsed
-                if (!$details) {
+                if (!$details || !is_array($details)) {
                     continue;
                 }
                 
                 // Check if effectivity_date exists in details
-                if (!isset($details['effectivity_date'])) {
+                if (!isset($details['effectivity_date']) || empty($details['effectivity_date'])) {
                     continue;
                 }
                 
@@ -56,7 +56,7 @@ class EffectivityDateController extends Controller
                     $effectivityDate = Carbon::parse($details['effectivity_date']);
                     // Only include if effectivity date is in the future (>= today)
                     if ($effectivityDate->gte($today)) {
-                        // Show all rental rate changes with future dates (don't check if applied)
+                        // Show all rental rate changes with future dates
                         $pendingChanges[] = [
                             'id' => $audit->id,
                             'change_type' => 'rental_rate',
@@ -70,7 +70,12 @@ class EffectivityDateController extends Controller
                         ];
                     }
                 } catch (\Exception $e) {
-                    // Skip invalid dates
+                    // Log error for debugging but continue
+                    Log::debug('Error parsing rental rate effectivity date', [
+                        'audit_id' => $audit->id,
+                        'effectivity_date' => $details['effectivity_date'] ?? 'missing',
+                        'error' => $e->getMessage()
+                    ]);
                     continue;
                 }
             }
