@@ -701,7 +701,7 @@ class StaffController extends Controller
             // <-- START: Audit Trail for Stall Assignment -->
             AuditLogger::log(
                 'Assigned stall',
-                'Stall Assignment',
+                'Vendor Management',
                 'Success',
                 ['stall_number' => $stall->table_number, 'vendor_name' => $vendor->name, 'vendor_id' => $vendor->id]
             );
@@ -724,7 +724,7 @@ class StaffController extends Controller
              // <-- START: Audit Trail for Failed Assignment -->
             AuditLogger::log(
                 'Failed to assign stall',
-                'Stall Assignment',
+                'Vendor Management',
                 'Failure',
                 ['vendor_id' => $request->vendor_id, 'error' => $e->getMessage()]
             );
