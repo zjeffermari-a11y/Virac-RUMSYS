@@ -451,6 +451,10 @@ class SuperAdminDashboard {
             // announcementIsActive removed - publish immediately feature disabled
             saveAnnouncementBtn: document.getElementById("saveAnnouncementBtn"),
             sentAnnouncementsList: document.getElementById("sentAnnouncementsList"),
+            announcementTabs: document.querySelectorAll(".announcement-tab"),
+            announcementTabContents: document.querySelectorAll(".announcement-tab-content"),
+            announcementSemaphoreCreditBalance: document.getElementById("announcementSemaphoreCreditBalance"),
+            refreshAnnouncementsBtn: document.getElementById("refreshAnnouncementsBtn"),
             draftAnnouncementsList: document.getElementById("draftAnnouncementsList"),
             deleteAllDraftsBtn: document.getElementById("deleteAllDraftsBtn"),
 
@@ -5555,6 +5559,55 @@ class SuperAdminDashboard {
     // ==========================================
 
     setupAnnouncementEventListeners() {
+        // Setup announcement tab switching
+        if (this.elements.announcementTabs && this.elements.announcementTabs.length > 0) {
+            this.elements.announcementTabs.forEach((tab) => {
+                tab.addEventListener("click", () => {
+                    const tabId = tab.dataset.tab;
+                    
+                    // Update tab styles
+                    this.elements.announcementTabs.forEach((t) =>
+                        t.classList.remove(
+                            "active",
+                            "text-market-primary",
+                            "border-b-2",
+                            "border-market-primary"
+                        )
+                    );
+                    tab.classList.add(
+                        "active",
+                        "text-market-primary",
+                        "border-b-2",
+                        "border-market-primary"
+                    );
+                    
+                    // Show/hide tab contents
+                    const allTabContents = document.querySelectorAll('.announcement-tab-content');
+                    allTabContents.forEach((content) => {
+                        content.classList.toggle(
+                            "hidden",
+                            content.dataset.content !== tabId
+                        );
+                    });
+                    
+                    // Load sent announcements when "Sent Announcement" tab is clicked
+                    if (tabId === 'sentAnnouncement') {
+                        this.fetchAnnouncements();
+                    }
+                });
+            });
+        }
+
+        // Setup refresh button
+        if (this.elements.refreshAnnouncementsBtn) {
+            this.elements.refreshAnnouncementsBtn.addEventListener("click", () => {
+                this.fetchAnnouncements();
+            });
+        }
+
+        // Fetch Semaphore credits for announcement section
+        this.fetchAnnouncementSemaphoreCredits();
+
         if (this.elements.createAnnouncementForm) {
             this.elements.createAnnouncementForm.addEventListener("submit", (e) => {
                 e.preventDefault();

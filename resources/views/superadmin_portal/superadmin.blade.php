@@ -1443,12 +1443,47 @@
     <div id="announcementSection" class="dashboard-section overflow-visible">
         @include('layouts.partials.content-header', ['title' => 'Announcements'])
 
-        <div class="space-y-6">
-            <div class="grid grid-cols-1 gap-8 h-[calc(100vh-250px)]">
-                {{-- Left Column: Create Announcement Form --}}
-                <div class="flex flex-col min-h-0">
-                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full flex flex-col">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Create Announcement</h3>
+        <div class="bg-white rounded-2xl shadow-lg p-6">
+            {{-- Credit Tracker --}}
+            <div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-100 p-2 rounded-lg text-blue-600">
+                        <i class="fas fa-coins text-xl"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-blue-900">Semaphore API Credits</h4>
+                        <p class="text-sm text-blue-700">Remaining credits for SMS notifications</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span id="announcementSemaphoreCreditBalance" class="text-2xl font-bold text-blue-800">Loading...</span>
+                    <span class="text-sm text-blue-600 font-medium block">Credits</span>
+                </div>
+            </div>
+
+            {{-- Tab Navigation --}}
+            <div class="mb-6 border-b border-gray-200">
+                <nav class="flex space-x-4" aria-label="Tabs">
+                    <button data-tab="createAnnouncement"
+                        class="announcement-tab active text-market-primary border-b-2 border-market-primary px-3 py-2 text-lg font-medium">
+                        Create Announcement
+                    </button>
+                    <button data-tab="sentAnnouncement"
+                        class="announcement-tab text-gray-500 hover:text-gray-700 px-3 py-2 text-lg font-medium">
+                        Sent Announcement
+                    </button>
+                </nav>
+            </div>
+
+            {{-- Tab Content Area --}}
+            <div id="announcementTabContainer">
+                {{-- Create Announcement Tab Content --}}
+                <div data-content="createAnnouncement" class="announcement-tab-content">
+                    <div class="grid grid-cols-1 gap-8">
+                        {{-- Create Announcement Form --}}
+                        <div class="flex flex-col min-h-0">
+                            <div class="bg-gray-50 rounded-xl p-6 h-full flex flex-col">
+                                <h3 class="text-xl font-semibold text-gray-800 mb-4">Create Announcement</h3>
                         <form id="createAnnouncementForm" class="flex flex-col flex-1 min-h-0 overflow-y-auto pr-2">
                             <div class="mb-4">
                                 <label for="announcementTitle" class="block text-gray-700 font-medium mb-2">Title *</label>
@@ -1533,43 +1568,27 @@
                             </button>
                             </div>
                         </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {{-- Right Column: Draft Announcements - DISABLED --}}
-                {{-- Draft announcements feature has been removed --}}
-                <div class="flex flex-col min-h-0 hidden">
-                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full flex flex-col">
-                        <div class="flex items-center justify-between mb-4 flex-shrink-0">
-                            <h3 class="text-xl font-semibold text-gray-800">Draft Announcements</h3>
-                            <div class="flex items-center gap-2">
-                                <span id="draftAnnouncementsCount" class="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-full">0</span>
-                                <button id="deleteAllDraftsBtn" 
-                                    class="bg-red-500 text-white text-xs px-3 py-1 rounded-lg font-medium hover:bg-red-600 transition-colors hidden"
-                                    title="Delete All Drafts">
-                                    <i class="fas fa-trash-alt mr-1"></i>Delete All
-                                </button>
-                            </div>
+                {{-- Sent Announcement Tab Content --}}
+                <div data-content="sentAnnouncement" class="announcement-tab-content hidden">
+                    <div class="bg-gray-50 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-semibold text-gray-800">Sent Announcements</h3>
+                            <button id="refreshAnnouncementsBtn" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm border border-gray-300">
+                                <i class="fas fa-sync-alt mr-2"></i>Refresh
+                            </button>
                         </div>
-                        <div id="draftAnnouncementsList" class="space-y-2 flex-1 overflow-y-auto pr-2 min-h-0">
-                            {{-- Draft announcements will be populated by JS --}}
+                        <div id="sentAnnouncementsList" class="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto pr-2">
+                            {{-- Sent announcements will be populated by JS --}}
                             <div class="text-center text-gray-500 py-8">
                                 <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p class="text-sm">Loading announcements...</p>
+                                <p>Loading announcements...</p>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Sent Announcements List - Full Width at Bottom --}}
-            <div class="bg-white rounded-2xl shadow-lg p-6">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4">Sent Announcements</h3>
-                <div id="sentAnnouncementsList" class="space-y-4 max-h-[calc(100vh-500px)] overflow-y-auto pr-2">
-                    {{-- Sent announcements will be populated by JS --}}
-                    <div class="text-center text-gray-500 py-8">
-                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                        <p>Loading announcements...</p>
                     </div>
                 </div>
             </div>
