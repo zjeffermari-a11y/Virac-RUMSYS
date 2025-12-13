@@ -140,6 +140,13 @@
                             </div>
                         </div>
 
+                        @if ($errors->has('username') || $errors->has('password'))
+                            <div class="p-3 text-sm text-red-800 bg-red-100 rounded-xl flex items-center gap-2 border border-red-300" role="alert">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <span>{{ $errors->first('username') ?: $errors->first('password') }}</span>
+                            </div>
+                        @endif
+
                         <div>
                             <button type="submit" id="loginButton"
                                 class="w-full flex justify-center items-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-market-primary hover:bg-market-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400 cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl">
@@ -156,13 +163,6 @@
                                 </span>
                             </button>
                         </div>
-
-                        @if ($errors->has('username'))
-                            <div class="text-sm text-red-600 mt-2 flex items-center gap-2">
-                                <i class="fas fa-exclamation-circle"></i>
-                                <span>{{ $errors->first('username') }}</span>
-                            </div>
-                        @endif
                     </form>
 
                     <p class="mt-6 text-center text-xs text-gray-500">
@@ -200,6 +200,15 @@
             button.disabled = true;
             buttonText.textContent = 'Signing in...';
             spinner.classList.remove('hidden');
+            
+            // Re-enable button after 3 seconds in case of error (prevents stuck state)
+            setTimeout(() => {
+                if (button.disabled) {
+                    button.disabled = false;
+                    buttonText.textContent = 'Sign in';
+                    spinner.classList.add('hidden');
+                }
+            }, 3000);
         });
     </script>
 </body>

@@ -11,59 +11,80 @@ class LoginController extends Controller
 {
     public function login(Request $request)
     {
-        $request->validate([
-            'username' => 'required|string',
-            'password' => 'required|string',
-        ]);
-
-        $credentials = $request->only('username', 'password');
-
-        if (Auth::attempt($credentials)) {
-            $user = Auth::user();
-            $user->last_login = Carbon::now(); // Record the login time
-            $user->save(); // Save the user
-
-            DB::table('audit_trails')->insert([
-                'user_id' => $user->id,
-                'role_id' => $user->role_id,
-                'action' => 'User Login',
-                'module' => 'Authentication',
-                'result' => 'Success',
-                'created_at' => now(),
+        try {
+            $request->validate([
+                'username' => 'required|string',
+                'password' => 'required|string',
             ]);
 
-            $request->session()->regenerate();
-            $user->load('role');
+            $credentials = $request->only('username', 'password');
 
-            // Redirect based on role
-            switch ($user->role->name) {
-                case 'Admin':
-                    return redirect()->route('superadmin');
-                case 'Vendor':
-                    return redirect()->route('vendor.dashboard');
-                case 'Staff':
-                    return redirect('/staff');
-                case 'Meter Reader Clerk':
-                    return redirect('/meter');
-                default:
-                    return redirect('/'); // Fallback
+            if (Auth::attempt($credentials)) {
+                $user = Auth::user();
+                $user->last_login = Carbon::now(); // Record the login time
+                $user->save(); // Save the user
+
+                DB::table('audit_trails')->insert([
+                    'user_id' => $user->id,
+                    'role_id' => $user->role_id,
+                    'action' => 'User Login',
+                    'module' => 'Authentication',
+                    'result' => 'Success',
+                    'created_at' => now(),
+                ]);
+
+                $request->session()->regenerate();
+                $user->load('role');
+
+                // Redirect based on role
+                switch ($user->role->name) {
+                    case 'Admin':
+                        return redirect()->route('superadmin');
+                    case 'Vendor':
+                        return redirect()->route('vendor.dashboard');
+                    case 'Staff':
+                        return redirect('/staff');
+                    case 'Meter Reader Clerk':
+                        return redirect('/meter');
+                    default:
+                        return redirect('/'); // Fallback
+                }
             }
+
+            // Log failed login attempt
+            try {
+                DB::table('audit_trails')->insert([
+                    'user_id' => null, // No user ID for failed login
+                    'role_id' => 1, // Default role for failed attempts
+                    'action' => 'Failed Login Attempt',
+                    'module' => 'Authentication',
+                    'result' => 'Failed',
+                    'details' => json_encode(['username' => $request->input('username')]),
+                    'created_at' => now(),
+                ]);
+            } catch (\Exception $e) {
+                // Log error but don't fail the login response
+                \Log::warning('Failed to log failed login attempt', ['error' => $e->getMessage()]);
+            }
+
+            return back()->withErrors([
+                'username' => 'Invalid username or password. Please check your credentials and try again.',
+            ])->withInput($request->only('username'));
+            
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Handle validation errors
+            return back()->withErrors($e->errors())->withInput($request->only('username'));
+        } catch (\Exception $e) {
+            // Handle any other exceptions gracefully
+            \Log::error('Login error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->withErrors([
+                'username' => 'An error occurred during login. Please try again.',
+            ])->withInput($request->only('username'));
         }
-
-        // Log failed login attempt
-        DB::table('audit_trails')->insert([
-            'user_id' => null, // No user ID for failed login
-            'role_id' => 1, // Default role for failed attempts
-            'action' => 'Failed Login Attempt',
-            'module' => 'Authentication',
-            'result' => 'Failed',
-            'details' => json_encode(['username' => $request->input('username')]),
-            'created_at' => now(),
-        ]);
-
-        return back()->withErrors([
-            'username' => 'Invalid username or password.',
-        ])->onlyInput('username');
     }
 
     public function logout(Request $request)
