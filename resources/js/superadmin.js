@@ -5035,35 +5035,42 @@ class SuperAdminDashboard {
                             "X-CSRF-TOKEN": document
                                 .querySelector('meta[name="csrf-token"]')
                                 .getAttribute("content"),
+                            "Accept": "application/json",
+                            "X-Requested-With": "XMLHttpRequest",
                         },
                         credentials: "include",
                         body: formData,
                     });
 
-                    const result = await response.json();
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+                        console.error("Profile picture upload failed:", errorData);
+                        throw new Error(errorData.message || `HTTP ${response.status}: Failed to upload profile picture`);
+                    }
 
-                    if (response.ok) {
-                        this.showToast(result.message || "Profile picture uploaded successfully!", "success");
-                        if (img && result.profile_picture_url) {
-                            img.src = result.profile_picture_url;
-                        }
-                        // Update sidebar profile picture
-                        const sidebarImg = document.querySelector('#sidebarProfileImage img');
-                        const sidebarIcon = document.getElementById('sidebarProfileIcon');
-                        if (sidebarImg && result.profile_picture_url) {
-                            sidebarImg.src = result.profile_picture_url;
-                            sidebarImg.classList.remove('hidden');
-                            if (sidebarIcon) sidebarIcon.classList.add('hidden');
-                        }
-                    } else {
-                        this.showToast(result.message || "Failed to upload profile picture", "error");
-                        if (img) img.classList.add("hidden");
-                        if (placeholder) placeholder.classList.remove("hidden");
+                    const result = await response.json();
+                    this.showToast(result.message || "Profile picture uploaded successfully!", "success");
+                    
+                    if (img && result.profile_picture_url) {
+                        img.src = result.profile_picture_url;
+                    }
+                    
+                    // Update sidebar profile picture
+                    const sidebarImg = document.querySelector('#sidebarProfileImage img');
+                    const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                    if (sidebarImg && result.profile_picture_url) {
+                        sidebarImg.src = result.profile_picture_url;
+                        sidebarImg.classList.remove('hidden');
+                        if (sidebarIcon) sidebarIcon.classList.add('hidden');
                     }
                 } catch (error) {
                     console.error("Profile picture upload error:", error);
-                    this.showToast("An error occurred. Please try again.", "error");
-                    if (img) img.classList.add("hidden");
+                    this.showToast(error.message || "An error occurred. Please try again.", "error");
+                    // Revert preview on error
+                    if (img) {
+                        img.classList.add("hidden");
+                        img.src = "";
+                    }
                     if (placeholder) placeholder.classList.remove("hidden");
                 } finally {
                     profilePictureInput.value = "";
@@ -5082,30 +5089,38 @@ class SuperAdminDashboard {
                             "X-CSRF-TOKEN": document
                                 .querySelector('meta[name="csrf-token"]')
                                 .getAttribute("content"),
+                            "Accept": "application/json",
+                            "X-Requested-With": "XMLHttpRequest",
                         },
                         credentials: "include",
                     });
 
-                    const result = await response.json();
-
-                    if (response.ok) {
-                        this.showToast(result.message || "Profile picture removed successfully!", "success");
-                        const img = document.getElementById("profilePictureImg");
-                        const placeholder = document.getElementById("profilePicturePlaceholder");
-                        if (img) img.classList.add("hidden");
-                        if (placeholder) placeholder.classList.remove("hidden");
-                        removeProfilePictureBtn.classList.add("hidden");
-                        // Update sidebar
-                        const sidebarImg = document.querySelector('#sidebarProfileImage img');
-                        const sidebarIcon = document.getElementById('sidebarProfileIcon');
-                        if (sidebarImg) sidebarImg.classList.add('hidden');
-                        if (sidebarIcon) sidebarIcon.classList.remove('hidden');
-                    } else {
-                        this.showToast(result.message || "Failed to remove profile picture", "error");
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+                        console.error("Remove profile picture failed:", errorData);
+                        throw new Error(errorData.message || `HTTP ${response.status}: Failed to remove profile picture`);
                     }
+
+                    const result = await response.json();
+                    this.showToast(result.message || "Profile picture removed successfully!", "success");
+                    
+                    const img = document.getElementById("profilePictureImg");
+                    const placeholder = document.getElementById("profilePicturePlaceholder");
+                    if (img) {
+                        img.classList.add("hidden");
+                        img.src = "";
+                    }
+                    if (placeholder) placeholder.classList.remove("hidden");
+                    removeProfilePictureBtn.classList.add("hidden");
+                    
+                    // Update sidebar
+                    const sidebarImg = document.querySelector('#sidebarProfileImage img');
+                    const sidebarIcon = document.getElementById('sidebarProfileIcon');
+                    if (sidebarImg) sidebarImg.classList.add('hidden');
+                    if (sidebarIcon) sidebarIcon.classList.remove('hidden');
                 } catch (error) {
                     console.error("Remove profile picture error:", error);
-                    this.showToast("An error occurred. Please try again.", "error");
+                    this.showToast(error.message || "An error occurred. Please try again.", "error");
                 }
             });
         }

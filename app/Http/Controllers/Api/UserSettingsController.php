@@ -141,9 +141,12 @@ class UserSettingsController extends Controller
                 'profile_picture_url' => $url
             ]);
         } catch (\Exception $e) {
-            \Log::error('Profile picture upload failed: ' . $e->getMessage());
+            \Log::error('Profile picture upload failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
             return response()->json([
-                'message' => 'Failed to upload profile picture. Please try again.'
+                'message' => 'Failed to upload profile picture: ' . $e->getMessage()
             ], 500);
         }
     }
