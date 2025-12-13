@@ -424,9 +424,70 @@ class EffectivityDateController extends Controller
                     ->update(['effectivity_date' => $newEffectivityDate]);
             }
 
+            // Check if the new effectivity date is today or in the past - if so, apply the change to main tables
+            $shouldApplyChange = Carbon::parse($newEffectivityDate)->lte($today);
+            
+            if ($shouldApplyChange) {
+                // Apply the change to main tables
+                if ($historyTable === 'rate_histories') {
+                    // Update the rate in the main rates table
+                    DB::table('rates')
+                        ->where('id', $currentRecord->rate_id)
+                        ->update([
+                            'rate' => $currentRecord->new_rate,
+                            'updated_at' => now()
+                        ]);
+                } elseif ($historyTable === 'schedule_histories') {
+                    // Update the schedule in the main schedules table
+                    $schedule = DB::table('schedules')->where('id', $currentRecord->schedule_id)->first();
+                    if ($schedule) {
+                        DB::table('schedules')
+                            ->where('id', $currentRecord->schedule_id)
+                            ->update([
+                                'description' => $currentRecord->new_value,
+                                'updated_at' => now()
+                            ]);
+                    }
+                } elseif ($historyTable === 'billing_setting_histories') {
+                    // Update the billing setting in the main billing_settings table
+                    $fieldName = str_replace(' ', '_', strtolower($currentRecord->field_changed));
+                    DB::table('billing_settings')
+                        ->where('id', $currentRecord->billing_setting_id)
+                        ->update([
+                            $fieldName => $currentRecord->new_value / 100, // Convert from percentage
+                            'updated_at' => now()
+                        ]);
+                } elseif ($historyTable === 'audit_trails' && $currentRecord->module === 'Rental Rates') {
+                    // Update rental rates in the main stalls table
+                    $details = json_decode($currentRecord->details, true) ?? [];
+                    if (isset($details['changes']) && is_array($details['changes'])) {
+                        foreach ($details['changes'] as $change) {
+                            if (isset($change['id'])) {
+                                $updateData = [];
+                                if (isset($change['new_daily_rate'])) {
+                                    $updateData['daily_rate'] = $change['new_daily_rate'];
+                                }
+                                if (isset($change['new_monthly_rate'])) {
+                                    $updateData['monthly_rate'] = $change['new_monthly_rate'];
+                                }
+                                if (isset($change['table_number'])) {
+                                    $updateData['table_number'] = $change['table_number'];
+                                }
+                                if (!empty($updateData)) {
+                                    $updateData['updated_at'] = now();
+                                    DB::table('stalls')
+                                        ->where('id', $change['id'])
+                                        ->update($updateData);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             DB::commit();
 
-            // Send SMS notification about the change
+            // Send SMS notification about the change (only when effectivity date is adjusted)
             try {
                 if ($historyTable === 'rate_histories') {
                     // Get rate info
@@ -466,10 +527,32 @@ class EffectivityDateController extends Controller
                 } elseif ($historyTable === 'audit_trails' && $currentRecord->module === 'Rental Rates') {
                     // Get rental rate info from details JSON
                     $details = json_decode($currentRecord->details, true) ?? [];
-                    if (isset($details['stall_id'])) {
+                    if (isset($details['changes']) && is_array($details['changes'])) {
+                        // Batch update - send notification for each stall
+                        foreach ($details['changes'] as $change) {
+                            if (isset($change['id'])) {
+                                $stall = DB::table('stalls')->where('id', $change['id'])->first();
+                                if ($stall) {
+                                    // Create a simple object for the notification service
+                                    $stallModel = (object) [
+                                        'id' => $stall->id,
+                                        'table_number' => $stall->table_number,
+                                        'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
+                                    ];
+                                    $notificationService->sendRentalRateChangeNotification(
+                                        $stallModel,
+                                        $change['old_daily_rate'] ?? 0,
+                                        $change['new_daily_rate'] ?? 0,
+                                        $change['old_monthly_rate'] ?? null,
+                                        $change['new_monthly_rate'] ?? null
+                                    );
+                                }
+                            }
+                        }
+                    } elseif (isset($details['stall_id'])) {
+                        // Single stall update
                         $stall = DB::table('stalls')->where('id', $details['stall_id'])->first();
                         if ($stall) {
-                            // Create a simple object for the notification service
                             $stallModel = (object) [
                                 'id' => $stall->id,
                                 'table_number' => $stall->table_number,
@@ -490,8 +573,12 @@ class EffectivityDateController extends Controller
                 // Don't fail the request if SMS fails
             }
 
+            $message = $shouldApplyChange 
+                ? 'Effectivity date updated, changes applied, and notifications sent.'
+                : 'Effectivity date updated successfully. Notifications will be sent when the effectivity date arrives.';
+
             return response()->json([
-                'message' => 'Effectivity date updated successfully and notifications sent.',
+                'message' => $message,
             ]);
 
         } catch (\Exception $e) {
