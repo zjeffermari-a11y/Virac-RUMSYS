@@ -90,8 +90,9 @@ class BillingSettingsController extends Controller
 
             // Process based on effectiveToday
             $user = Auth::user();
+            $pendingChangeId = null;
 
-            DB::transaction(function () use ($request, $user, $effectiveToday, $notificationService, $changes) {
+            DB::transaction(function () use ($request, $user, $effectiveToday, $notificationService, $changes, &$pendingChangeId) {
                 // Default to 1st of next month since bills are generated monthly on the 1st
                 $effectivityDate = $effectiveToday
                     ? \Carbon\Carbon::now()->format('Y-m-d')
@@ -142,8 +143,16 @@ class BillingSettingsController extends Controller
 
                     if (!empty($settingChanges)) {
                         $setting->save();
-                        DB::table('billing_setting_histories')->insert($settingChanges);
+                        $insertedIds = [];
+                        foreach ($settingChanges as $change) {
+                            $insertedIds[] = DB::table('billing_setting_histories')->insertGetId($change);
+                        }
                         $allChanges = array_merge($allChanges, $settingChanges);
+                        
+                        // Store the first history ID for redirect (if not effective today)
+                        if (!$effectiveToday && !isset($pendingChangeId) && !empty($insertedIds)) {
+                            $pendingChangeId = $insertedIds[0];
+                        }
                     }
                 }
                 
@@ -168,6 +177,10 @@ class BillingSettingsController extends Controller
                     'message' => 'Please adjust effectivity date in Effectivity Date Management',
                     'redirect' => true,
                     'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                    'pendingChange' => [
+                        'history_table' => 'billing_setting_histories',
+                        'history_id' => $pendingChangeId,
+                    ],
                 ]);
             }
         } catch (\Exception $e) {

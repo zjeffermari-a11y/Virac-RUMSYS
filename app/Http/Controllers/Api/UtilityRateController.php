@@ -211,8 +211,8 @@ class UtilityRateController extends Controller
                 // Don't update main table, don't send SMS yet
                 $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
                 
-                // Save to history only
-                DB::table('rate_histories')->insert([
+                // Save to history only and capture the history_id
+                $historyId = DB::table('rate_histories')->insertGetId([
                     'rate_id'    => $id,
                     'old_rate'   => $oldRateValue,
                     'new_rate'   => $newRateValue,
@@ -227,6 +227,9 @@ class UtilityRateController extends Controller
                     'Success',
                     ['rate_id' => $id, 'old_rate' => $oldRateValue, 'new_rate' => $newRateValue, 'old_monthly_rate' => $oldMonthlyRateValue, 'new_monthly_rate' => $newMonthlyRateValue, 'effectivity_date' => $effectivityDate]
                 );
+                
+                // Store history_id for redirect
+                $pendingChangeId = $historyId;
             }
         });
 
@@ -240,6 +243,10 @@ class UtilityRateController extends Controller
                 'message' => 'Please adjust effectivity date in Effectivity Date Management',
                 'redirect' => true,
                 'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                'pendingChange' => [
+                    'history_table' => 'rate_histories',
+                    'history_id' => $pendingChangeId ?? null,
+                ],
             ]);
         }
 

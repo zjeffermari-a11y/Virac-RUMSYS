@@ -27,14 +27,14 @@ class AuditLogger
                 // For now, let's log with a system user ID if available or just log a warning.
                 // Assuming this is primarily for user actions.
                 Log::warning("AuditLogger: No authenticated user found for action: {$action}");
-                return;
+                return null;
             }
 
             if (is_array($details) || is_object($details)) {
                 $details = json_encode($details);
             }
 
-            AuditTrail::create([
+            $auditTrail = AuditTrail::create([
                 'user_id' => $user->id,
                 'role_id' => $user->role_id,
                 'action' => substr($action, 0, 100), // Ensure it fits
@@ -43,8 +43,11 @@ class AuditLogger
                 'details' => $details,
             ]);
 
+            return $auditTrail->id;
+
         } catch (\Exception $e) {
             Log::error("AuditLogger Error: " . $e->getMessage());
+            return null;
         }
     }
 }

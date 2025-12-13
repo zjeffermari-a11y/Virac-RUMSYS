@@ -161,7 +161,8 @@ class RentalRateController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($validatedData, $effectiveToday, $notificationService) {
+        $pendingChangeAuditId = null;
+        DB::transaction(function () use ($validatedData, $effectiveToday, $notificationService, &$pendingChangeAuditId) {
             // Default to 1st of next month since bills are generated monthly on the 1st
             $effectivityDate = isset($validatedData['effectivityDate']) && $validatedData['effectivityDate']
                 ? \Carbon\Carbon::parse($validatedData['effectivityDate'])->format('Y-m-d')
@@ -243,12 +244,16 @@ class RentalRateController extends Controller
             
             // Only log if there were actual changes
             if (count($auditDetails['changes']) > 0) {
-                AuditLogger::log(
+                $auditId = AuditLogger::log(
                     'Updated Rental Rates',
                     'Rental Rates',
                     'Success',
                     $auditDetails
                 );
+                // Store the audit_id for redirect (rental rates use audit_trails)
+                if (!$effectiveToday) {
+                    $pendingChangeAuditId = $auditId;
+                }
             }
         });
 
@@ -259,6 +264,10 @@ class RentalRateController extends Controller
                 'message' => 'Please adjust effectivity date in Effectivity Date Management',
                 'redirect' => true,
                 'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                'pendingChange' => [
+                    'history_table' => 'audit_trails',
+                    'history_id' => $pendingChangeAuditId,
+                ],
             ]);
         }
     }

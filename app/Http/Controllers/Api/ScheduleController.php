@@ -218,7 +218,8 @@ class ScheduleController extends Controller
             }
 
             // Process based on effectiveToday
-            DB::transaction(function () use ($request, $effectiveToday, $notificationService, $changes) {
+            $pendingChangeId = null;
+            DB::transaction(function () use ($request, $effectiveToday, $notificationService, $changes, &$pendingChangeId) {
                 // Default to 1st of next month since bills are generated monthly on the 1st
                 $effectivityDate = $effectiveToday 
                     ? \Carbon\Carbon::now()->format('Y-m-d')
@@ -242,7 +243,7 @@ class ScheduleController extends Controller
                             ]
                         );
 
-                        DB::table('schedule_histories')->insert([
+                        $scheduleHistoryId = DB::table('schedule_histories')->insertGetId([
                             'schedule_id' => $schedule->id,
                             'field_changed' => $schedule->schedule_type, 
                             'old_value' => $oldDay,
@@ -250,6 +251,11 @@ class ScheduleController extends Controller
                             'changed_by' => Auth::id() ?? 1,
                             'effectivity_date' => $effectivityDate,
                         ]);
+                        
+                        // Store the first history ID for redirect (if not effective today)
+                        if (!$effectiveToday && !isset($pendingChangeId)) {
+                            $pendingChangeId = $scheduleHistoryId;
+                        }
 
                         AuditLogger::log(
                             'Updated Billing Schedule',
@@ -287,6 +293,10 @@ class ScheduleController extends Controller
                     'message' => 'Please adjust effectivity date in Effectivity Date Management',
                     'redirect' => true,
                     'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                    'pendingChange' => [
+                        'history_table' => 'schedule_histories',
+                        'history_id' => $pendingChangeId,
+                    ],
                 ]);
         }
     }
