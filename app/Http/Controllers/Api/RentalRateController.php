@@ -300,20 +300,49 @@ class RentalRateController extends Controller
             $oldDailyRate = (float) $stallModel->daily_rate;
             $oldMonthlyRate = (float) $stallModel->monthly_rate;
             
-        // Check if rate will change
+        // Check if rate will change - use epsilon for floating point comparison
         $newDailyRate = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
-        $rateChanged = $oldDailyRate !== $newDailyRate;
+        $epsilon = 0.01;
+        $dailyRateChanged = abs($oldDailyRate - $newDailyRate) > $epsilon;
+        
+        // Calculate new monthly rate to check if it changed
+        $newMonthlyRate = isset($validatedData['monthlyRate']) ? (float) $validatedData['monthlyRate'] : ($newDailyRate * 30);
+        $monthlyRateChanged = abs($oldMonthlyRate - $newMonthlyRate) > $epsilon;
+        $rateChanged = $dailyRateChanged || $monthlyRateChanged;
         
         // Check if table number or area will change
         $oldTableNumber = $stallModel->table_number;
-        $oldArea = $stallModel->area;
+        $oldArea = (float) ($stallModel->area ?? 0);
         $tableNumberChanged = isset($validatedData['tableNumber']) && $validatedData['tableNumber'] !== $oldTableNumber;
-        $areaChanged = isset($validatedData['area']) && abs((float)$validatedData['area'] - (float)$oldArea) > 0.01;
+        $newArea = isset($validatedData['area']) ? (float) $validatedData['area'] : $oldArea;
+        $areaChanged = abs($oldArea - $newArea) > $epsilon;
 
         if (!$rateChanged && !$tableNumberChanged && !$areaChanged) {
             // No change at all, just return
+            \Log::debug('No changes detected for stall update', [
+                'stall_id' => $stallModel->id,
+                'old_daily_rate' => $oldDailyRate,
+                'new_daily_rate' => $newDailyRate,
+                'old_monthly_rate' => $oldMonthlyRate,
+                'new_monthly_rate' => $newMonthlyRate,
+                'daily_rate_changed' => $dailyRateChanged,
+                'monthly_rate_changed' => $monthlyRateChanged,
+            ]);
             return response()->json(['message' => 'No changes detected.']);
         }
+        
+        // Log rate change detection for debugging
+        \Log::info('Rental rate change detected', [
+            'stall_id' => $stallModel->id,
+            'table_number' => $stallModel->table_number,
+            'old_daily_rate' => $oldDailyRate,
+            'new_daily_rate' => $newDailyRate,
+            'old_monthly_rate' => $oldMonthlyRate,
+            'new_monthly_rate' => $newMonthlyRate,
+            'daily_rate_changed' => $dailyRateChanged,
+            'monthly_rate_changed' => $monthlyRateChanged,
+            'rate_changed' => $rateChanged,
+        ]);
         
         // If only table number or area changed (no rate change), log it separately
         if (!$rateChanged && ($tableNumberChanged || $areaChanged)) {
@@ -364,7 +393,6 @@ class RentalRateController extends Controller
         DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService) {
             // Calculate new rates
             $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
-            $newMonthlyRateValue = isset($validatedData['monthlyRate']) ? (float) $validatedData['monthlyRate'] : ($newDailyRateValue * 30);
             
             if ($effectiveToday) {
                 // Effective today - update immediately, send SMS
@@ -373,6 +401,9 @@ class RentalRateController extends Controller
                 // Update the stall
                 $stallModel->update(array_filter($validatedData));
                 $stallModel->refresh();
+                
+                // Get the actual updated monthly rate from database (may be calculated by DB)
+                $newMonthlyRateValue = (float) $stallModel->monthly_rate;
                 
                 // Send SMS notification and regenerate bills in background
                 register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
@@ -387,12 +418,16 @@ class RentalRateController extends Controller
             } else {
                 // Not effective today - DON'T update the stall yet, just save to audit with future date
                 $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
+                // Calculate expected monthly rate (daily * 30)
+                $newMonthlyRateValue = $newDailyRateValue * 30;
+                
                 // Only update non-rate fields (like tableNumber, area) if they changed
                 $nonRateUpdates = array_filter($validatedData, function($key) {
                     return !in_array($key, ['dailyRate', 'monthlyRate']);
                 }, ARRAY_FILTER_USE_KEY);
                 if (!empty($nonRateUpdates)) {
                     $stallModel->update($nonRateUpdates);
+                    $stallModel->refresh();
                 }
             }
             
@@ -408,12 +443,22 @@ class RentalRateController extends Controller
                 'effectivity_date' => $effectivityDate,
             ];
             
-            AuditLogger::log(
+            // Always log the audit trail - this is critical for tracking changes
+            $auditId = AuditLogger::log(
                 'Updated Rental Rate',
                 'Rental Rates',
                 'Success',
                 $auditDetails
             );
+            
+            // Log if audit log creation failed
+            if (!$auditId) {
+                \Log::error('Failed to create audit log for rental rate update', [
+                    'stall_id' => $stallModel->id,
+                    'old_daily_rate' => $oldDailyRate,
+                    'new_daily_rate' => $newDailyRateValue,
+                ]);
+            }
         });
 
         if ($effectiveToday) {
