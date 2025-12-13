@@ -690,6 +690,8 @@ class SuperAdminDashboard {
                     this.setupAnnouncementEventListeners();
                     this.listenersInitialized.announcementSection = true;
                 }
+                // Always fetch announcements when section is shown
+                this.fetchAnnouncements();
                 break;
             case "systemUserManagementSection":
                 if (!this.listenersInitialized.userManagement) {
@@ -5079,17 +5081,41 @@ class SuperAdminDashboard {
                     }
 
                     const result = await response.json();
+                    console.log("Profile picture upload result:", result);
                     this.showToast(result.message || "Profile picture uploaded successfully!", "success");
                     
-                    if (img && result.profile_picture_url) {
-                        img.src = result.profile_picture_url;
+                    // Update profile picture with the URL from server
+                    if (result.profile_picture_url) {
+                        // Ensure we have the img element
+                        if (!img) {
+                            // Create img element if it doesn't exist
+                            const newImg = document.createElement("img");
+                            newImg.id = "profilePictureImg";
+                            newImg.alt = "Profile Picture";
+                            newImg.className = "w-full h-full object-cover";
+                            if (placeholder) placeholder.classList.add("hidden");
+                            container.appendChild(newImg);
+                            // Update reference
+                            const updatedImg = document.getElementById("profilePictureImg");
+                            if (updatedImg) {
+                                updatedImg.src = result.profile_picture_url;
+                                updatedImg.classList.remove("hidden");
+                            }
+                        } else {
+                            // Add cache busting parameter to ensure fresh image
+                            const urlWithCache = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                            img.src = urlWithCache;
+                            img.classList.remove("hidden");
+                            if (placeholder) placeholder.classList.add("hidden");
+                        }
                     }
                     
                     // Update sidebar profile picture
                     const sidebarImg = document.querySelector('#sidebarProfileImage img');
                     const sidebarIcon = document.getElementById('sidebarProfileIcon');
                     if (sidebarImg && result.profile_picture_url) {
-                        sidebarImg.src = result.profile_picture_url;
+                        const sidebarUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                        sidebarImg.src = sidebarUrl;
                         sidebarImg.classList.remove('hidden');
                         if (sidebarIcon) sidebarIcon.classList.add('hidden');
                     }

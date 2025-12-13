@@ -121,24 +121,41 @@ class UserSettingsController extends Controller
             // Update user record
             $user->profile_picture = $path;
             $user->save();
+            
+            // Refresh user model to ensure we have the latest data
+            $user->refresh();
 
             AuditLogger::log(
                 'Uploaded Profile Picture',
                 'User Settings',
                 'Success',
-                ['user_id' => $user->id]
+                ['user_id' => $user->id, 'path' => $path]
             );
 
             // Generate absolute URL for the profile picture
             $url = Storage::disk('public')->url($path);
-            // Ensure it's an absolute URL
+            // Ensure it's an absolute URL - remove leading slash if present and use asset()
+            $url = str_replace('//', '/', $url);
             if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                $url = asset($url);
+                // If it starts with /storage, use asset() to make it absolute
+                if (strpos($url, '/storage') === 0) {
+                    $url = asset($url);
+                } else {
+                    $url = url($url);
+                }
             }
+            
+            \Log::info('Profile picture uploaded successfully', [
+                'user_id' => $user->id,
+                'path' => $path,
+                'url' => $url,
+                'profile_picture_field' => $user->profile_picture
+            ]);
             
             return response()->json([
                 'message' => 'Profile picture uploaded successfully.',
-                'profile_picture_url' => $url
+                'profile_picture_url' => $url,
+                'profile_picture_path' => $path
             ]);
         } catch (\Exception $e) {
             \Log::error('Profile picture upload failed: ' . $e->getMessage(), [
@@ -159,9 +176,20 @@ class UserSettingsController extends Controller
         $user = Auth::user();
         
         if ($user->profile_picture) {
-            Storage::disk('public')->delete($user->profile_picture);
+            try {
+                Storage::disk('public')->delete($user->profile_picture);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to delete profile picture file: ' . $e->getMessage(), [
+                    'path' => $user->profile_picture,
+                    'user_id' => $user->id
+                ]);
+            }
+            
             $user->profile_picture = null;
             $user->save();
+            
+            // Refresh user model
+            $user->refresh();
 
             AuditLogger::log(
                 'Removed Profile Picture',
@@ -169,6 +197,11 @@ class UserSettingsController extends Controller
                 'Success',
                 ['user_id' => $user->id]
             );
+
+            \Log::info('Profile picture removed successfully', [
+                'user_id' => $user->id,
+                'profile_picture_field' => $user->profile_picture
+            ]);
 
             return response()->json(['message' => 'Profile picture removed successfully.']);
         }
