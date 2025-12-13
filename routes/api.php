@@ -97,6 +97,7 @@ Route::get('/notification-templates', [NotificationTemplateController::class, 'i
 Route::post('/notification-templates', [NotificationTemplateController::class, 'update']);
 Route::get('/notification-templates/sent-messages', [NotificationTemplateController::class, 'getSentMessages']);
 Route::get('/notification-templates/debug-sent-messages', [NotificationTemplateController::class, 'debugSentMessages'])->middleware(['auth:sanctum', 'role:Admin']);
+Route::get('/notification-templates/test-storage', [NotificationTemplateController::class, 'testSmsStorage'])->middleware(['auth:sanctum', 'role:Admin']);
 
 
 

@@ -426,4 +426,60 @@ class NotificationTemplateController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Test endpoint to manually create a test SMS notification entry
+     * This helps verify that storage and retrieval are working
+     */
+    public function testSmsStorage(Request $request)
+    {
+        try {
+            $adminUser = User::whereHas('role', function($query) {
+                $query->where('name', 'Admin');
+            })->first();
+            
+            $testMessage = "TEST SMS: This is a test message to verify SMS storage is working. Sent at " . now()->toDateTimeString();
+            
+            $notificationId = DB::table('notifications')->insertGetId([
+                'recipient_id' => auth()->id() ?? 1,
+                'sender_id' => $adminUser ? $adminUser->id : null,
+                'channel' => 'sms',
+                'title' => 'Test SMS',
+                'message' => json_encode([
+                    'text' => $testMessage,
+                    'type' => 'test',
+                ]),
+                'status' => 'sent',
+                'sent_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            
+            // Verify it can be retrieved
+            $retrieved = DB::table('notifications')
+                ->where('id', $notificationId)
+                ->where('channel', 'sms')
+                ->where('status', 'sent')
+                ->first();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Test SMS notification created and verified',
+                'notification_id' => $notificationId,
+                'retrieved' => $retrieved ? 'Yes' : 'No',
+                'data' => $retrieved
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Test SMS storage failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
 }
