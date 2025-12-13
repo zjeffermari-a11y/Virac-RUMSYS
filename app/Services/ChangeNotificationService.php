@@ -56,8 +56,18 @@ class ChangeNotificationService
      */
     private function sendSmsInBackground($recipients, $baseMessage, $utilityType = null, $newRate = null, $newMonthlyRate = null)
     {
-        register_shutdown_function(function() use ($recipients, $baseMessage, $utilityType, $newRate, $newMonthlyRate) {
+        // Store admin user ID before shutdown function to avoid DB connection issues
+        $adminUser = \App\Models\User::whereHas('role', function($query) {
+            $query->where('name', 'Admin');
+        })->first();
+        $adminUserId = $adminUser ? $adminUser->id : null;
+        $smsTitle = $this->getSmsTitleForChange($baseMessage);
+        
+        register_shutdown_function(function() use ($recipients, $baseMessage, $utilityType, $newRate, $newMonthlyRate, $adminUserId, $smsTitle) {
             try {
+                // Reconnect to database in case connection was closed
+                DB::reconnect();
+                
                 $successCount = 0;
                 $failCount = 0;
                 
@@ -86,15 +96,12 @@ class ChangeNotificationService
                         
                         // Store SMS message in notifications table
                         try {
-                            $adminUser = \App\Models\User::whereHas('role', function($query) {
-                                $query->where('name', 'Admin');
-                            })->first();
-                            
-                            $smsTitle = $this->getSmsTitleForChange($baseMessage);
+                            // Ensure DB connection is active
+                            DB::connection()->getPdo();
                             
                             $notificationId = DB::table('notifications')->insertGetId([
                                 'recipient_id' => $user->id,
-                                'sender_id' => $adminUser ? $adminUser->id : null,
+                                'sender_id' => $adminUserId,
                                 'channel' => 'sms',
                                 'title' => $smsTitle,
                                 'message' => json_encode([
@@ -116,7 +123,8 @@ class ChangeNotificationService
                             Log::error("Failed to store SMS notification in ChangeNotificationService", [
                                 'error' => $e->getMessage(),
                                 'trace' => $e->getTraceAsString(),
-                                'user_id' => $user->id
+                                'user_id' => $user->id,
+                                'db_connected' => DB::connection()->getPdo() ? 'yes' : 'no'
                             ]);
                         }
                     } else {
@@ -127,7 +135,9 @@ class ChangeNotificationService
                 
                 Log::info("SMS sent in background: {$successCount} successful, {$failCount} failed");
             } catch (\Exception $e) {
-                Log::error("Error sending SMS in background: " . $e->getMessage());
+                Log::error("Error sending SMS in background: " . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
+                ]);
             }
         });
     }
