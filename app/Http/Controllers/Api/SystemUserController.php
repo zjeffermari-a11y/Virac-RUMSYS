@@ -50,7 +50,21 @@ class SystemUserController extends Controller
         }
 
         // Get all users for client-side pagination
-        $users = $query->orderBy('u.created_at', 'desc')->get();
+        // Sort by latest activity (last_login) - most recent first, NULL (never logged in) last
+        // Database-agnostic approach: use CASE to put NULLs last
+        $driver = DB::getDriverName();
+        if ($driver === 'pgsql') {
+            // PostgreSQL supports NULLS LAST
+            $users = $query->orderByRaw('u.last_login DESC NULLS LAST')
+                ->orderBy('u.created_at', 'desc')
+                ->get();
+        } else {
+            // MySQL and others: use CASE to put NULLs last
+            $users = $query->orderByRaw('CASE WHEN u.last_login IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('u.last_login', 'desc')
+                ->orderBy('u.created_at', 'desc')
+                ->get();
+        }
 
         // Transform the last_login to an ISO-8601 string for correct JS parsing
         $users->transform(function ($user) {

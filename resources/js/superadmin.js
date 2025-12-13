@@ -2203,6 +2203,24 @@ class SuperAdminDashboard {
             return matchesSearch && matchesRole;
         });
 
+        // Sort by latest activity (last_login) - most recent first, never logged in last
+        filteredUsers.sort((a, b) => {
+            // If both have last_login, sort by date descending (newest first)
+            if (a.last_login && b.last_login) {
+                return new Date(b.last_login) - new Date(a.last_login);
+            }
+            // If only a has last_login, a comes first
+            if (a.last_login && !b.last_login) {
+                return -1;
+            }
+            // If only b has last_login, b comes first
+            if (!a.last_login && b.last_login) {
+                return 1;
+            }
+            // If neither has last_login, maintain original order (or sort by created_at if available)
+            return 0;
+        });
+
         const perPage = 10;
         const total = filteredUsers.length;
         const totalPages = Math.ceil(total / perPage);
