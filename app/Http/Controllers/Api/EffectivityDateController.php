@@ -30,23 +30,33 @@ class EffectivityDateController extends Controller
         // 0. Get pending Rental Rate changes (stored in audit_trails)
         $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
         if ($hasDetailsColumn) {
+            // Get all recent rental rate audit entries
             $rentalRateAudits = DB::table('audit_trails')
                 ->where('module', 'Rental Rates')
                 ->whereIn('action', ['Updated Rental Rate', 'Updated Rental Rates'])
                 ->whereNotNull('details')
-                ->select('id', 'details', 'created_at')
+                ->select('id', 'action', 'module', 'details', 'created_at')
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             foreach ($rentalRateAudits as $audit) {
                 $details = json_decode($audit->details, true);
-                if (!$details || !isset($details['effectivity_date'])) {
+                
+                // Debug: Log if details can't be parsed
+                if (!$details) {
+                    Log::debug('Rental rate audit details not JSON', ['audit_id' => $audit->id, 'details_raw' => $audit->details]);
+                    continue;
+                }
+                
+                // Check if effectivity_date exists in details
+                if (!isset($details['effectivity_date'])) {
+                    Log::debug('Rental rate audit missing effectivity_date', ['audit_id' => $audit->id, 'details_keys' => array_keys($details)]);
                     continue;
                 }
                 
                 try {
                     $effectivityDate = Carbon::parse($details['effectivity_date']);
-                    // Only include if effectivity date is in the future
+                    // Only include if effectivity date is in the future (>= today)
                     if ($effectivityDate->gte($today)) {
                         $pendingChanges[] = [
                             'id' => $audit->id,
@@ -59,9 +69,19 @@ class EffectivityDateController extends Controller
                             'history_table' => 'audit_trails',
                             'history_id' => $audit->id,
                         ];
+                    } else {
+                        Log::debug('Rental rate effectivity date is in the past', [
+                            'audit_id' => $audit->id,
+                            'effectivity_date' => $details['effectivity_date'],
+                            'today' => $today->format('Y-m-d')
+                        ]);
                     }
                 } catch (\Exception $e) {
-                    // Skip invalid dates
+                    Log::error('Error parsing rental rate effectivity date', [
+                        'audit_id' => $audit->id,
+                        'effectivity_date' => $details['effectivity_date'] ?? 'missing',
+                        'error' => $e->getMessage()
+                    ]);
                     continue;
                 }
             }
@@ -511,6 +531,46 @@ class EffectivityDateController extends Controller
                 'message' => 'Error updating schedules: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Debug endpoint to check rental rate audit entries
+     */
+    public function debugRentalRates()
+    {
+        $hasDetailsColumn = DB::getSchemaBuilder()->hasColumn('audit_trails', 'details');
+        if (!$hasDetailsColumn) {
+            return response()->json(['error' => 'details column does not exist']);
+        }
+
+        $audits = DB::table('audit_trails')
+            ->where('module', 'Rental Rates')
+            ->whereIn('action', ['Updated Rental Rate', 'Updated Rental Rates'])
+            ->whereNotNull('details')
+            ->select('id', 'action', 'module', 'details', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($audit) {
+                $details = json_decode($audit->details, true);
+                return [
+                    'id' => $audit->id,
+                    'action' => $audit->action,
+                    'created_at' => $audit->created_at,
+                    'has_effectivity_date' => isset($details['effectivity_date']),
+                    'effectivity_date' => $details['effectivity_date'] ?? null,
+                    'table_number' => $details['table_number'] ?? null,
+                    'old_daily_rate' => $details['old_daily_rate'] ?? null,
+                    'new_daily_rate' => $details['new_daily_rate'] ?? null,
+                    'all_keys' => $details ? array_keys($details) : [],
+                ];
+            });
+
+        return response()->json([
+            'total_found' => $audits->count(),
+            'audits' => $audits,
+            'today' => Carbon::today()->format('Y-m-d'),
+        ]);
     }
 }
 

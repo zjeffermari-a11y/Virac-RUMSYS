@@ -152,6 +152,7 @@ use App\Http\Controllers\Api\EffectivityDateController;
 
 Route::prefix('admin/effectivity-dates')->middleware(['auth', 'role:Admin'])->group(function () {
     Route::get('/pending-changes', [EffectivityDateController::class, 'getPendingChanges']);
+    Route::get('/debug-rental-rates', [EffectivityDateController::class, 'debugRentalRates']);
     Route::put('/update', [EffectivityDateController::class, 'updateEffectivityDate']);
     Route::get('/schedules', [EffectivityDateController::class, 'getBillGenerationSchedules']);
     Route::put('/schedules', [EffectivityDateController::class, 'updateBillGenerationSchedules']);
