@@ -20,6 +20,7 @@ class UtilityRateController extends Controller
     public function index(Request $request = null)
     {
         try {
+            // Clear cache if it exists and might be stale
             $formattedRates = Cache::remember('utility_rates', 3600, function () {
                 // This closure only runs if 'utility_rates' is not in the cache.
                 $rates = DB::table('rates')
@@ -36,35 +37,42 @@ class UtilityRateController extends Controller
                     $electricityExists = DB::table('rates')->where('utility_type', 'Electricity')->exists();
                     $waterExists = DB::table('rates')->where('utility_type', 'Water')->exists();
                     
-                    if (!$electricityExists) {
-                        DB::table('rates')->insert([
-                            'utility_type' => 'Electricity',
-                            'section_id' => null,
-                            'rate' => 31.00,
-                            'monthly_rate' => 0.00,
-                            'created_at' => now(),
-                            'updated_at' => now()
-                        ]);
-                        \Log::info('Created default Electricity rate');
+                    try {
+                        if (!$electricityExists) {
+                            $electricityId = DB::table('rates')->insertGetId([
+                                'utility_type' => 'Electricity',
+                                'section_id' => null,
+                                'rate' => 31.00,
+                                'monthly_rate' => 0.00,
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ]);
+                            \Log::info('Created default Electricity rate with ID: ' . $electricityId);
+                        }
+                        
+                        if (!$waterExists) {
+                            $waterId = DB::table('rates')->insertGetId([
+                                'utility_type' => 'Water',
+                                'section_id' => null,
+                                'rate' => 5.00,
+                                'monthly_rate' => 0.00,
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ]);
+                            \Log::info('Created default Water rate with ID: ' . $waterId);
+                        }
+                    } catch (\Exception $insertException) {
+                        \Log::error('Failed to create default utility rates: ' . $insertException->getMessage());
+                        \Log::error('Insert exception trace: ' . $insertException->getTraceAsString());
                     }
                     
-                    if (!$waterExists) {
-                        DB::table('rates')->insert([
-                            'utility_type' => 'Water',
-                            'section_id' => null,
-                            'rate' => 6.00,
-                            'monthly_rate' => 0.00,
-                            'created_at' => now(),
-                            'updated_at' => now()
-                        ]);
-                        \Log::info('Created default Water rate');
-                    }
-                    
-                    // Re-fetch rates after creation
+                    // Re-fetch rates after creation attempt
                     $rates = DB::table('rates')
                                 ->whereIn('utility_type', ['Electricity', 'Water'])
                                 ->select('id', 'utility_type', 'rate', 'monthly_rate')
                                 ->get();
+                    
+                    \Log::info('Utility rates after creation attempt: ' . $rates->count());
                 }
 
                 $formatted = $rates->map(function ($item) {
@@ -78,8 +86,44 @@ class UtilityRateController extends Controller
                 })->values()->all(); // Convert to array and re-index
 
                 \Log::info('Formatted utility rates count: ' . count($formatted));
+                
+                // If still empty after creation attempt, return empty array
+                if (empty($formatted)) {
+                    \Log::error('Utility rates are still empty after creation attempt!');
+                }
+                
                 return $formatted;
             });
+
+            // Clear cache if we got an empty result (might be stale cache)
+            if (empty($formattedRates) || !is_array($formattedRates)) {
+                \Log::warning('Formatted rates is empty or not an array: ' . gettype($formattedRates) . ', clearing cache...');
+                Cache::forget('utility_rates');
+                
+                // Try one more time without cache
+                $rates = DB::table('rates')
+                            ->whereIn('utility_type', ['Electricity', 'Water'])
+                            ->select('id', 'utility_type', 'rate', 'monthly_rate')
+                            ->get();
+                
+                if ($rates->isEmpty()) {
+                    \Log::error('Utility rates are still missing from database after cache clear!');
+                    $formattedRates = [];
+                } else {
+                    $formattedRates = $rates->map(function ($item) {
+                        return [
+                            'id'          => $item->id,
+                            'utility'     => $item->utility_type,
+                            'rate'        => (float) $item->rate,
+                            'monthlyRate' => (float) $item->monthly_rate,
+                            'unit'        => ($item->utility_type === 'Electricity') ? 'kWh' : 'day'
+                        ];
+                    })->values()->all();
+                    
+                    // Re-cache the correct data
+                    Cache::put('utility_rates', $formattedRates, 3600);
+                }
+            }
 
             // Ensure we always return an array
             if (!is_array($formattedRates)) {
@@ -94,6 +138,10 @@ class UtilityRateController extends Controller
         } catch (\Exception $e) {
             \Log::error("Error fetching utility rates: " . $e->getMessage());
             \Log::error("Stack trace: " . $e->getTraceAsString());
+            
+            // Clear cache on error
+            Cache::forget('utility_rates');
+            
             if ($request && $request->wantsJson()) {
                 return response()->json([], 500);
             }
