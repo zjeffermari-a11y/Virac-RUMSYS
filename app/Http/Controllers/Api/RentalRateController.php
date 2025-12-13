@@ -242,6 +242,11 @@ class RentalRateController extends Controller
                             'new_daily' => $newDailyRate,
                             'old_monthly' => $oldMonthlyRate,
                             'new_monthly' => $newMonthlyRate,
+                            'daily_diff' => abs($oldDailyRate - $newDailyRate),
+                            'monthly_diff' => abs($oldMonthlyRate - $newMonthlyRate),
+                            'epsilon' => $epsilon,
+                            'daily_within_epsilon' => abs($oldDailyRate - $newDailyRate) <= $epsilon,
+                            'monthly_within_epsilon' => abs($oldMonthlyRate - $newMonthlyRate) <= $epsilon,
                         ]);
                     }
                 }
@@ -327,6 +332,11 @@ class RentalRateController extends Controller
                 'new_monthly_rate' => $newMonthlyRate,
                 'daily_rate_changed' => $dailyRateChanged,
                 'monthly_rate_changed' => $monthlyRateChanged,
+                'daily_diff' => abs($oldDailyRate - $newDailyRate),
+                'monthly_diff' => abs($oldMonthlyRate - $newMonthlyRate),
+                'epsilon' => $epsilon,
+                'daily_within_epsilon' => abs($oldDailyRate - $newDailyRate) <= $epsilon,
+                'monthly_within_epsilon' => abs($oldMonthlyRate - $newMonthlyRate) <= $epsilon,
             ]);
             return response()->json(['message' => 'No changes detected.']);
         }
