@@ -197,28 +197,40 @@ class NotificationTemplateController extends Controller
      */
     public function getSentMessages(Request $request)
     {
-        $page = $request->input('page', 1);
-        $perPage = $request->input('per_page', 50); // Increased default for better scrolling
-        
-        // Get filters from request
-        $messageType = $request->input('type');
-        $dateFrom = $request->input('date_from');
-        $dateTo = $request->input('date_to');
-        $recipientSearch = $request->input('recipient');
-        
-        // Filter by message type based on title
-        $messageTypes = [
-            'Bill Statement',
-            'Payment Reminder',
-            'Overdue Bill Alert',
-            'Rate Change Notification',
-            'Schedule Change Notification',
-            'Billing Setting Change Notification',
-            'Rental Rate Change Notification',
-            'Policy Change Notification',
-            'Announcement',
-            'SMS Notification',
-        ];
+        try {
+            $page = $request->input('page', 1);
+            $perPage = $request->input('per_page', 50); // Increased default for better scrolling
+            
+            // Get filters from request
+            $messageType = $request->input('type');
+            $dateFrom = $request->input('date_from');
+            $dateTo = $request->input('date_to');
+            $recipientSearch = $request->input('recipient');
+            
+            // Filter by message type based on title
+            $messageTypes = [
+                'Bill Statement',
+                'Payment Reminder',
+                'Overdue Bill Alert',
+                'Rate Change Notification',
+                'Schedule Change Notification',
+                'Billing Setting Change Notification',
+                'Rental Rate Change Notification',
+                'Policy Change Notification',
+                'Announcement',
+                'SMS Notification',
+            ];
+            
+            // Log for debugging
+            \Log::info('getSentMessages called', [
+                'page' => $page,
+                'filters' => [
+                    'type' => $messageType,
+                    'date_from' => $dateFrom,
+                    'date_to' => $dateTo,
+                    'recipient' => $recipientSearch
+                ]
+            ]);
         
         // Build base query - if recipient filter is needed, join users from the start
         if ($recipientSearch) {
@@ -328,12 +340,90 @@ class NotificationTemplateController extends Controller
             ];
         });
         
+            \Log::info('getSentMessages result', [
+                'total' => $total,
+                'messages_count' => $formattedMessages->count(),
+                'page' => $page
+            ]);
+            
+            return response()->json([
+                'data' => $formattedMessages,
+                'current_page' => (int) $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => (int) ceil($total / $perPage),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getSentMessages', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => 'Failed to fetch sent messages',
+                'message' => $e->getMessage(),
+                'data' => [],
+                'total' => 0
+            ], 500);
+        }
+    }
+
+    /**
+     * Debug endpoint to check SMS notifications in database
+     */
+    public function debugSentMessages(Request $request)
+    {
+        // Check total SMS notifications
+        $totalSms = DB::table('notifications')
+            ->where('channel', 'sms')
+            ->count();
+        
+        // Check sent SMS notifications
+        $sentSms = DB::table('notifications')
+            ->where('channel', 'sms')
+            ->where('status', 'sent')
+            ->count();
+        
+        // Check by title
+        $byTitle = DB::table('notifications')
+            ->where('channel', 'sms')
+            ->where('status', 'sent')
+            ->select('title', DB::raw('count(*) as count'))
+            ->groupBy('title')
+            ->get();
+        
+        // Get recent SMS notifications (last 10)
+        $recent = DB::table('notifications as n')
+            ->join('users as recipient', 'n.recipient_id', '=', 'recipient.id')
+            ->where('n.channel', 'sms')
+            ->where('n.status', 'sent')
+            ->select(
+                'n.id',
+                'n.title',
+                'n.sent_at',
+                'n.created_at',
+                'recipient.name as recipient_name'
+            )
+            ->orderBy('n.sent_at', 'desc')
+            ->orderBy('n.created_at', 'desc')
+            ->limit(10)
+            ->get();
+        
+        // Check if notifications table exists and has correct structure
+        $tableExists = DB::getSchemaBuilder()->hasTable('notifications');
+        $hasChannelColumn = $tableExists ? DB::getSchemaBuilder()->hasColumn('notifications', 'channel') : false;
+        $hasStatusColumn = $tableExists ? DB::getSchemaBuilder()->hasColumn('notifications', 'status') : false;
+        
         return response()->json([
-            'data' => $formattedMessages,
-            'current_page' => (int) $page,
-            'per_page' => $perPage,
-            'total' => $total,
-            'last_page' => (int) ceil($total / $perPage),
+            'debug_info' => [
+                'table_exists' => $tableExists,
+                'has_channel_column' => $hasChannelColumn,
+                'has_status_column' => $hasStatusColumn,
+                'total_sms_notifications' => $totalSms,
+                'sent_sms_notifications' => $sentSms,
+                'by_title' => $byTitle,
+                'recent_messages' => $recent,
+            ]
         ]);
     }
 }

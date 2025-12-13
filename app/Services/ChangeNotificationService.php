@@ -92,7 +92,7 @@ class ChangeNotificationService
                             
                             $smsTitle = $this->getSmsTitleForChange($baseMessage);
                             
-                            DB::table('notifications')->insert([
+                            $notificationId = DB::table('notifications')->insertGetId([
                                 'recipient_id' => $user->id,
                                 'sender_id' => $adminUser ? $adminUser->id : null,
                                 'channel' => 'sms',
@@ -106,8 +106,18 @@ class ChangeNotificationService
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
+                            
+                            Log::info("Change notification SMS stored successfully", [
+                                'notification_id' => $notificationId,
+                                'user_id' => $user->id,
+                                'title' => $smsTitle
+                            ]);
                         } catch (\Exception $e) {
-                            Log::error("Failed to store SMS notification: " . $e->getMessage());
+                            Log::error("Failed to store SMS notification in ChangeNotificationService", [
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString(),
+                                'user_id' => $user->id
+                            ]);
                         }
                     } else {
                         $failCount++;

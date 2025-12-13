@@ -524,7 +524,7 @@ class SmsService
                 
                 $smsTitle = $this->getSmsTitle($templateName);
                 
-                DB::table('notifications')->insert([
+                $notificationId = DB::table('notifications')->insertGetId([
                     'recipient_id' => $user->id,
                     'sender_id' => $adminUser ? $adminUser->id : null,
                     'channel' => 'sms',
@@ -539,8 +539,20 @@ class SmsService
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+                
+                Log::info("SMS notification stored successfully", [
+                    'notification_id' => $notificationId,
+                    'user_id' => $user->id,
+                    'template' => $templateName,
+                    'title' => $smsTitle
+                ]);
             } catch (\Exception $e) {
-                Log::error("Failed to store SMS notification: " . $e->getMessage());
+                Log::error("Failed to store SMS notification", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'user_id' => $user->id,
+                    'template' => $templateName
+                ]);
             }
         }
         

@@ -96,6 +96,7 @@ Route::get('/notification-templates/credits', [NotificationTemplateController::c
 Route::get('/notification-templates', [NotificationTemplateController::class, 'index']);
 Route::post('/notification-templates', [NotificationTemplateController::class, 'update']);
 Route::get('/notification-templates/sent-messages', [NotificationTemplateController::class, 'getSentMessages']);
+Route::get('/notification-templates/debug-sent-messages', [NotificationTemplateController::class, 'debugSentMessages'])->middleware(['auth:sanctum', 'role:Admin']);
 
 
 
