@@ -2731,12 +2731,8 @@ class SuperAdminDashboard {
                 let effectivityDateCell = '';
                 const billingModules = ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings', 'Effectivity Date Management'];
                 if (log.effectivity_date && billingModules.includes(log.module)) {
-                    // Backend already formats it as "Today" or "M d, Y", so just display it
-                    if (log.effectivity_date === 'Today') {
-                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium font-semibold">Today</td>`;
-                    } else {
-                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium">${log.effectivity_date}</td>`;
-                    }
+                    // Backend formats it as "M d, Y" (e.g., "Dec 13, 2025"), so just display it
+                    effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium">${log.effectivity_date}</td>`;
                 } else {
                     effectivityDateCell = '<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3">-</td>';
                 }

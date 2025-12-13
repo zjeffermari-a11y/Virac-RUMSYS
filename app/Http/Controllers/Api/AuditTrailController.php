@@ -120,19 +120,13 @@ class AuditTrailController extends Controller
                             }
                         }
                         
-                        // Format effectivity date: show "Today" if it's today, otherwise show the date
+                        // Format effectivity date: always show the actual date
                         if ($effectivityDate) {
-                            $today = \Carbon\Carbon::today()->format('Y-m-d');
-                            if ($effectivityDate === $today) {
-                                $item->effectivity_date = 'Today';
-                            } else {
-                                // Format the date nicely
-                                try {
-                                    $date = \Carbon\Carbon::parse($effectivityDate);
-                                    $item->effectivity_date = $date->format('M d, Y');
-                                } catch (\Exception $e) {
-                                    $item->effectivity_date = $effectivityDate;
-                                }
+                            try {
+                                $date = \Carbon\Carbon::parse($effectivityDate);
+                                $item->effectivity_date = $date->format('M d, Y');
+                            } catch (\Exception $e) {
+                                $item->effectivity_date = $effectivityDate;
                             }
                         }
                     }
