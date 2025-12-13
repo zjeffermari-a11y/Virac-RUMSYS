@@ -1245,7 +1245,7 @@
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-yellow-700">
-                        <strong>Admin Only:</strong> Adjust effectivity dates for pending policy changes. 
+                        Adjust effectivity dates for pending policy changes. 
                         Changes with effectivity dates in the current month will be automatically applied based on the schedule below. 
                         Bills will be regenerated and SMS notifications will be sent automatically.
                     </p>
