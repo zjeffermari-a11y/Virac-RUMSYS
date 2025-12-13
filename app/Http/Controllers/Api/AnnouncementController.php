@@ -415,11 +415,19 @@ class AnnouncementController extends Controller
             foreach ($recipients as $user) {
                 $contactNumber = $user->getSemaphoreReadyContactNumber();
                 if ($contactNumber) {
-                    $result = $smsService->send($contactNumber, $message);
+                    // Store SMS message immediately (synchronous)
+                    $result = $smsService->send($contactNumber, $message, false, [
+                        'store' => true,
+                        'title' => 'Announcement',
+                        'recipient_id' => $user->id,
+                        'type' => 'announcement',
+                        'announcement_id' => $announcement->id
+                    ]);
+                    
                     if ($result['success']) {
                         $successCount++;
                         
-                        // Store SMS message in notifications table
+                        // Also store directly as backup
                         try {
                             $adminUser = \App\Models\User::whereHas('role', function($query) {
                                 $query->where('name', 'Admin');
@@ -441,7 +449,10 @@ class AnnouncementController extends Controller
                                 'updated_at' => now(),
                             ]);
                         } catch (\Exception $e) {
-                            Log::error("Failed to store announcement SMS notification: " . $e->getMessage());
+                            // Ignore duplicate key errors
+                            if (strpos($e->getMessage(), 'Duplicate') === false) {
+                                Log::error("Failed to store announcement SMS notification: " . $e->getMessage());
+                            }
                         }
                     } else {
                         $failCount++;

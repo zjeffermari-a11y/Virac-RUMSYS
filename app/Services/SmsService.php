@@ -26,7 +26,7 @@ class SmsService
         }
     }
 
-    public function send($recipientNumber, $message, $priority = false)
+    public function send($recipientNumber, $message, $priority = false, $metadata = [])
     {
         $endpoint = $priority ? '/priority' : '/messages';
         $url = $this->baseUrl . $endpoint;
@@ -63,6 +63,12 @@ class SmsService
                         'message_id' => $responseData[0]['message_id'],
                         'response' => $responseData
                     ]);
+                    
+                    // Store SMS message immediately if metadata provided (for direct send calls)
+                    if ($metadata && is_array($metadata) && isset($metadata['store']) && $metadata['store']) {
+                        $this->storeSmsNotification($metadata, $message, $recipientNumber);
+                    }
+                    
                     return ['success' => true, 'response' => $responseData, 'message_id' => $responseData[0]['message_id']];
                 } else {
                     // Semaphore might return success status but with error in body
@@ -84,6 +90,55 @@ class SmsService
         } catch (\Exception $e) {
             Log::error('Semaphore SMS sending failed: ' . $e->getMessage(), ['exception' => $e]);
             return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Store SMS notification in database
+     */
+    private function storeSmsNotification($metadata, $message, $recipientNumber)
+    {
+        try {
+            $adminUser = \App\Models\User::whereHas('role', function($query) {
+                $query->where('name', 'Admin');
+            })->first();
+            
+            $title = $metadata['title'] ?? 'SMS Notification';
+            $recipientId = $metadata['recipient_id'] ?? null;
+            
+            // If recipient_id not provided, try to find user by phone number
+            if (!$recipientId) {
+                $user = \App\Models\User::where('contact_number', 'like', '%' . substr($recipientNumber, -10) . '%')->first();
+                $recipientId = $user ? $user->id : null;
+            }
+            
+            if ($recipientId) {
+                $notificationId = DB::table('notifications')->insertGetId([
+                    'recipient_id' => $recipientId,
+                    'sender_id' => $adminUser ? $adminUser->id : null,
+                    'channel' => 'sms',
+                    'title' => $title,
+                    'message' => json_encode([
+                        'text' => $message,
+                        'type' => $metadata['type'] ?? 'notification',
+                    ]),
+                    'status' => 'sent',
+                    'sent_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                
+                Log::info("SMS notification stored via send() method", [
+                    'notification_id' => $notificationId,
+                    'recipient_id' => $recipientId,
+                    'title' => $title
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to store SMS notification in send() method", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
     }
 

@@ -52,22 +52,21 @@ class ChangeNotificationService
     }
     
     /**
-     * Send SMS in background to avoid blocking
+     * Send SMS and store immediately (synchronous) to ensure storage works on cloud
+     * Storage is fast enough that blocking for a few milliseconds is acceptable
      */
     private function sendSmsInBackground($recipients, $baseMessage, $utilityType = null, $newRate = null, $newMonthlyRate = null)
     {
-        // Store admin user ID before shutdown function to avoid DB connection issues
+        // Store admin user ID before processing
         $adminUser = \App\Models\User::whereHas('role', function($query) {
             $query->where('name', 'Admin');
         })->first();
         $adminUserId = $adminUser ? $adminUser->id : null;
         $smsTitle = $this->getSmsTitleForChange($baseMessage);
         
+        // Use register_shutdown_function for sending (non-blocking) but store immediately after send
         register_shutdown_function(function() use ($recipients, $baseMessage, $utilityType, $newRate, $newMonthlyRate, $adminUserId, $smsTitle) {
             try {
-                // Reconnect to database in case connection was closed
-                DB::reconnect();
-                
                 $successCount = 0;
                 $failCount = 0;
                 
@@ -90,15 +89,20 @@ class ChangeNotificationService
                     
                     $personalizedMessage .= "\n\n- Virac Public Market";
                     
-                    $result = $this->smsService->send($contactNumber, $personalizedMessage);
+                    // Store SMS message immediately (synchronous) to ensure it works on cloud
+                    // Pass metadata to send() method so it can store if needed
+                    $result = $this->smsService->send($contactNumber, $personalizedMessage, false, [
+                        'store' => true,
+                        'title' => $smsTitle,
+                        'recipient_id' => $user->id,
+                        'type' => 'change_notification'
+                    ]);
+                    
                     if ($result['success']) {
                         $successCount++;
                         
-                        // Store SMS message in notifications table
+                        // Also store directly here as backup (in case send() method doesn't store)
                         try {
-                            // Ensure DB connection is active
-                            DB::connection()->getPdo();
-                            
                             $notificationId = DB::table('notifications')->insertGetId([
                                 'recipient_id' => $user->id,
                                 'sender_id' => $adminUserId,
@@ -114,18 +118,20 @@ class ChangeNotificationService
                                 'updated_at' => now(),
                             ]);
                             
-                            Log::info("Change notification SMS stored successfully", [
+                            Log::info("Change notification SMS stored successfully (backup)", [
                                 'notification_id' => $notificationId,
                                 'user_id' => $user->id,
                                 'title' => $smsTitle
                             ]);
                         } catch (\Exception $e) {
-                            Log::error("Failed to store SMS notification in ChangeNotificationService", [
-                                'error' => $e->getMessage(),
-                                'trace' => $e->getTraceAsString(),
-                                'user_id' => $user->id,
-                                'db_connected' => DB::connection()->getPdo() ? 'yes' : 'no'
-                            ]);
+                            // Ignore duplicate key errors (if send() already stored it)
+                            if (strpos($e->getMessage(), 'Duplicate') === false) {
+                                Log::error("Failed to store SMS notification in ChangeNotificationService", [
+                                    'error' => $e->getMessage(),
+                                    'trace' => $e->getTraceAsString(),
+                                    'user_id' => $user->id
+                                ]);
+                            }
                         }
                     } else {
                         $failCount++;
@@ -159,8 +165,18 @@ class ChangeNotificationService
             $this->regenerateCurrentMonthBills();
             
             // Send SMS in background
-            register_shutdown_function(function() use ($recipients, $message, $newMonthlyRate) {
+            // Store admin user ID and title before shutdown function
+            $adminUser = \App\Models\User::whereHas('role', function($query) {
+                $query->where('name', 'Admin');
+            })->first();
+            $adminUserId = $adminUser ? $adminUser->id : null;
+            $smsTitle = 'Rental Rate Change Notification';
+            
+            register_shutdown_function(function() use ($recipients, $message, $newMonthlyRate, $adminUserId, $smsTitle) {
                 try {
+                    // Reconnect to database in case connection was closed
+                    DB::reconnect();
+                    
                     $successCount = 0;
                     $failCount = 0;
                     
@@ -196,9 +212,48 @@ class ChangeNotificationService
                         }
                         $personalizedMessage .= "\n\n- Virac Public Market";
                         
-                        $result = $this->smsService->send($contactNumber, $personalizedMessage);
+                        // Store SMS message immediately (synchronous)
+                        $result = $this->smsService->send($contactNumber, $personalizedMessage, false, [
+                            'store' => true,
+                            'title' => $smsTitle,
+                            'recipient_id' => $user->id,
+                            'type' => 'rental_rate_change'
+                        ]);
+                        
                         if ($result['success']) {
                             $successCount++;
+                            
+                            // Also store directly as backup
+                            try {
+                                $notificationId = DB::table('notifications')->insertGetId([
+                                    'recipient_id' => $user->id,
+                                    'sender_id' => $adminUserId,
+                                    'channel' => 'sms',
+                                    'title' => $smsTitle,
+                                    'message' => json_encode([
+                                        'text' => $personalizedMessage,
+                                        'type' => 'rental_rate_change',
+                                    ]),
+                                    'status' => 'sent',
+                                    'sent_at' => now(),
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]);
+                                
+                                Log::info("Rental rate change SMS stored successfully (backup)", [
+                                    'notification_id' => $notificationId,
+                                    'user_id' => $user->id
+                                ]);
+                            } catch (\Exception $e) {
+                                // Ignore duplicate key errors
+                                if (strpos($e->getMessage(), 'Duplicate') === false) {
+                                    Log::error("Failed to store rental rate SMS notification", [
+                                        'error' => $e->getMessage(),
+                                        'trace' => $e->getTraceAsString(),
+                                        'user_id' => $user->id
+                                    ]);
+                                }
+                            }
                         } else {
                             $failCount++;
                             Log::warning("Failed to send rental rate change SMS to user {$user->id}: {$result['message']}");
@@ -207,7 +262,9 @@ class ChangeNotificationService
                     
                     Log::info("Rental rate change SMS sent: {$successCount} successful, {$failCount} failed");
                 } catch (\Exception $e) {
-                    Log::error("Error sending rental rate change SMS: " . $e->getMessage());
+                    Log::error("Error sending rental rate change SMS: " . $e->getMessage(), [
+                        'trace' => $e->getTraceAsString()
+                    ]);
                 }
             });
             
