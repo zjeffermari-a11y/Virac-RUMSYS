@@ -390,76 +390,112 @@ class RentalRateController extends Controller
         }
 
         // Process based on effectiveToday
-        DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService) {
-            // Calculate new rates
-            $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
-            
-            if ($effectiveToday) {
-                // Effective today - update immediately, send SMS
-                $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
+        $auditId = null;
+        try {
+            DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService, &$auditId) {
+                // Calculate new rates
+                $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
                 
-                // Update the stall
-                $stallModel->update(array_filter($validatedData));
-                $stallModel->refresh();
-                
-                // Get the actual updated monthly rate from database (may be calculated by DB)
-                $newMonthlyRateValue = (float) $stallModel->monthly_rate;
-                
-                // Send SMS notification and regenerate bills in background
-                register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
-                    $notificationService->sendRentalRateChangeNotification(
-                        $stallModel,
-                        $oldDailyRate,
-                        $newDailyRateValue,
-                        $oldMonthlyRate,
-                        $newMonthlyRateValue
-                    );
-                });
-            } else {
-                // Not effective today - DON'T update the stall yet, just save to audit with future date
-                $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
-                // Calculate expected monthly rate (daily * 30)
-                $newMonthlyRateValue = $newDailyRateValue * 30;
-                
-                // Only update non-rate fields (like tableNumber, area) if they changed
-                $nonRateUpdates = array_filter($validatedData, function($key) {
-                    return !in_array($key, ['dailyRate', 'monthlyRate']);
-                }, ARRAY_FILTER_USE_KEY);
-                if (!empty($nonRateUpdates)) {
-                    $stallModel->update($nonRateUpdates);
+                if ($effectiveToday) {
+                    // Effective today - update immediately, send SMS
+                    $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
+                    
+                    // Update the stall
+                    $stallModel->update(array_filter($validatedData));
                     $stallModel->refresh();
+                    
+                    // Get the actual updated monthly rate from database (may be calculated by DB)
+                    $newMonthlyRateValue = (float) $stallModel->monthly_rate;
+                    
+                    // Send SMS notification and regenerate bills in background
+                    register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
+                        $notificationService->sendRentalRateChangeNotification(
+                            $stallModel,
+                            $oldDailyRate,
+                            $newDailyRateValue,
+                            $oldMonthlyRate,
+                            $newMonthlyRateValue
+                        );
+                    });
+                } else {
+                    // Not effective today - DON'T update the stall yet, just save to audit with future date
+                    $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
+                    // Calculate expected monthly rate (daily * 30)
+                    $newMonthlyRateValue = $newDailyRateValue * 30;
+                    
+                    // Only update non-rate fields (like tableNumber, area) if they changed
+                    $nonRateUpdates = array_filter($validatedData, function($key) {
+                        return !in_array($key, ['dailyRate', 'monthlyRate']);
+                    }, ARRAY_FILTER_USE_KEY);
+                    if (!empty($nonRateUpdates)) {
+                        $stallModel->update($nonRateUpdates);
+                        $stallModel->refresh();
+                    }
                 }
-            }
-            
-            // Store audit details - always use the calculated values
-            $auditDetails = [
-                'stall_id' => $stallModel->id,
-                'table_number' => $stallModel->table_number,
-                'section' => $stallModel->section->name ?? 'N/A',
-                'old_daily_rate' => $oldDailyRate,
-                'new_daily_rate' => $newDailyRateValue,
-                'old_monthly_rate' => $oldMonthlyRate,
-                'new_monthly_rate' => $newMonthlyRateValue,
-                'effectivity_date' => $effectivityDate,
-            ];
-            
-            // Always log the audit trail - this is critical for tracking changes
-            $auditId = AuditLogger::log(
-                'Updated Rental Rate',
-                'Rental Rates',
-                'Success',
-                $auditDetails
-            );
-            
-            // Log if audit log creation failed
-            if (!$auditId) {
-                \Log::error('Failed to create audit log for rental rate update', [
+                
+                // Store audit details - always use the calculated values
+                $auditDetails = [
                     'stall_id' => $stallModel->id,
+                    'table_number' => $stallModel->table_number,
+                    'section' => $stallModel->section->name ?? 'N/A',
                     'old_daily_rate' => $oldDailyRate,
                     'new_daily_rate' => $newDailyRateValue,
-                ]);
+                    'old_monthly_rate' => $oldMonthlyRate,
+                    'new_monthly_rate' => $newMonthlyRateValue,
+                    'effectivity_date' => $effectivityDate,
+                ];
+                
+                // Always log the audit trail - this is critical for tracking changes
+                // Log BEFORE any potential rollback to ensure it's saved
+                $auditId = AuditLogger::log(
+                    'Updated Rental Rate',
+                    'Rental Rates',
+                    'Success',
+                    $auditDetails
+                );
+                
+                // Log if audit log creation failed
+                if (!$auditId) {
+                    \Log::error('Failed to create audit log for rental rate update', [
+                        'stall_id' => $stallModel->id,
+                        'old_daily_rate' => $oldDailyRate,
+                        'new_daily_rate' => $newDailyRateValue,
+                        'user_id' => \Illuminate\Support\Facades\Auth::id(),
+                    ]);
+                    throw new \Exception('Failed to create audit log');
+                }
+            });
+        } catch (\Exception $e) {
+            \Log::error('Error in rental rate update transaction', [
+                'error' => $e->getMessage(),
+                'stall_id' => $stallModel->id ?? null,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            // Even if transaction fails, try to log the audit trail outside transaction
+            if (!$auditId) {
+                try {
+                    $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
+                    $effectivityDate = $effectiveToday 
+                        ? \Carbon\Carbon::now()->format('Y-m-d')
+                        : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
+                    
+                    AuditLogger::log(
+                        'Updated Rental Rate',
+                        'Rental Rates',
+                        'Failed',
+                        [
+                            'stall_id' => $stallModel->id ?? null,
+                            'old_daily_rate' => $oldDailyRate,
+                            'new_daily_rate' => $newDailyRateValue,
+                            'error' => $e->getMessage(),
+                        ]
+                    );
+                } catch (\Exception $logError) {
+                    \Log::error('Failed to create fallback audit log', ['error' => $logError->getMessage()]);
+                }
             }
-        });
+            throw $e;
+        }
 
         if ($effectiveToday) {
             return response()->json(['message' => 'Rental rate updated and notifications sent!']);
