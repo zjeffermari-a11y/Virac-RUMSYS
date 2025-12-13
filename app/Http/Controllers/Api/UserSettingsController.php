@@ -110,13 +110,13 @@ class UserSettingsController extends Controller
         try {
             // Delete old profile picture if exists
             if ($user->profile_picture) {
-                Storage::disk('b2')->delete($user->profile_picture);
+                Storage::disk('public')->delete($user->profile_picture);
             }
 
-            // Store the image to Backblaze B2
+            // Store the image
             $image = $request->file('profile_picture');
             $filename = 'profile_' . $user->id . '_' . time() . '.' . $image->getClientOriginalExtension();
-            $path = Storage::disk('b2')->putFileAs('profile-pictures', $image, $filename);
+            $path = $image->storeAs('profile-pictures', $filename, 'public');
 
             // Update user record
             $user->profile_picture = $path;
@@ -129,9 +129,16 @@ class UserSettingsController extends Controller
                 ['user_id' => $user->id]
             );
 
+            // Generate absolute URL for the profile picture
+            $url = Storage::disk('public')->url($path);
+            // Ensure it's an absolute URL
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                $url = asset($url);
+            }
+            
             return response()->json([
                 'message' => 'Profile picture uploaded successfully.',
-                'profile_picture_url' => $user->profile_picture_url
+                'profile_picture_url' => $url
             ]);
         } catch (\Exception $e) {
             \Log::error('Profile picture upload failed: ' . $e->getMessage());
@@ -149,7 +156,7 @@ class UserSettingsController extends Controller
         $user = Auth::user();
         
         if ($user->profile_picture) {
-            Storage::disk('b2')->delete($user->profile_picture);
+            Storage::disk('public')->delete($user->profile_picture);
             $user->profile_picture = null;
             $user->save();
 

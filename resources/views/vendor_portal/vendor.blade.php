@@ -121,11 +121,24 @@
                 </div>
             </div>
 
+            {{-- Please be advised Banner --}}
             <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded-lg shadow-sm"
                 role="alert">
                 <p class="font-bold">Please be advised:</p>
                 <p>Official bills for the new month are generated at 7:00 AM on the 1st day of the month. In case of
                     inconsistencies or errors, please report them to Market Operations.</p>
+            </div>
+
+            {{-- Total Outstanding Balance Card --}}
+            <div class="bg-white border-2 p-6 rounded-2xl mb-6 shadow-lg" style="border-color: #E6E8EB;">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xl font-bold text-gray-800 mb-1">Total Outstanding Balance</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-4xl font-bold text-red-600">₱{{ number_format($totalOutstandingBalance, 2) }}</p>
+                    </div>
+                </div>
             </div>
 
             @if ($groupedBills->isEmpty())
@@ -294,7 +307,7 @@
                     <div
                         class="w-72 h-72 rounded-2xl shadow-inner overflow-hidden bg-gray-200 relative flex items-center justify-center flex-shrink-0">
                         @if($vendor->profile_picture)
-                            <img id="profileSectionImg" src="{{ $vendor->profile_picture_url }}" alt="Profile" class="w-full h-full object-cover">
+                            <img id="profileSectionImg" src="{{ Storage::url($vendor->profile_picture) }}" alt="Profile" class="w-full h-full object-cover">
                             <i id="profileSectionIcon" class="fas fa-user-circle text-9xl text-gray-400 hidden"></i>
                         @else
                             <img id="profileSectionImg" src="" alt="Profile" class="w-full h-full object-cover hidden">

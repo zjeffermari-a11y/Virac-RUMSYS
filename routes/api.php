@@ -128,7 +128,6 @@ use App\Http\Controllers\Api\BillingSettingsController;
 
 Route::prefix('billing-settings')->group(function () {
     Route::get('/', [BillingSettingsController::class, 'index']);
-    Route::get('/credits', [BillingSettingsController::class, 'getCredits']);
     Route::put('/', [BillingSettingsController::class, 'update']);
     Route::get('/history', [BillingSettingsController::class, 'history']);
 });
@@ -142,9 +141,20 @@ use App\Http\Controllers\Api\AnnouncementController;
 
 Route::prefix('admin/announcements')->middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::get('/', [AnnouncementController::class, 'index']);
+    Route::get('/{announcement}', [AnnouncementController::class, 'show']);
+    Route::get('/vendors/list', [AnnouncementController::class, 'getVendorsForSelection']);
     Route::post('/', [AnnouncementController::class, 'store']);
     Route::put('/{announcement}', [AnnouncementController::class, 'update']);
     Route::delete('/{announcement}', [AnnouncementController::class, 'destroy']);
+});
+
+use App\Http\Controllers\Api\EffectivityDateController;
+
+Route::prefix('admin/effectivity-dates')->middleware(['auth', 'role:Admin'])->group(function () {
+    Route::get('/pending-changes', [EffectivityDateController::class, 'getPendingChanges']);
+    Route::put('/update', [EffectivityDateController::class, 'updateEffectivityDate']);
+    Route::get('/schedules', [EffectivityDateController::class, 'getBillGenerationSchedules']);
+    Route::put('/schedules', [EffectivityDateController::class, 'updateBillGenerationSchedules']);
 });
 
 // Public endpoint for vendors and staff to fetch active announcements

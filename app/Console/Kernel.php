@@ -25,6 +25,7 @@ class Kernel extends ConsoleKernel
     \App\Console\Commands\DeletePayment::class,
     \App\Console\Commands\CleanupSpecificMonthBilling::class,
     \App\Console\Commands\RemoveTestContactNumbers::class,
+    \App\Console\Commands\ApplyPendingRateChanges::class,
     ];
 
     /**

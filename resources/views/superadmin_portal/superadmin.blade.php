@@ -58,6 +58,10 @@
             class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-start">
             <i class="fas fa-sms mr-3"></i>Billing Statement SMS Notification Settings
         </a>
+        <a href="#effectivityDateManagementSection" data-section="effectivityDateManagementSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer transition-smooth flex items-start">
+            <i class="fas fa-calendar-check mr-3"></i>Effectivity Date Management
+        </a>
     </div>
 
     <a href="#notificationSection" data-section="notificationSection"
@@ -375,6 +379,7 @@
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">New Daily Rate</th>
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Old Monthly Rate</th>
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">New Monthly Rate</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Effectivity Date</th>
                             </tr>
                         </thead>
                         <tbody id="rentalRateHistoryTableBody">
@@ -437,9 +442,6 @@
                             <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700 w-1/3">
                                 Rate
                             </th>
-                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700 w-1/4">
-                                Effectivity Date
-                            </th>
 
                         </tr>
                     </thead>
@@ -470,6 +472,7 @@
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">New
                                     Rate
                                 </th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Effectivity Date</th>
                             </tr>
                         </thead>
                         <tbody id="utilityRateHistoryTableBody">
@@ -557,6 +560,7 @@
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">
                                     New Schedule Day
                                 </th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Effectivity Date</th>
                             </tr>
                         </thead>
                         <tbody id="scheduleHistoryTableBody">
@@ -648,6 +652,7 @@
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">
                                     New Schedule
                                 </th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Effectivity Date</th>
                             </tr>
                         </thead>
                         <tbody id="billingDatesHistoryTableBody">
@@ -1096,6 +1101,7 @@
                                     Value</th>
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">New
                                     Value</th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Effectivity Date</th>
                             </tr>
                         </thead>
                         <tbody id="billingSettingsHistoryTableBody"></tbody>
@@ -1104,6 +1110,135 @@
             </div>
             <div id="billingSettingsHistoryLoader" class="history-log-loader">
                 <i class="fas fa-spinner fa-spin"></i> Loading...
+            </div>
+        </div>
+    </div>
+
+    {{-- =================================================================== --}}
+    {{-- BILLING MANAGEMENT: Effectivity Date Management --}}
+    {{-- =================================================================== --}}
+    <div id="effectivityDateManagementSection" class="dashboard-section overflow-visible">
+        @include('layouts.partials.content-header', [
+            'title' => 'Billing Management',
+            'subtitle' => 'Effectivity Date Management',
+            'icon' => 'fa-calendar-check',
+        ])
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong>Admin Only:</strong> Adjust effectivity dates for pending policy changes. 
+                        Changes with effectivity dates in the current month will be automatically applied based on the schedule below. 
+                        Bills will be regenerated and SMS notifications will be sent automatically.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        {{-- Bill Generation Schedules --}}
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                <h3 class="text-2xl font-semibold text-gray-800">Bill Generation Schedules</h3>
+                <div id="scheduleDefaultButtons">
+                    <button id="editScheduleBtn"
+                        class="bg-blue-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-600 transition-all duration-200 flex items-center gap-2">
+                        <i class="fas fa-edit"></i>
+                        <span>Edit Schedules</span>
+                    </button>
+                </div>
+                <div id="scheduleEditButtons" class="hidden flex items-center gap-2">
+                    <button id="saveScheduleBtn"
+                        class="bg-green-500 text-white px-6 py-2 rounded-xl font-medium hover:bg-green-600 transition-all duration-200 flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        <span>Save</span>
+                    </button>
+                    <button id="cancelScheduleBtn"
+                        class="bg-gray-500 text-white px-6 py-2 rounded-xl font-medium hover:bg-gray-600 transition-all duration-200 flex items-center gap-2">
+                        <i class="fas fa-times"></i>
+                        <span>Cancel</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                {{-- Bill Generation Schedule --}}
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-file-invoice-dollar mr-2"></i>Monthly Bill Generation
+                    </label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Day of Month</label>
+                            <input type="number" id="billGenerationDay" min="1" max="31" 
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                readonly>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Time</label>
+                            <input type="time" id="billGenerationTime"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                readonly>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Bills are generated monthly on the specified day and time.</p>
+                </div>
+
+                {{-- Apply Pending Changes Schedule --}}
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-sync-alt mr-2"></i>Apply Pending Changes
+                    </label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Time (Daily)</label>
+                            <input type="time" id="applyPendingChangesTime"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                readonly>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Checks for pending changes with effectivity dates in the current month and applies them automatically.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                <h3 class="text-2xl font-semibold text-gray-800">Pending Policy Changes</h3>
+                <button id="refreshPendingChangesBtn"
+                    class="bg-blue-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-600 transition-all duration-200 flex items-center gap-2">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+
+            <div id="pendingChangesContainer" class="overflow-x-auto">
+                <div id="pendingChangesLoader" class="text-center p-8">
+                    <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+                    <p class="mt-2 text-gray-600">Loading pending changes...</p>
+                </div>
+                <table class="w-full border-collapse responsive-table hidden" id="pendingChangesTable">
+                    <thead>
+                        <tr class="bg-gradient-to-r from-gray-50 to-gray-100">
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Item</th>
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Description</th>
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Current Effectivity Date</th>
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Changed On</th>
+                            <th class="border border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pendingChangesTableBody">
+                        {{-- Pending changes will be populated by JavaScript --}}
+                    </tbody>
+                </table>
+                <div id="noPendingChanges" class="text-center p-8 hidden">
+                    <i class="fas fa-check-circle text-4xl text-green-400 mb-4"></i>
+                    <p class="text-gray-600 text-lg">No pending changes with future effectivity dates.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -1195,12 +1330,12 @@
         @include('layouts.partials.content-header', ['title' => 'Announcements'])
 
         <div class="space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-250px)]">
                 {{-- Left Column: Create Announcement Form --}}
-                <div>
-                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full">
+                <div class="flex flex-col min-h-0">
+                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full flex flex-col">
                         <h3 class="text-xl font-semibold text-gray-800 mb-4">Create Announcement</h3>
-                        <form id="createAnnouncementForm">
+                        <form id="createAnnouncementForm" class="flex flex-col flex-1 min-h-0 overflow-y-auto pr-2">
                             <div class="mb-4">
                                 <label for="announcementTitle" class="block text-gray-700 font-medium mb-2">Title *</label>
                                 <input type="text" id="announcementTitle" required
@@ -1209,20 +1344,25 @@
                             </div>
                             <div class="mb-4">
                                 <label for="announcementContent" class="block text-gray-700 font-medium mb-2">Content *</label>
-                                <textarea id="announcementContent" required rows="8"
-                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                <textarea id="announcementContent" required rows="6"
+                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent resize-none"
                                     placeholder="Enter announcement details..."></textarea>
                             </div>
                             <div class="mb-4">
                                 <label class="block text-gray-700 font-medium mb-2">Recipients *</label>
-                                <div class="space-y-2">
+                                <div class="space-y-2 max-h-32 overflow-y-auto pr-2">
                                     <label class="flex items-center space-x-2 cursor-pointer">
-                                        <input type="checkbox" id="recipientStaff" checked
+                                        <input type="checkbox" id="recipientStaff"
                                             class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
                                         <span class="text-gray-700">Staff</span>
                                     </label>
                                     <label class="flex items-center space-x-2 cursor-pointer">
-                                        <input type="checkbox" id="recipientAllSections" checked
+                                        <input type="checkbox" id="recipientMeterReaderClerk"
+                                            class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
+                                        <span class="text-gray-700">Meter Reader Clerk</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="recipientAllSections"
                                             class="recipient-checkbox form-checkbox h-5 w-5 text-market-primary rounded focus:ring-market-primary">
                                         <span class="text-gray-700">All Sections</span>
                                     </label>
@@ -1242,6 +1382,33 @@
                                         <span class="text-gray-700">Semi-Wet Section</span>
                                     </label>
                                 </div>
+                                
+                                {{-- Specific Vendors Selection --}}
+                                <div class="mt-3 pt-3 border-t border-gray-200">
+                                    <button type="button" id="toggleSpecificVendors" class="text-sm text-market-primary hover:text-market-secondary font-medium flex items-center gap-2">
+                                        <i class="fas fa-chevron-down" id="specificVendorsIcon"></i>
+                                        <span>Select Specific Vendors</span>
+                                    </button>
+                                    <div id="specificVendorsContainer" class="hidden mt-3">
+                                        <div class="mb-2">
+                                            <input type="text" id="vendorSearchInput" placeholder="Search vendors..." 
+                                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                                        </div>
+                                        <div id="vendorListContainer" class="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+                                            <div class="text-center text-gray-500 text-sm py-4">
+                                                <i class="fas fa-spinner fa-spin"></i> Loading vendors...
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 flex items-center justify-between">
+                                            <p class="text-xs text-gray-500">
+                                                <span id="selectedVendorsCount">0</span> vendor(s) selected
+                                            </p>
+                                            <button type="button" id="clearVendorSelection" class="text-xs text-red-600 hover:text-red-800">
+                                                Clear All
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="mb-4">
                                 <label class="flex items-center space-x-2 cursor-pointer">
@@ -1250,24 +1417,29 @@
                                     <span class="text-gray-700">Publish Immediately</span>
                                 </label>
                             </div>
+                            <div class="mt-auto pt-2">
                             <button type="submit" id="saveAnnouncementBtn"
                                 class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
                                 <i class="fas fa-paper-plane"></i>
                                 <span>Post Announcement</span>
                             </button>
+                            </div>
                         </form>
                     </div>
                 </div>
 
                 {{-- Right Column: Draft Announcements --}}
-                <div>
-                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Draft Announcements</h3>
-                        <div id="draftAnnouncementsList" class="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto pr-2">
+                <div class="flex flex-col min-h-0">
+                    <div class="bg-white rounded-2xl shadow-lg p-6 h-full flex flex-col">
+                        <div class="flex items-center justify-between mb-4 flex-shrink-0">
+                            <h3 class="text-xl font-semibold text-gray-800">Draft Announcements</h3>
+                            <span id="draftAnnouncementsCount" class="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-full">0</span>
+                        </div>
+                        <div id="draftAnnouncementsList" class="space-y-2 flex-1 overflow-y-auto pr-2 min-h-0">
                             {{-- Draft announcements will be populated by JS --}}
                             <div class="text-center text-gray-500 py-8">
                                 <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>Loading announcements...</p>
+                                <p class="text-sm">Loading announcements...</p>
                             </div>
                         </div>
                     </div>
@@ -1431,6 +1603,60 @@
         </div>
     </div>
 
+    {{-- Effectivity Date Edit Modal --}}
+    <div id="effectivityDateModal" class="fixed inset-0 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 rounded-t-2xl">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-semibold">Adjust Effectivity Date</h3>
+                    <button id="closeEffectivityDateModal" class="text-white hover:text-gray-200 transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <form id="effectivityDateForm" class="p-6">
+                <input type="hidden" id="effectivityHistoryTable">
+                <input type="hidden" id="effectivityHistoryId">
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Category</label>
+                    <input type="text" id="effectivityCategory" readonly
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-600">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Item</label>
+                    <input type="text" id="effectivityItemName" readonly
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-600">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Description</label>
+                    <input type="text" id="effectivityDescription" readonly
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-600">
+                </div>
+                
+                <div class="mb-4">
+                    <label for="newEffectivityDate" class="block text-gray-700 font-medium mb-2">New Effectivity Date *</label>
+                    <input type="date" id="newEffectivityDate" required
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
+                    <p class="text-sm text-gray-500 mt-1">If set to current month, bills will be regenerated and SMS notifications will be sent.</p>
+                </div>
+                
+                <div class="flex gap-3 mt-6">
+                    <button type="button" id="cancelEffectivityDateBtn"
+                        class="flex-1 bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition-all duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" id="saveEffectivityDateBtn"
+                        class="flex-1 bg-green-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-600 transition-all duration-200">
+                        <i class="fas fa-save mr-2"></i>Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     {{-- =================================================================== --}}
     {{-- AUDIT TRAILS SECTION --}}
     {{-- =================================================================== --}}
@@ -1489,6 +1715,9 @@
                             <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">
                                 Result
                             </th>
+                            <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">
+                                Effectivity Date
+                            </th>
                         </tr>
                     </thead>
                     <tbody id="auditTrailsTableBody">
@@ -1530,6 +1759,36 @@
         </div>
     </div>
 
+    {{-- Change Effectivity Confirmation Modal --}}
+    <div id="changeEffectivityModal" class="fixed inset-0 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div class="bg-gradient-to-r from-market-primary to-market-secondary text-white p-6 rounded-t-2xl">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-semibold">Change Detected</h3>
+                    <button id="closeChangeEffectivityModal" class="text-white hover:text-gray-200 transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-700 mb-4">Is this change effective today?</p>
+                <div id="changeDetails" class="mb-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
+                    {{-- Change details will be populated by JavaScript --}}
+                </div>
+                <div class="flex gap-3">
+                    <button id="confirmEffectiveToday"
+                        class="flex-1 bg-market-primary text-white py-3 rounded-lg font-medium hover:bg-market-secondary transition-colors">
+                        Yes, Effective Today
+                    </button>
+                    <button id="confirmFutureDate"
+                        class="flex-1 bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                        No, Set Future Date
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- =================================================================== --}}
     {{-- PROFILE SECTION --}}
     {{-- =================================================================== --}}
@@ -1544,7 +1803,7 @@
                     <div class="relative inline-block">
                         <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
                             @if(auth()->user()->profile_picture)
-                                <img id="profilePictureImg" src="{{ auth()->user()->profile_picture_url }}" 
+                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
                                      alt="Profile Picture" class="w-full h-full object-cover">
                             @else
                                 <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">

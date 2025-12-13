@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Schedule;
 use Illuminate\Support\Facades\Cache;
 use App\Services\AuditLogger;
-use App\Services\AnnouncementService;
+use App\Services\ChangeNotificationService;
 
 class ScheduleController extends Controller
 {
@@ -36,6 +36,7 @@ class ScheduleController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'day' => 'required|integer|min:1|max:31',
+            'effectivityDate' => 'nullable|date',
         ]);
 
         if ($validator->fails()) {
@@ -51,6 +52,11 @@ class ScheduleController extends Controller
 
                 $oldDay = $schedule->description;
                 $newDay = $request->input('day');
+                
+                // Default to 1st of next month since bills are generated monthly on the 1st
+                $effectivityDate = isset($request->effectivityDate) && $request->effectivityDate
+                    ? \Carbon\Carbon::parse($request->effectivityDate)->format('Y-m-d')
+                    : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
 
                 // Only proceed if the day has actually changed
                 if ($oldDay != $newDay) {
@@ -67,13 +73,14 @@ class ScheduleController extends Controller
                         'old_value' => $oldDay,
                         'new_value' => $newDay,
                         'changed_by' => Auth::id() ?? 1, // Fallback to user 1 for testing
+                        'effectivity_date' => $effectivityDate,
                     ]);
 
                     AuditLogger::log(
                         'Updated Meter Reading Schedule',
                         'Schedules',
                         'Success',
-                        ['schedule_id' => $scheduleId, 'old_day' => $oldDay, 'new_day' => $newDay]
+                        ['schedule_id' => $scheduleId, 'old_day' => $oldDay, 'new_day' => $newDay, 'effectivity_date' => $effectivityDate]
                     );
                 }
             });
@@ -94,16 +101,29 @@ class ScheduleController extends Controller
     public function history()
     {
         return Cache::remember('schedule_history', 3600, function () {
+            // Check if effectivity_date column exists
+            $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn('schedule_histories', 'effectivity_date');
+            
+            $selectFields = ['sh.old_value', 'sh.new_value', 'sh.changed_at'];
+            if ($hasEffectivityDate) {
+                $selectFields[] = 'sh.effectivity_date';
+            }
+            
             $history = DB::table('schedule_histories as sh')
                 ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
                 ->join('users as u', 'sh.changed_by', '=', 'u.id')
                 ->where('s.schedule_type', 'Meter Reading')
-                ->select('sh.old_value', 'sh.new_value', 'sh.changed_at')
+                ->select($selectFields)
                 ->orderBy('sh.changed_at', 'desc')
                 ->paginate(10);
 
-            $history->getCollection()->transform(function ($item) {
+            $history->getCollection()->transform(function ($item) use ($hasEffectivityDate) {
                 $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
+                if ($hasEffectivityDate && isset($item->effectivity_date) && $item->effectivity_date) {
+                    $item->effectivity_date = (new \DateTime($item->effectivity_date))->format('Y-m-d');
+                } else {
+                    $item->effectivity_date = null;
+                }
                 return $item;
             });
 
@@ -138,12 +158,14 @@ class ScheduleController extends Controller
         });
     }
 
-    public function updateBillingDates(Request $request)
+    public function updateBillingDates(Request $request, ChangeNotificationService $notificationService)
     {
         $validator = Validator::make($request->all(), [
             'schedules' => 'required|array|min:1',
             'schedules.*.type' => 'required|string',
             'schedules.*.day' => 'required|string|max:20', // Increased to accommodate "End of the month" (18 chars)
+            'effectivityDate' => 'nullable|date',
+            'effectiveToday' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -151,63 +173,94 @@ class ScheduleController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request) {
+            // First, detect changes
+            $changes = [];
+            foreach ($request->input('schedules') as $scheduleData) {
+                $type = $scheduleData['type'];
+                $newDay = $scheduleData['day'];
+                $existingSchedule = Schedule::where('schedule_type', $type)->first();
+                $oldDay = $existingSchedule ? $existingSchedule->description : 'Not Set';
+                
+                if ($oldDay != $newDay) {
+                    $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $type);
+                    $changes[] = [
+                        'type' => $type,
+                        'utility_type' => $utilityType,
+                        'old_day' => $oldDay,
+                        'new_day' => $newDay,
+                    ];
+                }
+            }
+
+            if (empty($changes)) {
+                return response()->json(['message' => 'No changes detected.']);
+            }
+
+            // Check if we need to show modal
+            $effectiveToday = $request->input('effectiveToday');
+            
+            if ($effectiveToday === null) {
+                // Return change info for modal
+                return response()->json([
+                    'changeDetected' => true,
+                    'changeType' => 'schedule',
+                    'changeData' => $changes,
+                    'requiresConfirmation' => true,
+                ]);
+            }
+
+            // Process based on effectiveToday
+            DB::transaction(function () use ($request, $effectiveToday, $notificationService, $changes) {
+                // Default to 1st of next month since bills are generated monthly on the 1st
+                $effectivityDate = $effectiveToday 
+                    ? \Carbon\Carbon::now()->format('Y-m-d')
+                    : (isset($request->effectivityDate) && $request->effectivityDate
+                        ? \Carbon\Carbon::parse($request->effectivityDate)->format('Y-m-d')
+                        : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d'));
+                
                 foreach ($request->input('schedules') as $scheduleData) {
-                    
                     $type = $scheduleData['type'];
                     $newDay = $scheduleData['day'];
 
-                    // First, find any existing schedule to get its old value for the history log.
                     $existingSchedule = Schedule::where('schedule_type', $type)->first();
                     $oldDay = $existingSchedule ? $existingSchedule->description : 'Not Set';
 
-                    // Only proceed if the value has actually changed.
                     if ($oldDay != $newDay) {
-                        
-                        // Use updateOrCreate to either update the existing record or create a new one.
-                        // This is a single, reliable operation.
                         $schedule = Schedule::updateOrCreate(
-                            ['schedule_type' => $type], // The unique column(s) to find the record by.
-                            [                           // The values to set on the found or new record.
+                            ['schedule_type' => $type],
+                            [
                                 'description' => $newDay,
-                                // If the record already exists, keep its original date. If not, set a new one.
                                 'schedule_date' => $existingSchedule->schedule_date ?? now()->toDateString()
                             ]
                         );
 
-                        // Now that we're certain the record was saved, log the history.
                         DB::table('schedule_histories')->insert([
                             'schedule_id' => $schedule->id,
                             'field_changed' => $schedule->schedule_type, 
                             'old_value' => $oldDay,
                             'new_value' => $newDay,
                             'changed_by' => Auth::id() ?? 1,
+                            'effectivity_date' => $effectivityDate,
                         ]);
 
                         AuditLogger::log(
                             'Updated Billing Schedule',
                             'Schedules',
                             'Success',
-                            ['type' => $type, 'old_value' => $oldDay, 'new_value' => $newDay]
+                            ['type' => $type, 'old_value' => $oldDay, 'new_value' => $newDay, 'effectivity_date' => $effectivityDate]
                         );
 
-                        // Create draft announcement for date schedule change (only for Due Date and Disconnection)
-                        if (str_contains($type, 'Due Date') || str_contains($type, 'Disconnection')) {
-                            try {
-                                // Extract utility type from schedule type (e.g., "Due Date - Electricity" -> "Electricity")
-                                $utilityType = str_replace(['Due Date - ', 'Disconnection - '], '', $type);
-                                
-                                $announcementService = new AnnouncementService();
-                                $announcementService->createDateScheduleChangeAnnouncement(
+                        // Send SMS if effective today (run in background)
+                        if ($effectiveToday) {
+                            register_shutdown_function(function() use ($notificationService, $type, $oldDay, $newDay) {
+                                $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $type);
+                                $notificationService->sendScheduleChangeNotification(
                                     $type,
                                     $utilityType,
                                     $oldDay,
                                     $newDay
                                 );
-                            } catch (\Exception $e) {
-                                // Log error but don't fail the transaction
-                                \Illuminate\Support\Facades\Log::error('Failed to create date schedule change announcement: ' . $e->getMessage());
-                            }
+                            });
                         }
                     }
                 }
@@ -219,7 +272,15 @@ class ScheduleController extends Controller
         Cache::forget('billing_date_schedules');
         Cache::forget('billing_dates_history');
 
-        return response()->json(['message' => 'Schedules updated successfully!']);
+        if ($effectiveToday) {
+            return response()->json(['message' => 'Schedules updated and notifications sent!']);
+        } else {
+                return response()->json([
+                    'message' => 'Please adjust effectivity date in Effectivity Date Management',
+                    'redirect' => true,
+                    'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                ]);
+        }
     }
 
     /**
@@ -229,6 +290,20 @@ class ScheduleController extends Controller
     {
         $page = $request->input('page', 1); // Still need page for pagination
 
+        // Check if effectivity_date column exists
+        $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn('schedule_histories', 'effectivity_date');
+        
+        $selectFields = [
+            'sh.old_value',
+            'sh.new_value',
+            'sh.changed_at',
+            'sh.field_changed as item_changed' // Keep the alias for frontend consistency
+        ];
+        
+        if ($hasEffectivityDate) {
+            $selectFields[] = 'sh.effectivity_date';
+        }
+
         $historyData = DB::table('schedule_histories as sh')
             ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
             ->join('users as u', 'sh.changed_by', '=', 'u.id')
@@ -236,18 +311,18 @@ class ScheduleController extends Controller
                 $query->where('s.schedule_type', 'like', 'Due Date - %')
                       ->orWhere('s.schedule_type', 'like', 'Disconnection - %');
             })
-            ->select(
-                'sh.old_value',
-                'sh.new_value',
-                'sh.changed_at',
-                'sh.field_changed as item_changed' // Keep the alias for frontend consistency
-            )
+            ->select($selectFields)
             ->orderBy('sh.changed_at', 'desc')
             ->paginate(10); // Still paginate
 
         // Format date after fetching
-        $historyData->getCollection()->transform(function ($item) {
+        $historyData->getCollection()->transform(function ($item) use ($hasEffectivityDate) {
             $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
+            if ($hasEffectivityDate && isset($item->effectivity_date) && $item->effectivity_date) {
+                $item->effectivity_date = (new \DateTime($item->effectivity_date))->format('Y-m-d');
+            } else {
+                $item->effectivity_date = null;
+            }
             return $item;
         });
 
@@ -291,6 +366,7 @@ class ScheduleController extends Controller
             'schedules.*.day' => 'nullable|integer|min:1|max:31', // For Billing Statements (day of month)
             'schedules.*.days' => 'nullable|array', // For Payment Reminders and Overdue Alerts (array of days)
             'schedules.*.days.*' => 'integer|min:0|max:365',
+            'effectivityDate' => 'nullable|date',
         ]);
 
         if ($validator->fails()) {
@@ -299,6 +375,10 @@ class ScheduleController extends Controller
 
         try {
             DB::transaction(function () use ($request) {
+                // Default to 1st of next month since bills are generated monthly on the 1st
+                $effectivityDate = isset($request->effectivityDate) && $request->effectivityDate
+                    ? \Carbon\Carbon::parse($request->effectivityDate)->format('Y-m-d')
+                    : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
                 foreach ($request->input('schedules') as $scheduleData) {
                     $type = $scheduleData['type'];
                     $newTime = $scheduleData['time'];
@@ -350,6 +430,7 @@ class ScheduleController extends Controller
                                 'old_value' => $oldTime,
                                 'new_value' => $newTime,
                                 'changed_by' => Auth::id() ?? 1,
+                                'effectivity_date' => $effectivityDate,
                             ]);
                         }
 
@@ -361,6 +442,7 @@ class ScheduleController extends Controller
                                 'old_value' => $oldDay ?? 'Not Set',
                                 'new_value' => (string)$newDay,
                                 'changed_by' => Auth::id() ?? 1,
+                                'effectivity_date' => $effectivityDate,
                             ]);
                         }
 
@@ -375,6 +457,7 @@ class ScheduleController extends Controller
                                 'old_value' => $oldDaysStr,
                                 'new_value' => $newDaysStr,
                                 'changed_by' => Auth::id() ?? 1,
+                                'effectivity_date' => $effectivityDate,
                             ]);
                         }
 
@@ -389,7 +472,8 @@ class ScheduleController extends Controller
                                 'old_day' => $oldDay,
                                 'new_day' => $newDay,
                                 'old_days' => $oldDays,
-                                'new_days' => $newDays
+                                'new_days' => $newDays,
+                                'effectivity_date' => $effectivityDate
                             ]
                         );
                     }
@@ -411,21 +495,35 @@ class ScheduleController extends Controller
     public function getSmsScheduleHistory()
     {
         return Cache::remember('sms_schedule_history', 3600, function () {
+            // Check if effectivity_date column exists
+            $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn('schedule_histories', 'effectivity_date');
+            
+            $selectFields = [
+                'sh.old_value',
+                'sh.new_value',
+                'sh.changed_at',
+                'sh.field_changed as item_changed'
+            ];
+            
+            if ($hasEffectivityDate) {
+                $selectFields[] = 'sh.effectivity_date';
+            }
+            
             $history = DB::table('schedule_histories as sh')
                 ->join('schedules as s', 'sh.schedule_id', '=', 's.id')
                 ->join('users as u', 'sh.changed_by', '=', 'u.id')
                 ->where('s.schedule_type', 'like', 'SMS - %')
-                ->select(
-                    'sh.old_value',
-                    'sh.new_value',
-                    'sh.changed_at',
-                    'sh.field_changed as item_changed'
-                )
+                ->select($selectFields)
                 ->orderBy('sh.changed_at', 'desc')
                 ->paginate(10);
 
-            $history->getCollection()->transform(function ($item) {
+            $history->getCollection()->transform(function ($item) use ($hasEffectivityDate) {
                 $item->changed_at = (new \DateTime($item->changed_at))->format(\DateTime::ATOM);
+                if ($hasEffectivityDate && isset($item->effectivity_date) && $item->effectivity_date) {
+                    $item->effectivity_date = (new \DateTime($item->effectivity_date))->format('Y-m-d');
+                } else {
+                    $item->effectivity_date = null;
+                }
                 return $item;
             });
 

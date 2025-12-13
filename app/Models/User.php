@@ -7,7 +7,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -27,8 +26,6 @@ class User extends Authenticatable
         'last_login'        => 'datetime',
         'password'          => 'hashed',
     ];
-
-    protected $appends = ['profile_picture_url'];
 
     /* -----------------------------------------------------------------
      | Relationships
@@ -211,22 +208,13 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the profile picture URL from Backblaze B2
+     * Get the profile picture URL
      */
     public function getProfilePictureUrlAttribute(): ?string
     {
         if (!$this->profile_picture) {
             return null;
         }
-
-        try {
-            return \Illuminate\Support\Facades\Storage::disk('b2')->temporaryUrl(
-                $this->profile_picture,
-                now()->addDays(7)
-            );
-        } catch (\Exception $e) {
-            \Log::error('Failed to generate profile picture URL: ' . $e->getMessage());
-            return null;
-        }
+        return \Illuminate\Support\Facades\Storage::url($this->profile_picture);
     }
 }

@@ -25,15 +25,15 @@ const MarketApp = {
         vendorDashboardData: null,
         isLoadingModal: false,
         allNotifications: [],
-        dataLoaded: {
-            homeSection: false,
-            vendorManagementSection: false,
-            stallAssignmentSection: false,
-            dashboardSection: false,
-            reportsSection: false,
-            profileSection: false,
-            notificationsSection: false,
-        },
+            dataLoaded: {
+                homeSection: false,
+                vendorManagementSection: false,
+                stallAssignmentSection: false,
+                dashboardSection: false,
+                reportsSection: false,
+                profileSection: false,
+                notificationsSection: false,
+            },
         isOutstandingModalOpen: false,
         modalBills: [],
         unassignedVendors: [],
@@ -231,7 +231,7 @@ const MarketApp = {
                 filtered.sort((a, b) => {
                     let valA = a[key] ? a[key].toString() : "";
                     let valB = b[key] ? b[key].toString() : "";
-
+                    
                     // Use natural sort for stall numbers (handles alphanumeric like "MS-06", "L1")
                     if (key === "stallNumber") {
                         valA = valA.toUpperCase();
@@ -583,7 +583,7 @@ const MarketApp = {
                         // If not JSON, use message as plain text
                         notificationText = notification.message || notification.title || notificationText;
                     }
-
+                    
                     const isUnread = notification.read_at === null;
                     const timeAgo = MarketApp.methods.formatTimeAgo(notification.created_at);
 
@@ -705,7 +705,7 @@ const MarketApp = {
 
                 // Combine notifications and announcements
                 const allItems = [];
-
+                
                 // Add regular notifications
                 (notificationsData.notifications || []).forEach(notif => {
                     allItems.push({
@@ -961,7 +961,7 @@ const MarketApp = {
 
             form.addEventListener("submit", async (e) => {
                 e.preventDefault();
-
+                
                 const btn = document.getElementById("changePasswordBtn");
                 const originalText = btn.innerHTML;
                 btn.disabled = true;
@@ -1078,11 +1078,11 @@ const MarketApp = {
                             let profileImg = document.getElementById("profilePictureImg");
                             const container = document.getElementById("profilePictureContainer");
                             const placeholder = document.getElementById("profilePicturePlaceholder");
-
+                            
                             console.log('Profile image element exists:', !!profileImg);
                             console.log('Container exists:', !!container);
                             console.log('Placeholder exists:', !!placeholder);
-
+                            
                             if (!profileImg) {
                                 // Create image element if it doesn't exist (when placeholder was showing)
                                 profileImg = document.createElement("img");
@@ -1097,19 +1097,19 @@ const MarketApp = {
                                     container.appendChild(profileImg);
                                 }
                             }
-
+                            
                             // Update image source with cache busting to force reload
                             const imageUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
-
+                            
                             // Set up error handler before changing src
-                            profileImg.onerror = function () {
+                            profileImg.onerror = function() {
                                 console.error('Failed to load profile picture:', imageUrl);
                                 console.error('Original URL:', result.profile_picture_url);
                                 // Try without cache busting
                                 profileImg.src = result.profile_picture_url;
-
+                                
                                 // If still fails, show helpful message
-                                profileImg.onerror = function () {
+                                profileImg.onerror = function() {
                                     console.error('Profile picture failed to load. Storage link may be missing.');
                                     MarketApp.methods.showToast(
                                         'Image uploaded but cannot display. Please ensure storage link is created (run: php artisan storage:link)',
@@ -1117,16 +1117,16 @@ const MarketApp = {
                                     );
                                 };
                             };
-
+                            
                             // Update the image source
                             profileImg.src = imageUrl;
                             profileImg.classList.remove("hidden");
-
+                            
                             // Hide placeholder if it still exists
                             if (placeholder && placeholder.parentNode) {
                                 placeholder.classList.add("hidden");
                             }
-
+                            
                             // Show remove button
                             if (removeBtn) removeBtn.classList.remove("hidden");
                         }
@@ -1138,9 +1138,9 @@ const MarketApp = {
                             sidebarImg.src = sidebarImageUrl;
                             sidebarImg.classList.remove('hidden');
                             if (sidebarIcon) sidebarIcon.classList.add('hidden');
-
+                            
                             // Handle sidebar image load error
-                            sidebarImg.onerror = function () {
+                            sidebarImg.onerror = function() {
                                 console.error('Failed to load sidebar profile picture');
                                 sidebarImg.src = result.profile_picture_url; // Try without cache busting
                             };
@@ -1322,7 +1322,7 @@ const MarketApp = {
                 }
 
                 const responseData = await response.json();
-
+                
                 // Handle paginated response
                 const payments = responseData.data || responseData;
 
@@ -1880,10 +1880,10 @@ const MarketApp = {
                                 } else {
                                     consumption = 0;
                                 }
-
+                                
                                 // Get rate: Priority 1: bill.rate, Priority 2: database rate
                                 let electricityRate = bill.rate || window.UTILITY_RATES?.Electricity?.rate || 0;
-
+                                
                                 // Only calculate backwards if we're missing actual data
                                 if (consumption === 0 && originalAmount > 0) {
                                     // If we have a rate, calculate consumption from amount
@@ -1900,11 +1900,11 @@ const MarketApp = {
                                     // If we have consumption but no rate, calculate rate from amount
                                     electricityRate = originalAmount / consumption;
                                 }
-
+                                
                                 // Calculate amount from consumption × rate
                                 const calculatedAmount = consumption * electricityRate;
                                 baseAmountForCalc = calculatedAmount > 0 ? calculatedAmount : originalAmount;
-
+                                
                                 // Always display as formula: (consumption kWh) x rate = amount
                                 detailsHtml = `(${consumption.toFixed(
                                     2
@@ -2239,7 +2239,7 @@ const MarketApp = {
             // Update profile picture
             const profilePicturePreview = document.getElementById('profilePicturePreview');
             const profilePictureIcon = document.getElementById('profilePictureIcon');
-
+            
             if (vendor.profile_picture) {
                 if (profilePicturePreview) {
                     profilePicturePreview.src = vendor.profile_picture;
@@ -2349,7 +2349,7 @@ const MarketApp = {
                         MarketApp.methods.showToast(result.message || "Vendor profile picture uploaded successfully!", "success");
                         // Update image source to the server URL
                         if (profilePicturePreview && result.profile_picture_url) {
-                            const imageUrl = result.profile_picture_url;
+                            const imageUrl = result.profile_picture_url + (result.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
                             profilePicturePreview.src = imageUrl;
                             profilePicturePreview.classList.remove('hidden');
                             if (profilePictureIcon) profilePictureIcon.classList.add('hidden');
@@ -3034,11 +3034,11 @@ const MarketApp = {
 
             const [collections, vendors, sections] = await Promise.all([
                 MarketApp.database.fetchDailyCollections(),
-                initialVendors.length > 0
-                    ? Promise.resolve(initialVendors)
+                initialVendors.length > 0 
+                    ? Promise.resolve(initialVendors) 
                     : MarketApp.database.fetchVendors(),
-                initialSections.length > 0
-                    ? Promise.resolve(initialSections)
+                initialSections.length > 0 
+                    ? Promise.resolve(initialSections) 
                     : MarketApp.database.fetchSections(),
             ]);
 
@@ -3046,30 +3046,30 @@ const MarketApp = {
             MarketApp.state.allVendors = Array.isArray(vendors) ? vendors : (vendors.data || []);
             MarketApp.state.allMarketSections = sections;
             MarketApp.methods.setSectionFromHash();
-
+            
             // Load announcements
             // Announcements are now shown as notifications in the bell dropdown
-
+            
             // Load notifications
             await MarketApp.methods.fetchNotifications();
-
+            
             // Setup announcement close button
             // Announcement banner removed
-
+            
             // Poll for notifications every 7 seconds
             // Poll for notifications every 2 seconds for faster updates
             setInterval(() => MarketApp.methods.fetchNotifications(), 2000);
-
+            
             // Also fetch immediately when page becomes visible (user switches tabs/windows)
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) {
                     MarketApp.methods.fetchNotifications();
                 }
             });
-
+            
             // Setup password change form
             MarketApp.methods.setupPasswordChangeForm();
-
+            
             // Setup profile picture upload
             MarketApp.methods.setupProfilePictureUpload();
         } catch (error) {

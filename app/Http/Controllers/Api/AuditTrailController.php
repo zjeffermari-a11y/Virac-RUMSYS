@@ -22,7 +22,8 @@ class AuditTrailController extends Controller
                 'r.name as user_role',
                 'at.action',
                 'at.module',
-                'at.result'
+                'at.result',
+                'at.details'
             );
 
         // Search by user name or action
@@ -53,6 +54,25 @@ class AuditTrailController extends Controller
         $logs->getCollection()->transform(function ($item) {
             // Assume the DB stores in UTC, format it to a string with timezone info.
             $item->date_time = (new \DateTime($item->date_time, new \DateTimeZone('Asia/Manila')))->format(\DateTime::ATOM);
+            
+            // Parse details JSON to extract effectivity_date for rate changes, schedules, and billing settings
+            if ($item->details && in_array($item->module, ['Rental Rates', 'Utility Rates', 'Schedules', 'Billing Settings'])) {
+                $details = json_decode($item->details, true);
+                if (is_array($details)) {
+                    // Extract effectivity_date from details
+                    if (isset($details['effectivity_date'])) {
+                        $item->effectivity_date = $details['effectivity_date'];
+                    } elseif (isset($details['changes']) && is_array($details['changes'])) {
+                        // For batch updates, get effectivity_date from first change or top level
+                        if (isset($details['changes'][0]['effectivity_date'])) {
+                            $item->effectivity_date = $details['changes'][0]['effectivity_date'];
+                        } elseif (isset($details['effectivity_date'])) {
+                            $item->effectivity_date = $details['effectivity_date'];
+                        }
+                    }
+                }
+            }
+            
             return $item;
         });
 

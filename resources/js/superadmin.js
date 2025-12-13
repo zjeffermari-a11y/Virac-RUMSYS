@@ -18,10 +18,10 @@ class SuperAdminDashboard {
         // Ensure utilityRates is always an array
         // The API returns an array directly, but check both .data and direct access
         const utilityRatesData = window.INITIAL_STATE?.utilityRates?.data || window.INITIAL_STATE?.utilityRates;
-        this.utilityRates = Array.isArray(utilityRatesData)
-            ? utilityRatesData
+        this.utilityRates = Array.isArray(utilityRatesData) 
+            ? utilityRatesData 
             : [];
-
+        
         // Debug: Log initial utility rates
         console.log('Initial Utility Rates:', this.utilityRates);
         this.utilityRateHistory =
@@ -76,7 +76,7 @@ class SuperAdminDashboard {
         const utilityRateHistoryData = window.INITIAL_STATE?.utilityRateHistory?.data || window.INITIAL_STATE?.utilityRateHistory || [];
         this.utilityRateHistoryPage = Array.isArray(utilityRateHistoryData) && utilityRateHistoryData.length > 0 ? 2 : 1; // Start at page 2 if we have initial data, otherwise page 1
         this.utilityRateHistoryHasMore =
-            !!window.INITIAL_STATE?.utilityRateHistory?.next_page_url ||
+            !!window.INITIAL_STATE?.utilityRateHistory?.next_page_url || 
             !!window.INITIAL_STATE?.utilityRateHistory?.has_more;
         this.isFetchingUtilityHistory = false;
         this.scheduleHistoryPage = 2;
@@ -149,7 +149,9 @@ class SuperAdminDashboard {
             userManagement: false,
             auditTrails: false,
             billingSettings: false,
+            effectivityDateManagement: false,
         };
+        this.pendingChanges = [];
     }
 
     cacheDOMElements() {
@@ -511,8 +513,8 @@ class SuperAdminDashboard {
             this.dashboardManager.init();
         }
 
-        this.setupGlobalDelegation();
         this.setupEventListeners();
+        this.setupChangeEffectivityModal();
         this.setInitialSection();
         this.render();
         this.setupInfiniteScroll(
@@ -543,19 +545,19 @@ class SuperAdminDashboard {
         );
 
         this.filterAndRenderRates();
-
+        
         // Always render all data on page load (even if empty)
         // They will show "No data found" or "Loading..." if empty, or display data if available
-
+        
         // Utility Rates
         this.renderUtilityRatesTable();
         this.renderUtilityRateHistoryTable();
-
+        
         // If utility rates are empty, fetch them
         if (!this.utilityRates || this.utilityRates.length === 0) {
             this.fetchUtilityRates();
         }
-
+        
         // If utility rate history is empty, fetch it
         if (!this.utilityRateHistory || this.utilityRateHistory.length === 0) {
             this.utilityRateHistory = [];
@@ -563,32 +565,32 @@ class SuperAdminDashboard {
             this.utilityRateHistoryHasMore = true;
             this.fetchUtilityRateHistory();
         }
-
+        
         // Meter Reading Schedule
         this.renderMeterReadingSchedule();
         this.renderScheduleHistoryTable();
-
+        
         // Billing Date Schedules
         this.renderBillingDateSchedules();
         this.renderBillingDateHistory();
-
+        
         // If billing date schedules are empty, fetch them
         if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
             this.fetchBillingDateSchedules();
         }
-
+        
         // Billing Settings (Discounts, Surcharges, Penalty)
         this.renderBillingSettingsTables();
         this.renderBillingSettingsHistory();
-
+        
         // If billing settings are empty, fetch them
         if (!this.billingSettings || Object.keys(this.billingSettings).length === 0) {
             this.fetchBillingSettings();
         }
-
+        
         // Rental Rate History
         this.renderRentalRateHistory();
-
+        
         if (!this.rentalRateHistory || this.rentalRateHistory.length === 0) {
             this.rentalRateHistory = [];
             this.rentalRateHistoryPage = 1;
@@ -607,7 +609,7 @@ class SuperAdminDashboard {
         }
         // Poll for notifications every 2 seconds for faster updates
         setInterval(this.fetchUnreadNotifications.bind(this), 2000);
-
+        
         // Also fetch immediately when page becomes visible (user switches tabs/windows)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
@@ -628,7 +630,6 @@ class SuperAdminDashboard {
     }
 
     initializeSection(sectionId) {
-        console.log("[initializeSection] Called with sectionId:", sectionId);
         // This function ensures data is loaded and listeners are attached for a given section
         this.loadDataForSection(sectionId);
 
@@ -658,7 +659,10 @@ class SuperAdminDashboard {
                 }
                 break;
             case "billingStatementSmsNotificationSettingsSection":
-                // Global delegation handles this now
+                if (!this.listenersInitialized.billingSmsSettings) {
+                    this.setupBillingSmsSettingsEventListeners(); // Combined listener
+                    this.listenersInitialized.billingSmsSettings = true;
+                }
                 break;
             case "discountsSurchargesPenaltySection":
                 if (!this.listenersInitialized.billingSettings) {
@@ -688,6 +692,14 @@ class SuperAdminDashboard {
                 if (!this.listenersInitialized.auditTrails) {
                     this.setupAuditTrailEventListeners();
                     this.listenersInitialized.auditTrails = true;
+                }
+                break;
+            case "effectivityDateManagementSection":
+                if (!this.listenersInitialized.effectivityDateManagement) {
+                    this.setupEffectivityDateManagementEventListeners();
+                    this.listenersInitialized.effectivityDateManagement = true;
+                    this.loadPendingChanges();
+                    this.loadBillGenerationSchedules();
                 }
                 break;
         }
@@ -1007,21 +1019,43 @@ class SuperAdminDashboard {
 
     async fetchUtilityRates() {
         try {
-            const response = await fetch("/api/utility-rates");
-            if (!response.ok) throw new Error("Network response was not ok");
+            const response = await fetch("/api/utility-rates", {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("API Error Response:", errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
 
             // The API returns an array directly
             const responseData = await response.json();
-
+            
             // Ensure utilityRates is always an array
-            this.utilityRates = Array.isArray(responseData)
-                ? responseData
+            this.utilityRates = Array.isArray(responseData) 
+                ? responseData 
                 : [];
 
             console.log('Utility Rates loaded:', this.utilityRates);
-            this.renderUtilityRatesTable();
+            
+            if (this.utilityRates.length === 0) {
+                console.warn('No utility rates found in response');
+                this.elements.utilityRatesTableBody.innerHTML = `
+                    <tr><td colspan="2" class="text-center py-4 text-gray-500">No utility rates found.</td></tr>
+                `;
+            } else {
+                this.renderUtilityRatesTable();
+            }
         } catch (error) {
             console.error("Failed to fetch utility rates:", error);
+            this.elements.utilityRatesTableBody.innerHTML = `
+                <tr><td colspan="2" class="text-center py-4 text-red-500">Error loading utility rates. Please refresh the page.</td></tr>
+            `;
             this.showToast(
                 "Failed to load utility rates from the server.",
                 "error"
@@ -1046,7 +1080,7 @@ class SuperAdminDashboard {
             // Handle both paginated and non-paginated responses
             const historyData = data.data || data;
             const hasMore = data.has_more !== undefined ? data.has_more : (data.next_page_url !== null);
-
+            
             if (historyData && Array.isArray(historyData) && historyData.length > 0) {
                 this.utilityRateHistory.push(...historyData);
                 this.utilityRateHistoryHasMore = hasMore;
@@ -1055,7 +1089,7 @@ class SuperAdminDashboard {
                 // No more data
                 this.utilityRateHistoryHasMore = false;
             }
-
+            
             this.renderUtilityRateHistoryTable();
         } catch (error) {
             console.error("Failed to fetch utility rate history:", error);
@@ -1160,86 +1194,81 @@ class SuperAdminDashboard {
         }
     }
 
-    setupGlobalDelegation() {
-        console.log("[SuperAdmin] Setting up global event delegation");
-        document.addEventListener('click', (e) => {
-            // --- SMS Notification Tabs ---
-            if (e.target.closest('.notification-tab')) {
-                const tab = e.target.closest('.notification-tab');
-                const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
-                if (!container.contains(tab)) return; // Only for this section
-
-                e.preventDefault();
+    // Combined event listener setup for the "Billing Statement / SMS..." section
+    setupBillingSmsSettingsEventListeners() {
+        // --- Notification Template Listeners ---
+        this.elements.notificationTabs.forEach((tab) => {
+            tab.addEventListener("click", () => {
                 const tabId = tab.dataset.tab;
-                console.log(`[Global Delegation] Tab clicked: ${tabId}`);
-
-                // Context Awareness: Reset active editor
-                this.activeNotificationEditor = null;
-
-                const currentTabs = container.querySelectorAll(".notification-tab");
-                const currentContents = container.querySelectorAll(".notification-tab-content");
-
-                // Update Tab Styles
-                currentTabs.forEach((t) =>
-                    t.classList.remove("active", "text-market-primary", "border-b-2", "border-market-primary")
+                this.elements.notificationTabs.forEach((t) =>
+                    t.classList.remove(
+                        "active",
+                        "text-market-primary",
+                        "border-b-2",
+                        "border-market-primary"
+                    )
                 );
-                tab.classList.add("active", "text-market-primary", "border-b-2", "border-market-primary");
-
-                // Update Content Visibility
-                currentContents.forEach((content) => {
-                    if (content.dataset.content === tabId) {
-                        content.classList.remove("hidden");
-                        const firstEditor = content.querySelector('.template-editor');
-                        if (firstEditor) this.activeNotificationEditor = firstEditor;
-                    } else {
-                        content.classList.add("hidden");
-                    }
+                tab.classList.add(
+                    "active",
+                    "text-market-primary",
+                    "border-b-2",
+                    "border-market-primary"
+                );
+                this.elements.notificationTabContents.forEach((content) => {
+                    content.classList.toggle(
+                        "hidden",
+                        content.dataset.content !== tabId
+                    );
                 });
-            }
-
-            // --- SMS Schedule Buttons ---
-            if (e.target.closest('#editSmsSchedulesBtn')) {
-                console.log("[Global Delegation] Edit SMS Schedules Clicked");
-                if (typeof this.toggleSmsSchedulesEditMode === 'function') this.toggleSmsSchedulesEditMode(true);
-            }
-            if (e.target.closest('#cancelSmsSchedulesBtn')) {
-                console.log("[Global Delegation] Cancel SMS Schedules Clicked");
-                if (typeof this.toggleSmsSchedulesEditMode === 'function') this.toggleSmsSchedulesEditMode(false);
-            }
-            if (e.target.closest('#saveSmsSchedulesBtn')) {
-                console.log("[Global Delegation] Save SMS Schedules Clicked");
-                if (typeof this.saveSmsSchedules === 'function') this.saveSmsSchedules();
-            }
-
-            // --- Placeholder Buttons ---
-            if (e.target.closest('.placeholder-btn')) {
-                const button = e.target.closest('.placeholder-btn');
-                const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
-                if (container && container.contains(button)) {
-                    if (this.activeNotificationEditor) {
-                        this.insertPlaceholder(this.activeNotificationEditor, button.textContent.trim());
-                    } else {
-                        this.showToast("Please select a text area first.", "info");
-                    }
-                }
-            }
+            });
         });
 
-        // Initialize Search for Placeholders (delegated input)
-        document.addEventListener('input', (e) => {
-            if (e.target.id === 'placeholderSearch') {
+        this.elements.saveTemplatesBtn.addEventListener("click", () =>
+            this.saveNotificationTemplates()
+        );
+
+        const templateEditors = document.querySelectorAll(".template-editor");
+        templateEditors.forEach((editor) => {
+            editor.addEventListener("focus", () => {
+                this.activeNotificationEditor = editor;
+            });
+            editor.addEventListener("input", () => {
+                this.updateCharacterCount(editor);
+                this.updateLivePreview(editor);
+            });
+        });
+
+        document.querySelectorAll(".placeholder-btn").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (this.activeNotificationEditor) {
+                    this.insertPlaceholder(
+                        this.activeNotificationEditor,
+                        button.textContent.trim()
+                    );
+                } else {
+                    this.showToast("Please select a text area first.", "info");
+                }
+            });
+        });
+
+        // Add search functionality for placeholders
+        const placeholderSearch = document.getElementById("placeholderSearch");
+        if (placeholderSearch) {
+            placeholderSearch.addEventListener("input", (e) => {
                 const searchTerm = e.target.value.toLowerCase();
                 const categories = document.querySelectorAll(".placeholder-category");
+                
                 categories.forEach((category) => {
                     const buttons = category.querySelectorAll(".placeholder-btn");
                     const hasMatch = Array.from(buttons).some((btn) =>
                         btn.textContent.toLowerCase().includes(searchTerm) ||
                         btn.getAttribute("title")?.toLowerCase().includes(searchTerm)
                     );
+                    
                     if (hasMatch || !searchTerm) {
                         category.style.display = "block";
                         buttons.forEach((btn) => {
-                            const matches =
+                            const matches = 
                                 btn.textContent.toLowerCase().includes(searchTerm) ||
                                 btn.getAttribute("title")?.toLowerCase().includes(searchTerm);
                             btn.style.display = matches || !searchTerm ? "inline-block" : "none";
@@ -1248,62 +1277,19 @@ class SuperAdminDashboard {
                         category.style.display = "none";
                     }
                 });
-            }
-
-            // Editor Live Preview Updates
-            if (e.target.classList.contains('template-editor')) {
-                const editor = e.target;
-                this.updateCharacterCount(editor);
-                this.updateLivePreview(editor);
-            }
-        });
-
-        document.addEventListener('focusin', (e) => {
-            if (e.target.classList.contains('template-editor')) {
-                this.activeNotificationEditor = e.target;
-            }
-        });
-
-        // Initialize Save Templates Button (Delegated)
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('#saveTemplatesBtn')) {
-                this.saveNotificationTemplates();
-            }
-        });
-
-        // Initial Logic for Tab Visibility (called once)
-        const container = document.getElementById("billingStatementSmsNotificationSettingsSection");
-        if (container) this.initializeSmsNotificationTabs(container);
-    }
-
-    // Ensure Bill Statement tab is active and visible on section load
-    initializeSmsNotificationTabs(container = document) {
-        // Re-query dynamically to ensure we have current references, constrained to container
-        const allTabs = container.querySelectorAll('.notification-tab');
-        const allContents = container.querySelectorAll('.notification-tab-content');
-        const billStatementTab = container.querySelector('[data-tab="billStatement"]');
-
-        if (billStatementTab && allTabs.length > 0 && allContents.length > 0) {
-            // Set Bill Statement tab as active
-            allTabs.forEach((t) =>
-                t.classList.remove("active", "text-market-primary", "border-b-2", "border-market-primary")
-            );
-            billStatementTab.classList.add(
-                "active",
-                "text-market-primary",
-                "border-b-2",
-                "border-market-primary"
-            );
-
-            // Show only Bill Statement content, hide others
-            allContents.forEach((content) => {
-                if (content.dataset.content === "billStatement") {
-                    content.classList.remove("hidden");
-                } else {
-                    content.classList.add("hidden");
-                }
             });
         }
+
+        // --- New SMS Schedule Listeners ---
+        this.elements.editSmsSchedulesBtn.addEventListener("click", () =>
+            this.toggleSmsSchedulesEditMode(true)
+        );
+        this.elements.cancelSmsSchedulesBtn.addEventListener("click", () =>
+            this.toggleSmsSchedulesEditMode(false)
+        );
+        this.elements.saveSmsSchedulesBtn.addEventListener("click", () =>
+            this.saveSmsSchedules()
+        );
     }
 
     updateCharacterCount(editorElement) {
@@ -1500,7 +1486,7 @@ class SuperAdminDashboard {
                 );
                 const currentTime = schedule ? schedule.description : "08:00";
                 const currentDay = schedule ? (schedule.schedule_day ?? config.defaultDay) : config.defaultDay;
-                const currentDays = schedule && schedule.sms_days
+                const currentDays = schedule && schedule.sms_days 
                     ? (Array.isArray(schedule.sms_days) ? schedule.sms_days : [])
                     : (config.defaultDays || []);
 
@@ -1510,9 +1496,9 @@ class SuperAdminDashboard {
                         // Billing Statements: Single day of month selector
                         daysDisplay = `
                             <select class="sms-schedule-day-input w-full border border-gray-300 rounded-lg px-3 py-2" data-type="${config.type}">
-                                ${Array.from({ length: 31 }, (_, i) => i + 1).map(day =>
-                            `<option value="${day}" ${currentDay === day ? "selected" : ""}>${day}${day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"}</option>`
-                        ).join("")}
+                                ${Array.from({ length: 31 }, (_, i) => i + 1).map(day => 
+                                    `<option value="${day}" ${currentDay === day ? "selected" : ""}>${day}${day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"}</option>`
+                                ).join("")}
                             </select>
                             <p class="text-xs text-gray-500 mt-1">${config.helpText}</p>
                         `;
@@ -1520,7 +1506,7 @@ class SuperAdminDashboard {
                         // Payment Reminders and Overdue Alerts: Multiple days with add/remove
                         const daysList = currentDays.length > 0 ? currentDays : [];
                         const sortedDays = [...daysList].sort((a, b) => a - b);
-
+                        
                         daysDisplay = `
                             <div class="sms-days-container" data-type="${config.type}">
                                 <div class="flex flex-wrap gap-2 mb-2">
@@ -1597,7 +1583,7 @@ class SuperAdminDashboard {
             btn.addEventListener("click", (e) => {
                 const type = e.target.closest(".remove-day-btn").dataset.type;
                 const dayToRemove = parseInt(e.target.closest(".remove-day-btn").dataset.day);
-
+                
                 const schedule = this.smsSchedules.find(s => s.schedule_type === type);
                 if (schedule && schedule.sms_days) {
                     schedule.sms_days = schedule.sms_days.filter(d => d !== dayToRemove);
@@ -2317,7 +2303,7 @@ class SuperAdminDashboard {
         const tableBody = this.elements.auditTrailsTableBody;
 
         if (this.auditTrails.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500">No audit trail records found for the selected filters.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500">No audit trail records found for the selected filters.</td></tr>`;
             return;
         }
 
@@ -2345,6 +2331,24 @@ class SuperAdminDashboard {
                 );
                 const resultClass =
                     resultClasses[log.result] || "text-gray-600";
+                // Format effectivity date for rate changes
+                let effectivityDateCell = '';
+                if (log.effectivity_date && (log.module === 'Rental Rates' || log.module === 'Utility Rates')) {
+                    try {
+                        const effectivityDate = new Date(log.effectivity_date);
+                        const formattedEffectivityDate = effectivityDate.toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                        });
+                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-blue-600 font-medium">${formattedEffectivityDate}</td>`;
+                    } catch (e) {
+                        effectivityDateCell = `<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3">${log.effectivity_date || 'N/A'}</td>`;
+                    }
+                } else {
+                    effectivityDateCell = '<td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3">-</td>';
+                }
+
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td data-label="Date & Time" class="border border-gray-200 px-4 py-3">${formattedDate}</td>
@@ -2353,6 +2357,7 @@ class SuperAdminDashboard {
                     <td data-label="Action" class="border border-gray-200 px-4 py-3">${log.action}</td>
                     <td data-label="Module" class="border border-gray-200 px-4 py-3">${log.module}</td>
                     <td data-label="Result" class="border border-gray-200 px-4 py-3 font-medium ${resultClass}">${log.result}</td>
+                    ${effectivityDateCell}
                 </tr>
             `;
             })
@@ -2646,31 +2651,15 @@ class SuperAdminDashboard {
         }
     }
 
-    async fetchUtilityRates() {
-        try {
-            const response = await fetch("/api/utility-rates");
-            if (!response.ok) throw new Error("Failed to fetch utility rates.");
-            this.utilityRates = await response.json();
-            this.renderUtilityRatesTable();
-        } catch (error) {
-            console.error("Error fetching utility rates:", error);
-            if (this.elements.utilityRatesTableBody) {
-                this.elements.utilityRatesTableBody.innerHTML = `
-                    <tr><td colspan="2" class="text-center py-4 text-red-500">Failed to load rates.</td></tr>
-                `;
-            }
-        }
-    }
-
     renderUtilityRatesTable(isEditing = false) {
         if (!this.elements.utilityRatesTableBody) return;
-
+        
         // Ensure utilityRates is an array
         if (!Array.isArray(this.utilityRates)) {
             console.warn('utilityRates is not an array:', this.utilityRates);
             this.utilityRates = [];
         }
-
+        
         // Debug: Log the utility rates data structure
         console.log('Utility Rates Data:', this.utilityRates);
         if (this.utilityRates.length > 0) {
@@ -2699,15 +2688,11 @@ class SuperAdminDashboard {
                     
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700"> 
                         
-                            <input type="number" 
+                        <input type="number" 
                                class="edit-utility-rate no-spinner w-full h-full bg-transparent text-left text-gray-700 focus:outline-none focus:bg-gray-100 rounded-lg px-4 py-1 transition" 
                                value="${rateValue}" 
                                min="0" 
                                step="0.01">
-                    </td>
-                    <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">
-                        <input type="date" 
-                               class="edit-effectivity-date w-full h-full bg-transparent text-gray-700 focus:outline-none focus:bg-gray-100 rounded-lg px-2 py-1 transition">
                     </td>
                 </tr>`;
                     }
@@ -2724,7 +2709,6 @@ class SuperAdminDashboard {
                 <tr class="hover:bg-gray-50 transition-colors" data-id="util-${rate.id || ''}">
                     <td data-label="Utility" class="border border-gray-200 px-4 py-3 text-gray-700 font-medium">${rate.utility || 'N/A'}</td>
                     <td data-label="Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${rateValue.toFixed(2)} / ${unit}</td>
-                    <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700 text-center text-gray-400">-</td>
                 </tr>`;
                     }
                 )
@@ -2769,8 +2753,7 @@ class SuperAdminDashboard {
                     if (rateToUpdate) {
                         rateToUpdate.rate = rateValue;
                     }
-                    const effectivityDate = row.querySelector(".edit-effectivity-date").value;
-                    updatedRatesPayload.push({ id, rate: rateValue, effectivityDate: effectivityDate });
+                    updatedRatesPayload.push({ id, rate: rateValue });
                 }
             });
 
@@ -2797,9 +2780,7 @@ class SuperAdminDashboard {
                     utility_type: oldRate.utility,
                     old_rate: oldRate.rate,
                     new_rate: updatedRate.rate,
-                    new_rate: updatedRate.rate,
                     changed_at: new Date().toISOString(), // Use browser time for instant display
-                    effectivity_date: updatedRate.effectivityDate
                 };
                 newHistoryLogs.push(optimisticLog);
             }
@@ -2813,26 +2794,40 @@ class SuperAdminDashboard {
 
         //  Save to the server in the background
         try {
+            const headers = {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-CSRF-TOKEN": document
+                    .querySelector('meta[name="csrf-token"]')
+                    .getAttribute("content"),
+            };
+            const body = JSON.stringify({ rates: updatedRatesPayload });
+
             const response = await fetch("/api/utility-rates/batch-update", {
                 method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "X-CSRF-TOKEN": document
-                        .querySelector('meta[name="csrf-token"]')
-                        .getAttribute("content"),
-                },
-                body: JSON.stringify({ rates: updatedRatesPayload }),
+                headers,
+                body,
             });
+
+            // Check for change detection
+            const changeResult = await this.handleChangeDetection(response, "/api/utility-rates/batch-update", "PUT", headers, body);
+            if (changeResult.intercepted) {
+                // Rollback UI changes since we're showing modal
+                this.utilityRates = oldUtilityRates;
+                this.renderUtilityRatesTable(false);
+                this.utilityRateHistory.splice(0, newHistoryLogs.length);
+                this.renderUtilityRateHistoryTable();
+                return; // Modal is showing, wait for user confirmation
+            }
 
             if (!response.ok) {
                 throw new Error(
-                    (await response.json()).message || "Failed to save changes."
+                    changeResult.data.message || "Failed to save changes."
                 );
             }
 
             // On SUCCESS: The UI is already correct. Just show a success message.
-            this.showToast("Utility rates updated successfully!", "success");
+            this.showToast(changeResult.data.message || "Utility rates updated successfully!", "success");
 
             // Silently refresh the history in the background to get server-authoritative data
             this.utilityRateHistory = [];
@@ -2857,7 +2852,7 @@ class SuperAdminDashboard {
         if (this.utilityRateHistory.length === 0) {
             this.elements.utilityRateHistoryTableBody.innerHTML = `
                   <tr>
-                      <td colspan="4" class="text-center py-4 text-gray-500">No history logs found.</td>
+                      <td colspan="5" class="text-center py-4 text-gray-500">No history logs found.</td>
                   </tr>
               `;
             return;
@@ -2876,6 +2871,20 @@ class SuperAdminDashboard {
                         minute: "2-digit",
                         hour12: true,
                     });
+                    const formatEffectivityDate = (date) => {
+                        if (!date) return "N/A";
+                        try {
+                            const effectivityDate = new Date(date);
+                            return effectivityDate.toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                            });
+                        } catch (e) {
+                            return date;
+                        }
+                    };
+
                     return `
                           <tr class="hover:bg-gray-50 transition-colors">
                               <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
@@ -2884,13 +2893,10 @@ class SuperAdminDashboard {
                               <td data-label="Old Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
                             log.old_rate
                         ).toFixed(2)}</td>
-                                <td data-label="New Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
+                              <td data-label="New Rate" class="border border-gray-200 px-4 py-3 text-gray-700">₱${parseFloat(
                             log.new_rate
                         ).toFixed(2)}</td>
-                                <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">${log.effectivity_date
-                            ? new Date(log.effectivity_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-                            : '<span class="text-gray-400">Immediate</span>'
-                        }</td>
+                              <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">${formatEffectivityDate(log.effectivity_date)}</td>
                           </tr>
                       `;
                 })
@@ -2898,21 +2904,15 @@ class SuperAdminDashboard {
     }
 
     setupScheduleEventListeners() {
-        if (this.elements.editScheduleBtn) {
-            this.elements.editScheduleBtn.addEventListener("click", () =>
-                this.toggleScheduleEditMode(true)
-            );
-        }
-        if (this.elements.cancelScheduleBtn) {
-            this.elements.cancelScheduleBtn.addEventListener("click", () =>
-                this.toggleScheduleEditMode(false)
-            );
-        }
-        if (this.elements.saveScheduleBtn) {
-            this.elements.saveScheduleBtn.addEventListener("click", () =>
-                this.saveMeterReadingSchedule()
-            );
-        }
+        this.elements.editScheduleBtn.addEventListener("click", () =>
+            this.toggleScheduleEditMode(true)
+        );
+        this.elements.cancelScheduleBtn.addEventListener("click", () =>
+            this.toggleScheduleEditMode(false)
+        );
+        this.elements.saveScheduleBtn.addEventListener("click", () =>
+            this.saveMeterReadingSchedule()
+        );
     }
 
     async fetchMeterReadingSchedule() {
@@ -3008,7 +3008,7 @@ class SuperAdminDashboard {
     renderBillingDateSchedules(isEditing = false) {
         const tableBody = this.elements.billingDatesTableBody;
         if (!tableBody) return;
-
+        
         // If no schedules data, show loading message and fetch
         if (!this.billingDateSchedules || this.billingDateSchedules.length === 0) {
             tableBody.innerHTML = `
@@ -3052,11 +3052,11 @@ class SuperAdminDashboard {
         const createDayDropdown = (schedule, scheduleType, isEnabled, currentValue = null, isEditing = false) => {
             // Determine the value to use - prioritize currentValue (already processed), then schedule.description
             let scheduleValue = "Not Set";
-
+            
             // Use currentValue if it's valid (this is the processed value from view mode)
             if (currentValue && currentValue !== "Not Set" && currentValue !== null && currentValue !== undefined && currentValue !== "") {
                 scheduleValue = String(currentValue);
-            }
+            } 
             // Fallback to schedule.description if currentValue is not available
             else if (schedule && schedule.description !== null && schedule.description !== undefined && schedule.description !== "") {
                 let desc = String(schedule.description).trim();
@@ -3068,7 +3068,7 @@ class SuperAdminDashboard {
                     scheduleValue = desc; // Keep special values as-is
                 }
             }
-
+            
             // Debug logging
             if (isEditing) {
                 console.log(`  → Dropdown ${scheduleType}:`, {
@@ -3078,17 +3078,17 @@ class SuperAdminDashboard {
                     willSet: scheduleValue !== "Not Set"
                 });
             }
-
+            
             // Determine if this is for Rent based on scheduleType
             const isRent = scheduleType.includes('Rent');
-
+            
             // Build options HTML with selected attribute already in place (like billing settings does)
             let optionsHTML = "";
-
+            
             // "Not Set" option
             const notSetSelected = scheduleValue === "Not Set" ? " selected" : "";
             optionsHTML += `<option value="Not Set"${notSetSelected}>Not Set</option>`;
-
+            
             // Add special options for Rent
             if (isRent && scheduleType.includes('Due Date')) {
                 const endOfMonthSelected = scheduleValue === "End of the month" ? " selected" : "";
@@ -3098,13 +3098,13 @@ class SuperAdminDashboard {
                 const naSelected = scheduleValue === "N/A" ? " selected" : "";
                 optionsHTML += `<option value="N/A"${naSelected}>N/A</option>`;
             }
-
+            
             // Add day options (1-31) with selected attribute
             for (let i = 1; i <= 31; i++) {
                 const daySelected = scheduleValue === String(i) ? " selected" : "";
                 optionsHTML += `<option value="${i}"${daySelected}>${i}</option>`;
             }
-
+            
             // Return the complete select HTML (like billing settings does)
             return `
                 <select ${!isEnabled ? 'disabled' : ''} 
@@ -3122,12 +3122,12 @@ class SuperAdminDashboard {
             }
             const dayNum = parseInt(day);
             if (isNaN(dayNum)) return `<strong>${day}</strong>`;
-
+            
             // Correct ordinal suffix logic
             let suffix = "th";
             const lastDigit = dayNum % 10;
             const lastTwoDigits = dayNum % 100;
-
+            
             // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
             if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
                 suffix = "th";
@@ -3138,7 +3138,7 @@ class SuperAdminDashboard {
             } else if (lastDigit === 3) {
                 suffix = "rd";
             }
-
+            
             return `<strong>${dayNum}${suffix} day of the month</strong>`;
         };
 
@@ -3160,7 +3160,7 @@ class SuperAdminDashboard {
             // Check both possible field names (description or Description)
             const dueDateDesc = dueDateSchedule?.description ?? dueDateSchedule?.Description ?? null;
             const discoDateDesc = discoDateSchedule?.description ?? discoDateSchedule?.Description ?? null;
-
+            
             // Debug logging for each utility
             if (isEditing) {
                 console.log(`\n--- ${util} ---`);
@@ -3169,7 +3169,7 @@ class SuperAdminDashboard {
                 console.log(`Disconnection Schedule:`, discoDateSchedule);
                 console.log(`Disconnection Description:`, discoDateDesc, `Type:`, typeof discoDateDesc);
             }
-
+            
             // Convert to string, preserving the actual saved value
             // Handle null, undefined, and empty string as "Not Set"
             let dueDateValue = "Not Set";
@@ -3183,7 +3183,7 @@ class SuperAdminDashboard {
                 }
                 // Keep special values as-is
             }
-
+            
             let discoDateValue = "Not Set";
             if (discoDateDesc !== null && discoDateDesc !== undefined && discoDateDesc !== "") {
                 // Convert to string and trim whitespace
@@ -3195,7 +3195,7 @@ class SuperAdminDashboard {
                 }
                 // Keep special values as-is
             }
-
+            
             if (isEditing) {
                 console.log(`\n✅ ${util} - Final Values:`, {
                     dueDate: { raw: dueDateDesc, processed: dueDateValue },
@@ -3204,7 +3204,7 @@ class SuperAdminDashboard {
                     discoDateSchedule: discoDateSchedule
                 });
             }
-
+            
             // Render cells - editable dropdowns when editing, formatted text when viewing
             // Pass the current saved value to ensure it's preserved in the dropdown
             dueDateCell = isEditing
@@ -3231,7 +3231,7 @@ class SuperAdminDashboard {
         if (!tableBody) return;
 
         if (this.billingDateHistory.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
             return;
         }
 
@@ -3240,12 +3240,12 @@ class SuperAdminDashboard {
             if (day === "Not Set" || !day) return "Not Set";
             const dayNum = parseInt(day);
             if (isNaN(dayNum)) return day; // Should not happen but good practice
-
+            
             // Correct ordinal suffix logic
             let suffix = "th";
             const lastDigit = dayNum % 10;
             const lastTwoDigits = dayNum % 100;
-
+            
             // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
             if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
                 suffix = "th";
@@ -3256,7 +3256,7 @@ class SuperAdminDashboard {
             } else if (lastDigit === 3) {
                 suffix = "rd";
             }
-
+            
             return `${dayNum}${suffix} day`;
         };
 
@@ -3274,6 +3274,20 @@ class SuperAdminDashboard {
                     }
                 );
 
+                const formatEffectivityDate = (date) => {
+                    if (!date) return "N/A";
+                    try {
+                        const effectivityDate = new Date(date);
+                        return effectivityDate.toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                        });
+                    } catch (e) {
+                        return date;
+                    }
+                };
+
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
@@ -3285,6 +3299,7 @@ class SuperAdminDashboard {
                     <td data-label="New Schedule" class="border border-gray-200 px-4 py-3 text-gray-700">${formatDayValue(
                         log.new_value
                     )}</td>
+                    <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">${formatEffectivityDate(log.effectivity_date)}</td>
                 </tr>
             `;
             })
@@ -3340,22 +3355,22 @@ class SuperAdminDashboard {
         const selects = this.elements.billingDatesTableBody.querySelectorAll(
             ".billing-date-select:not([disabled])"
         );
-
+        
         // Only include schedules that have actually changed
         selects.forEach((select) => {
             const scheduleType = select.dataset.type;
             const newDay = select.value;
-
+            
             // Find original value
             const originalSchedule = this.originalBillingDates?.find(
                 (s) => s.schedule_type === scheduleType
             );
             const oldValue = originalSchedule ? originalSchedule.description : "Not Set";
-
+            
             // Only add to payload if value has changed
             // Convert oldValue to string for proper comparison
             const oldValueStr = oldValue !== null && oldValue !== undefined ? String(oldValue) : "Not Set";
-
+            
             if (oldValueStr !== newDay && !(oldValueStr === null && newDay === "Not Set")) {
                 // Ensure we have valid data
                 if (scheduleType && newDay !== null && newDay !== undefined) {
@@ -3418,27 +3433,41 @@ class SuperAdminDashboard {
 
         // Save to the server in the background
         try {
-            const response = await fetch("/api/schedules/billing-dates", {
-                method: "PUT",
-                headers: {
+            const headers = {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                     "X-CSRF-TOKEN": document
                         .querySelector('meta[name="csrf-token"]')
                         .getAttribute("content"),
-                },
-                body: JSON.stringify({ schedules: updatedSchedulesPayload }),
+            };
+            const body = JSON.stringify({ schedules: updatedSchedulesPayload });
+
+            const response = await fetch("/api/schedules/billing-dates", {
+                method: "PUT",
+                headers,
+                body,
             });
+
+            // Check for change detection
+            const changeResult = await this.handleChangeDetection(response, "/api/schedules/billing-dates", "PUT", headers, body);
+            if (changeResult.intercepted) {
+                // Rollback UI changes since we're showing modal
+                this.billingDateSchedules = oldSchedules;
+                this.billingDateHistory = oldHistory;
+                this.renderBillingDateSchedules(false);
+                this.renderBillingDateHistory();
+                return; // Modal is showing, wait for user confirmation
+            }
 
             if (!response.ok) {
                 throw new Error(
-                    (await response.json()).message ||
+                    changeResult.data.message ||
                     "Failed to update schedules."
                 );
             }
 
             // On success, show confirmation and silently refresh history
-            this.showToast("Schedules updated successfully!", "success");
+            this.showToast(changeResult.data.message || "Schedules updated successfully!", "success");
             this.billingDateHistory = [];
             this.billingDateHistoryPage = 1;
             this.billingDateHistoryHasMore = true;
@@ -3476,7 +3505,7 @@ class SuperAdminDashboard {
         if (!this.scheduleHistory || this.scheduleHistory.length === 0) {
             this.elements.scheduleHistoryTableBody.innerHTML = `
                   <tr>
-                      <td colspan="3" class="text-center py-4 text-gray-500">No history logs found.</td>
+                      <td colspan="4" class="text-center py-4 text-gray-500">No history logs found.</td>
                   </tr>
               `;
             return;
@@ -3510,6 +3539,20 @@ class SuperAdminDashboard {
                     return `${dayNum}${suffix}`;
                 };
 
+                const formatEffectivityDate = (date) => {
+                    if (!date) return "N/A";
+                    try {
+                        const effectivityDate = new Date(date);
+                        return effectivityDate.toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                        });
+                    } catch (e) {
+                        return date;
+                    }
+                };
+
                 return `
                       <tr class="hover:bg-gray-50 transition-colors">
                           <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
@@ -3519,6 +3562,7 @@ class SuperAdminDashboard {
                           <td data-label="New Schedule Day" class="border border-gray-200 px-4 py-3 text-gray-700">${formatDay(
                     log.new_value
                 )}</td>
+                          <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">${formatEffectivityDate(log.effectivity_date)}</td>
                       </tr>
                   `;
             })
@@ -3692,25 +3736,33 @@ class SuperAdminDashboard {
         }
 
         try {
-            const response = await fetch(`/api/utility-rates/${id}`, {
-                method: "PUT",
-                headers: {
+            const headers = {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                     "X-CSRF-TOKEN": document
                         .querySelector('meta[name="csrf-token"]')
                         .getAttribute("content"),
-                },
-                // MODIFIED: Send both rate and monthlyRate in the request
-                body: JSON.stringify({
+            };
+            const body = JSON.stringify({
                     rate: newRate,
                     monthlyRate: newMonthlyRate,
-                }),
             });
 
-            if (!response.ok) throw new Error("Failed to update the rate.");
+            const response = await fetch(`/api/utility-rates/${id}`, {
+                method: "PUT",
+                headers,
+                body,
+            });
 
-            this.showToast("Utility rate updated successfully!", "success");
+            // Check for change detection
+            const changeResult = await this.handleChangeDetection(response, `/api/utility-rates/${id}`, "PUT", headers, body);
+            if (changeResult.intercepted) {
+                return; // Modal is showing, wait for user confirmation
+            }
+
+            if (!response.ok) throw new Error(changeResult.data.message || "Failed to update the rate.");
+
+            this.showToast(changeResult.data.message || "Utility rate updated successfully!", "success");
 
             // Refetch all data to ensure consistency
             this.utilityRateHistory = [];
@@ -3871,26 +3923,40 @@ class SuperAdminDashboard {
         this.toggleRentalRatesEditMode(false);
 
         try {
-            const response = await fetch("/api/rental-rates/batch-update", {
-                method: "PUT",
-                headers: {
+            const headers = {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                     "X-CSRF-TOKEN": document
                         .querySelector('meta[name="csrf-token"]')
                         .getAttribute("content"),
-                },
-                body: JSON.stringify({ stalls: updatedStallsPayload }),
+            };
+            const body = JSON.stringify({ stalls: updatedStallsPayload });
+
+            const response = await fetch("/api/rental-rates/batch-update", {
+                method: "PUT",
+                headers,
+                body,
             });
+
+            // Check for change detection (backend may not support this yet for batch updates)
+            const changeResult = await this.handleChangeDetection(response, "/api/rental-rates/batch-update", "PUT", headers, body);
+            if (changeResult.intercepted) {
+                // Rollback UI changes since we're showing modal
+                this.allRentalRates = oldAllRentalRates;
+                this.filterAndRenderRates(
+                    this.rentalRatesPagination.current_page || 1
+                );
+                return; // Modal is showing, wait for user confirmation
+            }
 
             if (!response.ok) {
                 throw new Error(
-                    (await response.json()).message || "Failed to save changes."
+                    changeResult.data.message || "Failed to save changes."
                 );
             }
 
-            this.showToast("Rates updated successfully!", "success");
-
+            this.showToast(changeResult.data.message || "Rates updated successfully!", "success");
+            
             // Refresh rental rate history after successful update
             this.rentalRateHistory = [];
             this.rentalRateHistoryPage = 1;
@@ -4103,12 +4169,12 @@ class SuperAdminDashboard {
             hasMore: this.rentalRateHistoryHasMore,
             page: this.rentalRateHistoryPage
         });
-
+        
         if (this.isFetchingRentalRateHistory || !this.rentalRateHistoryHasMore) {
             console.log("Skipping fetch - already fetching or no more data");
             return;
         }
-
+        
         this.isFetchingRentalRateHistory = true;
         if (this.elements.rentalRateHistoryLoader)
             this.elements.rentalRateHistoryLoader.style.display = "block";
@@ -4119,20 +4185,20 @@ class SuperAdminDashboard {
                 `/api/rental-rates/history?page=${this.rentalRateHistoryPage}`
             );
             console.log("API Response status:", response.status, response.statusText);
-
+            
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 console.error("API Error:", errorData);
                 throw new Error(errorData.message || "Network response was not ok");
             }
             const data = await response.json();
-
+            
             console.log("Rental Rate History API Response:", data);
             console.log("History Data:", data.data);
             console.log("Total Records:", data.total);
             console.log("Has More:", data.has_more);
             console.log("Current Page:", data.current_page);
-
+            
             // Additional debugging
             if (!data.data || data.data.length === 0) {
                 console.warn("⚠️ No history data in response. Response structure:", Object.keys(data));
@@ -4144,7 +4210,7 @@ class SuperAdminDashboard {
             // Handle both paginated and non-paginated responses
             const historyData = data.data || data;
             const hasMore = data.has_more !== undefined ? data.has_more : (data.next_page_url !== null);
-
+            
             if (historyData && Array.isArray(historyData) && historyData.length > 0) {
                 this.rentalRateHistory.push(...historyData);
                 this.rentalRateHistoryHasMore = hasMore;
@@ -4171,7 +4237,7 @@ class SuperAdminDashboard {
         if (!tableBody) return;
 
         if (this.rentalRateHistory.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
             return;
         }
 
@@ -4194,6 +4260,20 @@ class SuperAdminDashboard {
                     return `₱${parseFloat(rate).toFixed(2)}`;
                 };
 
+                const formatEffectivityDate = (date) => {
+                    if (!date) return "N/A";
+                    try {
+                        const effectivityDate = new Date(date);
+                        return effectivityDate.toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                        });
+                    } catch (e) {
+                        return date;
+                    }
+                };
+
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
                     <td data-label="Date & Time" class="border border-gray-200 px-4 py-3 text-gray-700">${formattedDate}</td>
@@ -4204,6 +4284,7 @@ class SuperAdminDashboard {
                     <td data-label="New Daily Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.new_daily_rate)}</td>
                     <td data-label="Old Monthly Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.old_monthly_rate)}</td>
                     <td data-label="New Monthly Rate" class="border border-gray-200 px-4 py-3 text-gray-700">${formatRate(log.new_monthly_rate)}</td>
+                    <td data-label="Effectivity Date" class="border border-gray-200 px-4 py-3 text-gray-700">${formatEffectivityDate(log.effectivity_date)}</td>
                 </tr>
             `;
             })
@@ -4469,7 +4550,7 @@ class SuperAdminDashboard {
         if (this.elements.changePasswordForm) {
             this.elements.changePasswordForm.addEventListener("submit", async (e) => {
                 e.preventDefault();
-
+                
                 const btn = this.elements.changePasswordBtn;
                 const originalText = btn.innerHTML;
                 btn.disabled = true;
@@ -4518,7 +4599,7 @@ class SuperAdminDashboard {
         // Profile picture upload
         const profilePictureInput = document.getElementById("profilePictureInput");
         const removeProfilePictureBtn = document.getElementById("removeProfilePictureBtn");
-
+        
         if (profilePictureInput) {
             profilePictureInput.addEventListener("change", async (e) => {
                 const file = e.target.files[0];
@@ -4775,104 +4856,6 @@ class SuperAdminDashboard {
         );
     }
 
-    setupBillingSmsSettingsEventListeners() {
-        // Tab Switching Logic
-        this.elements.notificationTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Remove active class from all tabs and contents
-                this.elements.notificationTabs.forEach(t => {
-                    t.classList.remove('border-blue-500', 'text-blue-600');
-                    t.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-                });
-                this.elements.notificationTabContents.forEach(c => c.classList.add('hidden'));
-
-                // Add active class to clicked tab and show corresponding content
-                tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-                tab.classList.add('border-blue-500', 'text-blue-600');
-
-                const targetId = tab.getAttribute('data-tab');
-                const targetContent = document.getElementById(targetId);
-                if (targetContent) {
-                    targetContent.classList.remove('hidden');
-                }
-            });
-        });
-
-        // Save Templates Button
-        if (this.elements.saveTemplatesBtn) {
-            this.elements.saveTemplatesBtn.addEventListener('click', async () => {
-                const btn = this.elements.saveTemplatesBtn;
-                const originalText = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
-                try {
-                    const payload = {
-                        bill_statement: {
-                            wet_section: this.elements.templateBillStatementWet.value,
-                            dry_section: this.elements.templateBillStatementDry.value
-                        },
-                        payment_reminder: {
-                            template: this.elements.templatePaymentReminder.value
-                        },
-                        overdue_alert: {
-                            template: this.elements.templateOverdueAlert.value
-                        }
-                    };
-
-                    const response = await fetch('/api/notification-templates', {
-                        method: 'POST', // Using POST for update based on controller method
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) throw new Error('Failed to save templates');
-
-                    this.showToast('Notification templates saved successfully!', 'success');
-                } catch (error) {
-                    console.error('Error saving templates:', error);
-                    this.showToast('Failed to save templates.', 'error');
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
-            });
-        }
-
-        // Load Semaphore Credit Balance
-        this.loadSemaphoreCreditBalance();
-    }
-
-    async loadSemaphoreCreditBalance() {
-        if (!this.elements.semaphoreCreditBalance) return;
-
-        this.elements.semaphoreCreditBalance.textContent = "Loading...";
-
-        try {
-            // Fetch validation: billing-settings endpoint created previously
-            const response = await fetch('/api/billing-settings/credits');
-
-            if (!response.ok) {
-                // Try fallback if route defines it elsewhere or fails
-                console.warn("Primary credit route failed, checking response...");
-            }
-
-            const data = await response.json();
-
-            if (data.credits !== undefined) {
-                this.elements.semaphoreCreditBalance.textContent = `Credit Balance: ₱${data.credits}`;
-            } else {
-                this.elements.semaphoreCreditBalance.textContent = "Credit Balance: N/A";
-            }
-        } catch (error) {
-            console.error("Error loading Semaphore credits:", error);
-            this.elements.semaphoreCreditBalance.textContent = "Credit Balance: Error";
-        }
-    }
-
     async fetchBillingSettings() {
         try {
             const response = await fetch("/api/billing-settings");
@@ -4922,7 +4905,7 @@ class SuperAdminDashboard {
         const { rentSettingsTableBody, utilitySettingsTableBody } =
             this.elements;
         if (!rentSettingsTableBody || !utilitySettingsTableBody) return;
-
+        
         // If no billing settings data, show loading message and fetch
         if (!this.billingSettings || Object.keys(this.billingSettings).length === 0) {
             rentSettingsTableBody.innerHTML = `
@@ -5029,7 +5012,7 @@ class SuperAdminDashboard {
         if (!tableBody) return;
 
         if (this.billingSettingsHistory.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">No history logs found.</td></tr>`;
             return;
         }
 
@@ -5050,6 +5033,19 @@ class SuperAdminDashboard {
                 <td data-label="New Value" class="border p-3">${parseFloat(
                         log.new_value
                     ).toFixed(2)}%</td>
+                <td data-label="Effectivity Date" class="border p-3">${(() => {
+                    if (!log.effectivity_date) return "N/A";
+                    try {
+                        const effectivityDate = new Date(log.effectivity_date);
+                        return effectivityDate.toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                        });
+                    } catch (e) {
+                        return log.effectivity_date;
+                    }
+                })()}</td>
             </tr>
         `
             )
@@ -5100,25 +5096,33 @@ class SuperAdminDashboard {
         }
 
         try {
-            const response = await fetch("/api/billing-settings", {
-                method: "PUT",
-                headers: {
+            const headers = {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                     "X-CSRF-TOKEN": document
                         .querySelector('meta[name="csrf-token"]')
                         .getAttribute("content"),
-                },
-                body: JSON.stringify({
+            };
+            const body = JSON.stringify({
                     settings: settingsPayload,
                     user_id: window.loggedInUserId,
-                }),
             });
 
+            const response = await fetch("/api/billing-settings", {
+                method: "PUT",
+                headers,
+                body,
+            });
+
+            // Check for change detection
+            const changeResult = await this.handleChangeDetection(response, "/api/billing-settings", "PUT", headers, body);
+            if (changeResult.intercepted) {
+                return; // Modal is showing, wait for user confirmation
+            }
+
             if (!response.ok) {
-                const errorData = await response.json();
                 throw new Error(
-                    errorData.message || "Failed to save settings."
+                    changeResult.data.message || "Failed to save settings."
                 );
             }
 
@@ -5131,7 +5135,7 @@ class SuperAdminDashboard {
                 }
             });
 
-            this.showToast("Settings updated successfully!", "success");
+            this.showToast(changeResult.data.message || "Settings updated successfully!", "success");
             this.toggleBillingSettingsEditMode(false);
 
             // Reset and refetch history
@@ -5153,8 +5157,22 @@ class SuperAdminDashboard {
         if (this.elements.createAnnouncementForm) {
             this.elements.createAnnouncementForm.addEventListener("submit", (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                console.log("Form submitted");
                 this.saveAnnouncement();
+                return false;
             });
+            
+            // Also add direct click handler to button as fallback
+            if (this.elements.saveAnnouncementBtn) {
+                this.elements.saveAnnouncementBtn.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("Button clicked directly");
+                    this.saveAnnouncement();
+                    return false;
+                });
+            }
 
             // Handle recipient checkbox interactions
             const allSectionsCheckbox = document.getElementById('recipientAllSections');
@@ -5163,7 +5181,7 @@ class SuperAdminDashboard {
                     const wetSection = document.getElementById('recipientWetSection');
                     const drySection = document.getElementById('recipientDrySection');
                     const semiWetSection = document.getElementById('recipientSemiWetSection');
-
+                    
                     if (e.target.checked) {
                         // Uncheck and disable specific sections when "All Sections" is checked
                         if (wetSection) {
@@ -5203,6 +5221,43 @@ class SuperAdminDashboard {
                         });
                     }
                 });
+
+                // Handle vendor selection toggle
+                const toggleVendorsBtn = document.getElementById('toggleSpecificVendors');
+                const vendorsContainer = document.getElementById('specificVendorsContainer');
+                const vendorsIcon = document.getElementById('specificVendorsIcon');
+                
+                if (toggleVendorsBtn && vendorsContainer) {
+                    toggleVendorsBtn.addEventListener('click', async () => {
+                        vendorsContainer.classList.toggle('hidden');
+                        if (vendorsIcon) {
+                            vendorsIcon.classList.toggle('fa-chevron-down');
+                            vendorsIcon.classList.toggle('fa-chevron-up');
+                        }
+                        
+                        // Load vendors when container is opened
+                        if (!vendorsContainer.classList.contains('hidden')) {
+                            await this.loadVendorsForSelection();
+                        }
+                    });
+                }
+
+                // Handle "Publish Immediately" checkbox to update button text
+                const publishImmediatelyCheckbox = document.getElementById('announcementIsActive');
+                if (publishImmediatelyCheckbox) {
+                    publishImmediatelyCheckbox.addEventListener('change', (e) => {
+                        const btn = this.elements.saveAnnouncementBtn;
+                        const isEditMode = btn?.dataset.editId ? true : false;
+                        this.updateAnnouncementButtonText(e.target.checked, isEditMode);
+                    });
+                }
+
+                // Initial button text update
+                if (publishImmediatelyCheckbox) {
+                    const btn = this.elements.saveAnnouncementBtn;
+                    const isEditMode = btn?.dataset.editId ? true : false;
+                    this.updateAnnouncementButtonText(publishImmediatelyCheckbox.checked, isEditMode);
+                }
             }
         }
 
@@ -5216,20 +5271,85 @@ class SuperAdminDashboard {
                 }
             });
         }
-
+        
         // Event listeners for draft announcements
         if (this.elements.draftAnnouncementsList) {
+            // Use event delegation - attach listener once to the container
+            // This works even when the list content is dynamically updated
             this.elements.draftAnnouncementsList.addEventListener("click", (e) => {
+                console.log("Draft announcements list clicked", e.target, e.target.closest(".edit-announcement-btn"));
+                
+                // Check if click is on a button or icon inside a button
                 const deleteBtn = e.target.closest(".delete-announcement-btn");
                 if (deleteBtn) {
-                    const id = deleteBtn.dataset.id;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const id = deleteBtn.getAttribute('data-id') || deleteBtn.dataset.id;
+                    if (id) {
                     this.confirmDeleteAnnouncement(id);
+                    }
+                    return false;
                 }
-
+                
                 const activateBtn = e.target.closest(".activate-announcement-btn");
                 if (activateBtn) {
-                    const id = activateBtn.dataset.id;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const id = activateBtn.getAttribute('data-id') || activateBtn.dataset.id;
+                    if (id) {
                     this.activateAnnouncement(id);
+                }
+                    return false;
+                }
+                
+                // Handle edit button first (before toggle to prevent conflicts)
+                const editBtn = e.target.closest(".edit-announcement-btn");
+                if (editBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    const id = editBtn.getAttribute('data-id') || editBtn.dataset.id;
+                    console.log("Edit button clicked, ID:", id, "Button element:", editBtn);
+                    if (id) {
+                        // Show loading indicator
+                        editBtn.disabled = true;
+                        const originalHTML = editBtn.innerHTML;
+                        editBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
+                        this.editDraftAnnouncement(id).finally(() => {
+                            editBtn.disabled = false;
+                            editBtn.innerHTML = originalHTML;
+                        });
+                    } else {
+                        console.error("No ID found on edit button", editBtn);
+                        this.showToast("Could not find announcement ID", "error");
+                    }
+                    return false;
+                }
+                
+                // Handle toggle content button
+                const toggleBtn = e.target.closest('.toggle-content-btn');
+                if (toggleBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const index = toggleBtn.getAttribute('data-index') || toggleBtn.dataset.index;
+                    const wrapper = this.elements.draftAnnouncementsList.querySelector(`.announcement-content-wrapper-${index}`);
+                    const preview = wrapper?.querySelector('.announcement-content-preview');
+                    const full = wrapper?.querySelector('.announcement-content-full');
+                    
+                    if (preview && full) {
+                        if (preview.classList.contains('hidden')) {
+                            // Collapse
+                            preview.classList.remove('hidden');
+                            full.classList.add('hidden');
+                            toggleBtn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i>Show more';
+                        } else {
+                            // Expand
+                            preview.classList.add('hidden');
+                            full.classList.remove('hidden');
+                            toggleBtn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Show less';
+                        }
+                    }
+                    return false;
                 }
             });
         }
@@ -5243,11 +5363,11 @@ class SuperAdminDashboard {
             if (!response.ok) throw new Error("Failed to fetch announcements");
 
             const announcements = await response.json();
-
+            
             // Separate sent and draft announcements
             const sentAnnouncements = announcements.filter(a => a.is_active);
             const draftAnnouncements = announcements.filter(a => !a.is_active);
-
+            
             this.renderSentAnnouncements(sentAnnouncements);
             this.renderDraftAnnouncements(draftAnnouncements);
             this.dataLoaded.announcementSection = true;
@@ -5288,7 +5408,7 @@ class SuperAdminDashboard {
             const date = new Date(announcement.created_at);
             const dateStr = date.toLocaleDateString();
             const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-
+            
             return `
             <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
                 <div class="flex justify-between items-start mb-2">
@@ -5315,52 +5435,141 @@ class SuperAdminDashboard {
     renderDraftAnnouncements(announcements) {
         if (!this.elements.draftAnnouncementsList) return;
 
+        // Update count badge
+        const countBadge = document.getElementById('draftAnnouncementsCount');
+        if (countBadge) {
+            countBadge.textContent = announcements.length;
+            countBadge.classList.toggle('hidden', announcements.length === 0);
+        }
+
         if (announcements.length === 0) {
             this.elements.draftAnnouncementsList.innerHTML = `
-                <div class="text-center text-gray-500 py-8">
-                    <i class="fas fa-file-alt text-2xl mb-2 opacity-50"></i>
-                    <p>No draft announcements.</p>
+                <div class="text-center text-gray-500 py-12">
+                    <i class="fas fa-file-alt text-3xl mb-3 opacity-30"></i>
+                    <p class="text-sm">No draft announcements.</p>
+                    <p class="text-xs text-gray-400 mt-1">Create one using the form on the left</p>
                 </div>`;
             return;
         }
 
-        this.elements.draftAnnouncementsList.innerHTML = announcements.map(announcement => {
+        this.elements.draftAnnouncementsList.innerHTML = announcements.map((announcement, index) => {
             const date = new Date(announcement.created_at);
-            const dateStr = date.toLocaleDateString();
+            const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-
+            
+            // Format effectivity date (Month Year)
+            let effectivityDateStr = 'Not Set';
+            if (announcement.effectivity_date) {
+                try {
+                    const effectivityDate = new Date(announcement.effectivity_date);
+                    effectivityDateStr = effectivityDate.toLocaleDateString('en-US', {
+                        month: 'short',
+                        year: 'numeric'
+                    });
+                } catch (e) {
+                    effectivityDateStr = announcement.effectivity_date;
+                }
+            }
+            
+            // Truncate content to acceptable length
+            const maxDisplayLength = 120;
+            const isContentLong = announcement.content.length > maxDisplayLength;
+            const displayContent = isContentLong 
+                ? announcement.content.substring(0, maxDisplayLength) + '...' 
+                : announcement.content;
+            
+            // Escape content for safe HTML display
+            const escapeHtml = (text) => {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+            
+            const fullContentHtml = escapeHtml(announcement.content).replace(/\n/g, '<br>');
+            const displayContentHtml = escapeHtml(displayContent);
+            
             return `
-            <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow">
-                <div class="flex justify-between items-start mb-2">
-                    <h4 class="font-bold text-gray-800">${announcement.title}</h4>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500">${dateStr} ${timeStr}</span>
-                        <button data-id="${announcement.id}" 
-                            class="activate-announcement-btn bg-market-primary text-white px-3 py-1 rounded text-xs font-medium hover:bg-market-secondary transition-colors" title="Send">
-                            <i class="fas fa-paper-plane mr-1"></i> Send
+            <div class="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:shadow-sm hover:border-market-primary transition-all group" data-announcement-id="${announcement.id}">
+                <div class="flex items-start justify-between gap-2 mb-2">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-semibold text-gray-800 text-sm mb-1 truncate group-hover:text-market-primary transition-colors">${announcement.title}</h4>
+                        <div class="announcement-content-wrapper-${index}">
+                            <p class="text-gray-600 text-xs leading-relaxed announcement-content-preview">${displayContentHtml}</p>
+                            <p class="text-gray-600 text-xs leading-relaxed announcement-content-full hidden">${fullContentHtml}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        <button type="button" data-id="${announcement.id}" 
+                            class="activate-announcement-btn bg-market-primary text-white px-2 py-1 rounded text-xs font-medium hover:bg-market-secondary transition-colors cursor-pointer z-10 relative" title="Send">
+                            <i class="fas fa-paper-plane"></i>
                         </button>
-                        <button data-id="${announcement.id}" 
-                            class="delete-announcement-btn text-red-500 hover:text-red-700 p-1 rounded transition-colors" title="Delete">
-                            <i class="fas fa-trash-alt"></i>
+                        <button type="button" data-id="${announcement.id}" 
+                            class="edit-announcement-btn text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors cursor-pointer z-10 relative" title="Edit">
+                            <i class="fas fa-edit text-xs pointer-events-none"></i>
+                        </button>
+                        <button type="button" data-id="${announcement.id}" 
+                            class="delete-announcement-btn text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer z-10 relative" title="Delete">
+                            <i class="fas fa-trash-alt text-xs"></i>
                         </button>
                     </div>
                 </div>
-                <p class="text-gray-600 text-sm whitespace-pre-wrap">${announcement.content}</p>
-                <div class="mt-2 flex items-center gap-2">
-                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                <div class="flex items-center justify-between gap-2 flex-wrap text-xs">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
                         Draft
                     </span>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                            <i class="fas fa-calendar-alt mr-1"></i>${effectivityDateStr}
+                    </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        ${isContentLong ? `
+                            <button type="button" class="toggle-content-btn text-market-primary text-xs font-medium hover:underline cursor-pointer" data-index="${index}">
+                                <i class="fas fa-chevron-down mr-1"></i>Show more
+                            </button>
+                        ` : ''}
+                        <span class="text-gray-500 text-xs">
+                            <i class="far fa-clock mr-1"></i>${dateStr} ${timeStr}
+                        </span>
+                    </div>
                 </div>
             </div>
         `;
         }).join('');
+        
     }
 
     async saveAnnouncement() {
-        const title = this.elements.announcementTitle.value;
-        const content = this.elements.announcementContent.value;
-        const isActive = this.elements.announcementIsActive.checked;
+        console.log("saveAnnouncement called");
+        
+        // Re-cache elements in case they weren't loaded
+        if (!this.elements.announcementTitle) {
+            this.elements.announcementTitle = document.getElementById("announcementTitle");
+        }
+        if (!this.elements.announcementContent) {
+            this.elements.announcementContent = document.getElementById("announcementContent");
+        }
+        if (!this.elements.announcementIsActive) {
+            this.elements.announcementIsActive = document.getElementById("announcementIsActive");
+        }
+        if (!this.elements.saveAnnouncementBtn) {
+            this.elements.saveAnnouncementBtn = document.getElementById("saveAnnouncementBtn");
+        }
+        
+        const title = this.elements.announcementTitle?.value || '';
+        let content = this.elements.announcementContent?.value || '';
+        const isActive = this.elements.announcementIsActive?.checked || false;
         const btn = this.elements.saveAnnouncementBtn;
+        
+        if (!btn) {
+            console.error("Save button not found");
+            this.showToast("Error: Save button not found. Please refresh the page.", "error");
+            return;
+        }
+        
+        const editId = btn.dataset.editId;
+        
+        console.log("Form data:", { title, contentLength: content.length, isActive, editId });
 
         if (!title || !content) {
             this.showToast("Please fill in all required fields.", "error");
@@ -5370,6 +5579,7 @@ class SuperAdminDashboard {
         // Collect recipient data
         const recipients = {
             staff: document.getElementById('recipientStaff')?.checked || false,
+            meter_reader_clerk: document.getElementById('recipientMeterReaderClerk')?.checked || false,
             all_sections: document.getElementById('recipientAllSections')?.checked || false,
             sections: []
         };
@@ -5385,23 +5595,62 @@ class SuperAdminDashboard {
             recipients.sections.push('Semi-Wet');
         }
 
+        // Get selected specific vendors
+        const selectedVendorCheckboxes = document.querySelectorAll('.vendor-checkbox:checked');
+        if (selectedVendorCheckboxes.length > 0) {
+            recipients.vendor_ids = Array.from(selectedVendorCheckboxes).map(cb => parseInt(cb.value));
+        }
+        
+        // Update content with recipient information for manual announcements
+        if (content && !content.includes('Dear')) {
+            const recipientInfo = this.generateRecipientInfo(recipients);
+            content = `Dear ${recipientInfo},\n\n${content}`;
+        } else if (content && editId) {
+            // For edits, update the greeting if it's generic
+            const recipientInfo = this.generateRecipientInfo(recipients);
+            content = content.replace(/^Dear[^\n]*\n\n/, `Dear ${recipientInfo},\n\n`);
+        }
+
         // Validate that at least one recipient is selected
-        if (!recipients.staff && !recipients.all_sections && recipients.sections.length === 0) {
+        if (!recipients.staff && !recipients.meter_reader_clerk && !recipients.all_sections && recipients.sections.length === 0 && (!recipients.vendor_ids || recipients.vendor_ids.length === 0)) {
             this.showToast("Please select at least one recipient.", "error");
             return;
         }
 
         try {
+            if (!btn) {
+                console.error("Save button not found");
+                this.showToast("Error: Save button not found. Please refresh the page.", "error");
+                return;
+            }
+            
             const originalBtnText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
+            const loadingText = isActive ? '<i class="fas fa-spinner fa-spin"></i> Sending...' : (editId ? '<i class="fas fa-spinner fa-spin"></i> Updating...' : '<i class="fas fa-spinner fa-spin"></i> Posting...');
+            btn.innerHTML = loadingText;
 
-            const response = await fetch("/api/admin/announcements", {
-                method: "POST",
+            const url = editId ? `/api/admin/announcements/${editId}` : "/api/admin/announcements";
+            const method = editId ? "PUT" : "POST";
+            
+            console.log("Sending request:", { url, method, isActive, editId, title, contentLength: content.length });
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+            if (!csrfToken) {
+                console.error("CSRF token not found");
+                this.showToast("Error: CSRF token not found. Please refresh the page.", "error");
+                btn.disabled = false;
+                btn.innerHTML = originalBtnText;
+                return;
+            }
+            
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     "Content-Type": "application/json",
-                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+                    "Accept": "application/json",
+                    "X-CSRF-TOKEN": csrfToken,
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify({
                     title,
                     content,
@@ -5410,24 +5659,99 @@ class SuperAdminDashboard {
                 }),
             });
 
-            if (!response.ok) throw new Error("Failed to create announcement");
+            console.log("Response status:", response.status, response.statusText);
 
-            this.showToast("Announcement posted successfully!", "success");
-            this.elements.createAnnouncementForm.reset();
-            // Reset recipient checkboxes
-            document.getElementById('recipientStaff').checked = true;
-            document.getElementById('recipientAllSections').checked = true;
-            document.getElementById('recipientWetSection').checked = false;
-            document.getElementById('recipientDrySection').checked = false;
-            document.getElementById('recipientSemiWetSection').checked = false;
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || (editId ? "Failed to update announcement" : "Failed to create announcement"));
+            }
+
+            const result = await response.json();
+            
+            // Show appropriate success message
+            if (isActive) {
+                this.showToast(editId ? "Announcement sent successfully! Notifications and SMS have been sent." : "Announcement sent successfully! Notifications and SMS have been sent.", "success");
+            } else {
+                this.showToast(editId ? "Announcement saved as draft successfully!" : "Announcement saved as draft successfully!", "success");
+            }
+            
+            // Reset button if in edit mode
+            if (editId) {
+                delete btn.dataset.editId;
+            }
+            
+            // Manually clear form fields instead of using form.reset() to avoid restoring default checked states
+            if (this.elements.announcementTitle) {
+                this.elements.announcementTitle.value = '';
+            }
+            if (this.elements.announcementContent) {
+                this.elements.announcementContent.value = '';
+            }
+            if (this.elements.announcementIsActive) {
+                this.elements.announcementIsActive.checked = false;
+            }
+            
+            // Reset recipient checkboxes - uncheck all
+            const staffCheckbox = document.getElementById('recipientStaff');
+            const meterReaderCheckbox = document.getElementById('recipientMeterReaderClerk');
+            const allSectionsCheckbox = document.getElementById('recipientAllSections');
+            const wetSectionCheckbox = document.getElementById('recipientWetSection');
+            const drySectionCheckbox = document.getElementById('recipientDrySection');
+            const semiWetSectionCheckbox = document.getElementById('recipientSemiWetSection');
+            
+            if (staffCheckbox) staffCheckbox.checked = false;
+            if (meterReaderCheckbox) meterReaderCheckbox.checked = false;
+            if (allSectionsCheckbox) allSectionsCheckbox.checked = false;
+            if (wetSectionCheckbox) wetSectionCheckbox.checked = false;
+            if (drySectionCheckbox) drySectionCheckbox.checked = false;
+            if (semiWetSectionCheckbox) semiWetSectionCheckbox.checked = false;
+            
+            // Clear selected vendors
+            document.querySelectorAll('.vendor-checkbox').forEach(cb => cb.checked = false);
+            this.updateSelectedVendorsDisplay();
+            
+            // Hide vendor selection container if it was open
+            const vendorsContainer = document.getElementById('specificVendorsContainer');
+            if (vendorsContainer) {
+                vendorsContainer.classList.add('hidden');
+            }
+            const vendorsIcon = document.getElementById('specificVendorsIcon');
+            if (vendorsIcon) {
+                vendorsIcon.classList.remove('fa-chevron-up');
+                vendorsIcon.classList.add('fa-chevron-down');
+            }
+            
+            // Update button text
+            this.updateAnnouncementButtonText(false, false);
+            
             this.fetchAnnouncements(); // Refresh list
 
         } catch (error) {
             console.error("Error saving announcement:", error);
-            this.showToast("Failed to post announcement.", "error");
+            this.showToast(editId ? "Failed to update announcement." : "Failed to post announcement.", "error");
         } finally {
             btn.disabled = false;
+            // Reset button text based on edit mode and publish immediately
+            const isActive = this.elements.announcementIsActive?.checked || false;
+            const isEditMode = btn.dataset.editId ? true : false;
+            this.updateAnnouncementButtonText(isActive, isEditMode);
+        }
+    }
+
+    updateAnnouncementButtonText(isPublishImmediately, isEditMode = false) {
+        const btn = this.elements.saveAnnouncementBtn;
+        if (!btn) return;
+
+        if (isPublishImmediately) {
+            // Show "Send" when publish immediately is checked
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Send</span>';
+        } else {
+            // Show "Update Announcement" or "Post Announcement" when not checked
+            if (isEditMode) {
+                btn.innerHTML = '<i class="fas fa-save"></i> <span>Update Announcement</span>';
+            } else {
             btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Post Announcement</span>';
+            }
         }
     }
 
@@ -5457,20 +5781,161 @@ class SuperAdminDashboard {
 
     async deleteAnnouncement(id) {
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+            if (!csrfToken) {
+                console.error("CSRF token not found");
+                this.showToast("Error: CSRF token not found. Please refresh the page.", "error");
+                return;
+            }
+
             const response = await fetch(`/api/admin/announcements/${id}`, {
                 method: "DELETE",
                 headers: {
-                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "X-CSRF-TOKEN": csrfToken,
                 },
+                credentials: 'same-origin',
             });
 
-            if (!response.ok) throw new Error("Failed to delete announcement");
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.message || `Failed to delete announcement (${response.status})`;
+                console.error("Delete failed:", response.status, errorData);
+                throw new Error(errorMessage);
+            }
 
-            this.showToast("Announcement deleted successfully", "success");
+            const data = await response.json();
+            this.showToast(data.message || "Announcement deleted successfully", "success");
             this.fetchAnnouncements();
         } catch (error) {
             console.error("Error deleting announcement:", error);
-            this.showToast("Failed to delete announcement", "error");
+            this.showToast(error.message || "Failed to delete announcement", "error");
+        }
+    }
+
+    async editDraftAnnouncement(id) {
+        try {
+            console.log("Edit button clicked, fetching announcement ID:", id);
+            this.showToast("Loading announcement...", "info");
+            
+            // Fetch the announcement details
+            const response = await fetch(`/api/admin/announcements/${id}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin'
+            });
+            
+            console.log("Response status:", response.status, response.statusText);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Error response:", errorText);
+                throw new Error(`Failed to fetch announcement: ${response.status} ${response.statusText}`);
+            }
+            
+            const announcement = await response.json();
+            console.log("Announcement data received:", announcement);
+            
+            // Re-cache form elements in case they weren't loaded initially
+            const titleEl = document.getElementById("announcementTitle");
+            const contentEl = document.getElementById("announcementContent");
+            const isActiveEl = document.getElementById("announcementIsActive");
+            
+            if (!titleEl || !contentEl) {
+                console.error("Form elements not found:", { titleEl, contentEl });
+                this.showToast("Form elements not found. Please refresh the page.", "error");
+                return;
+            }
+            
+            // Update cached elements
+            this.elements.announcementTitle = titleEl;
+            this.elements.announcementContent = contentEl;
+            if (isActiveEl) {
+                this.elements.announcementIsActive = isActiveEl;
+            }
+            
+            // Populate the form with announcement data
+            this.elements.announcementTitle.value = announcement.title || '';
+            this.elements.announcementContent.value = announcement.content || '';
+            if (this.elements.announcementIsActive) {
+                this.elements.announcementIsActive.checked = announcement.is_active || false;
+            }
+            
+            // Trigger input events to ensure any listeners are notified
+            this.elements.announcementTitle.dispatchEvent(new Event('input', { bubbles: true }));
+            this.elements.announcementContent.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            console.log("Form populated with:", {
+                title: announcement.title,
+                contentLength: announcement.content?.length,
+                isActive: announcement.is_active
+            });
+            
+            // Set recipients
+            const recipients = announcement.recipients || {};
+            const staffCheckbox = document.getElementById('recipientStaff');
+            const meterReaderCheckbox = document.getElementById('recipientMeterReaderClerk');
+            const allSectionsCheckbox = document.getElementById('recipientAllSections');
+            const wetSectionCheckbox = document.getElementById('recipientWetSection');
+            const drySectionCheckbox = document.getElementById('recipientDrySection');
+            const semiWetSectionCheckbox = document.getElementById('recipientSemiWetSection');
+            
+            if (staffCheckbox) staffCheckbox.checked = recipients.staff || false;
+            if (meterReaderCheckbox) meterReaderCheckbox.checked = recipients.meter_reader_clerk || false;
+            if (allSectionsCheckbox) allSectionsCheckbox.checked = recipients.all_sections || false;
+            
+            const sections = recipients.sections || [];
+            if (wetSectionCheckbox) wetSectionCheckbox.checked = sections.includes('Wet Section');
+            if (drySectionCheckbox) drySectionCheckbox.checked = sections.includes('Dry Section');
+            if (semiWetSectionCheckbox) semiWetSectionCheckbox.checked = sections.includes('Semi-Wet');
+            
+            // Restore selected vendors
+            const vendorIds = recipients.vendor_ids || [];
+            if (vendorIds.length > 0) {
+                // Load vendors if container is not already loaded
+                await this.loadVendorsForSelection();
+                // Check the vendor checkboxes
+                vendorIds.forEach(vendorId => {
+                    const checkbox = document.querySelector(`.vendor-checkbox[value="${vendorId}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+                this.updateSelectedVendorsDisplay();
+                // Show the vendor container if vendors are selected
+                const container = document.getElementById('specificVendorsContainer');
+                if (container) {
+                    container.classList.remove('hidden');
+                }
+            }
+            
+            // Change button to update mode
+            const btn = this.elements.saveAnnouncementBtn;
+            if (btn) {
+                btn.dataset.editId = id;
+                // Update button text based on publish immediately checkbox
+                const isActive = this.elements.announcementIsActive?.checked || false;
+                this.updateAnnouncementButtonText(isActive, true);
+            }
+            
+            // Scroll to form
+            const announcementSection = document.getElementById('announcementSection');
+            if (announcementSection) {
+                // Small delay to ensure form is populated before scrolling
+                setTimeout(() => {
+                    announcementSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+            
+            this.showToast("Announcement loaded for editing", "success");
+            console.log("Edit process completed successfully");
+        } catch (error) {
+            console.error("Error loading announcement:", error);
+            console.error("Error stack:", error.stack);
+            this.showToast(`Failed to load announcement: ${error.message}`, "error");
         }
     }
 
@@ -5496,6 +5961,709 @@ class SuperAdminDashboard {
             this.showToast("Failed to send announcement", "error");
         }
     }
+
+    generateRecipientInfo(recipients) {
+        const parts = [];
+        
+        if (recipients.vendor_ids && recipients.vendor_ids.length > 0) {
+            if (recipients.vendor_ids.length === 1) {
+                parts.push('Selected Vendor');
+            } else {
+                parts.push(`${recipients.vendor_ids.length} Selected Vendors`);
+            }
+        }
+        
+        if (recipients.all_sections) {
+            parts.push('All Vendors');
+        } else if (recipients.sections && recipients.sections.length > 0) {
+            if (recipients.sections.length === 1) {
+                parts.push(`Vendors in ${recipients.sections[0]}`);
+            } else {
+                parts.push(`Vendors in ${recipients.sections.join(', ')}`);
+            }
+        }
+        
+        if (recipients.staff) {
+            parts.push('Staff');
+        }
+        
+        if (recipients.meter_reader_clerk) {
+            parts.push('Meter Reader Clerks');
+        }
+        
+        if (parts.length === 0) {
+            return 'All Recipients';
+        }
+        
+        return parts.join(', ');
+    }
+
+    async loadVendorsForSelection() {
+        const container = document.getElementById('vendorListContainer');
+        if (!container) return;
+        
+        // Check if already loaded
+        if (container.dataset.loaded === 'true') return;
+        
+        try {
+            const response = await fetch('/api/admin/announcements/vendors/list');
+            if (!response.ok) throw new Error('Failed to fetch vendors');
+            
+            const vendors = await response.json();
+            container.innerHTML = '';
+            
+            vendors.forEach(vendor => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded';
+                label.innerHTML = `
+                    <input type="checkbox" class="vendor-checkbox" value="${vendor.id}" 
+                        class="form-checkbox h-4 w-4 text-market-primary rounded focus:ring-market-primary">
+                    <span class="text-sm text-gray-700 flex-1">
+                        <span class="font-medium">${this.escapeHtml(vendor.name)}</span>
+                        <span class="text-gray-500 ml-2">(${this.escapeHtml(vendor.stall_number)} - ${this.escapeHtml(vendor.section)})</span>
+                    </span>
+                `;
+                container.appendChild(label);
+            });
+            
+            // Add search functionality
+            const searchInput = document.getElementById('vendorSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const labels = container.querySelectorAll('label');
+                    labels.forEach(label => {
+                        const text = label.textContent.toLowerCase();
+                        label.style.display = text.includes(searchTerm) ? '' : 'none';
+                    });
+                });
+            }
+            
+            // Update selected count when checkboxes change
+            container.addEventListener('change', () => {
+                this.updateSelectedVendorsDisplay();
+            });
+            
+            // Clear all button
+            const clearBtn = document.getElementById('clearVendorSelection');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    container.querySelectorAll('.vendor-checkbox').forEach(cb => cb.checked = false);
+                    this.updateSelectedVendorsDisplay();
+                });
+            }
+            
+            container.dataset.loaded = 'true';
+        } catch (error) {
+            console.error('Error loading vendors:', error);
+            container.innerHTML = '<div class="text-center text-red-500 text-sm py-4">Failed to load vendors</div>';
+        }
+    }
+
+    updateSelectedVendorsDisplay() {
+        const selectedCheckboxes = document.querySelectorAll('.vendor-checkbox:checked');
+        const countElement = document.getElementById('selectedVendorsCount');
+        
+        if (countElement) {
+            countElement.textContent = selectedCheckboxes.length;
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ===================================================================
+    // EFFECTIVITY DATE MANAGEMENT
+    // ===================================================================
+
+    setupEffectivityDateManagementEventListeners() {
+        // Refresh button
+        const refreshBtn = document.getElementById('refreshPendingChangesBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                this.loadPendingChanges();
+            });
+        }
+
+        // Schedule edit buttons
+        const editScheduleBtn = document.getElementById('editScheduleBtn');
+        const saveScheduleBtn = document.getElementById('saveScheduleBtn');
+        const cancelScheduleBtn = document.getElementById('cancelScheduleBtn');
+        const scheduleDefaultButtons = document.getElementById('scheduleDefaultButtons');
+        const scheduleEditButtons = document.getElementById('scheduleEditButtons');
+
+        if (editScheduleBtn) {
+            editScheduleBtn.addEventListener('click', () => {
+                this.toggleScheduleEditMode(true);
+            });
+        }
+
+        if (saveScheduleBtn) {
+            saveScheduleBtn.addEventListener('click', () => {
+                this.saveBillGenerationSchedules();
+            });
+        }
+
+        if (cancelScheduleBtn) {
+            cancelScheduleBtn.addEventListener('click', () => {
+                this.toggleScheduleEditMode(false);
+                this.loadBillGenerationSchedules();
+            });
+        }
+
+        // Modal close button
+        const closeModalBtn = document.getElementById('closeEffectivityDateModal');
+        if (closeModalBtn) {
+            closeModalBtn.addEventListener('click', () => {
+                this.closeEffectivityDateModal();
+            });
+        }
+
+        // Cancel button
+        const cancelBtn = document.getElementById('cancelEffectivityDateBtn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.closeEffectivityDateModal();
+            });
+        }
+
+        // Form submit
+        const form = document.getElementById('effectivityDateForm');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.updateEffectivityDate();
+            });
+        }
+
+        // Close modal on backdrop click
+        const modal = document.getElementById('effectivityDateModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeEffectivityDateModal();
+                }
+            });
+        }
+    }
+
+    async loadPendingChanges() {
+        const loader = document.getElementById('pendingChangesLoader');
+        const table = document.getElementById('pendingChangesTable');
+        const tableBody = document.getElementById('pendingChangesTableBody');
+        const noPendingChanges = document.getElementById('noPendingChanges');
+
+        try {
+            if (loader) loader.classList.remove('hidden');
+            if (table) table.classList.add('hidden');
+            if (noPendingChanges) noPendingChanges.classList.add('hidden');
+
+            const response = await fetch('/api/admin/effectivity-dates/pending-changes', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                if (response.status === 403) {
+                    throw new Error('Unauthorized. Admin access required.');
+                }
+                throw new Error('Failed to load pending changes');
+            }
+
+            const data = await response.json();
+            this.pendingChanges = data.pending_changes || [];
+
+            if (loader) loader.classList.add('hidden');
+
+            if (this.pendingChanges.length === 0) {
+                if (noPendingChanges) noPendingChanges.classList.remove('hidden');
+            } else {
+                if (table) table.classList.remove('hidden');
+                this.renderPendingChanges();
+            }
+        } catch (error) {
+            console.error('Error loading pending changes:', error);
+            if (loader) loader.classList.add('hidden');
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="border border-gray-200 px-4 py-8 text-center text-red-500">
+                            <i class="fas fa-exclamation-circle mr-2"></i>
+                            ${this.escapeHtml(error.message)}
+                        </td>
+                    </tr>
+                `;
+                if (table) table.classList.remove('hidden');
+            }
+        }
+    }
+
+    renderPendingChanges() {
+        const tableBody = document.getElementById('pendingChangesTableBody');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = this.pendingChanges.map(change => {
+            const effectivityDate = new Date(change.effectivity_date);
+            const formattedEffectivityDate = effectivityDate.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            const changedAt = new Date(change.changed_at);
+            const formattedChangedAt = changedAt.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="border border-gray-200 px-4 py-3">${this.escapeHtml(change.category)}</td>
+                    <td class="border border-gray-200 px-4 py-3">${this.escapeHtml(change.item_name)}</td>
+                    <td class="border border-gray-200 px-4 py-3">${this.escapeHtml(change.description)}</td>
+                    <td class="border border-gray-200 px-4 py-3 font-medium text-blue-600">${formattedEffectivityDate}</td>
+                    <td class="border border-gray-200 px-4 py-3 text-gray-600">${formattedChangedAt}</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                        <button 
+                            class="edit-effectivity-date-btn bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                            data-history-table="${this.escapeHtml(change.history_table)}"
+                            data-history-id="${change.history_id}"
+                            data-category="${this.escapeHtml(change.category)}"
+                            data-item-name="${this.escapeHtml(change.item_name)}"
+                            data-description="${this.escapeHtml(change.description)}"
+                            data-current-date="${change.effectivity_date}">
+                            <i class="fas fa-edit mr-1"></i>Adjust
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Attach event listeners to edit buttons
+        tableBody.querySelectorAll('.edit-effectivity-date-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openEffectivityDateModal(btn);
+            });
+        });
+    }
+
+    openEffectivityDateModal(button) {
+        const modal = document.getElementById('effectivityDateModal');
+        const historyTable = document.getElementById('effectivityHistoryTable');
+        const historyId = document.getElementById('effectivityHistoryId');
+        const category = document.getElementById('effectivityCategory');
+        const itemName = document.getElementById('effectivityItemName');
+        const description = document.getElementById('effectivityDescription');
+        const newDate = document.getElementById('newEffectivityDate');
+
+        if (!modal || !historyTable || !historyId || !category || !itemName || !description || !newDate) return;
+
+        historyTable.value = button.dataset.historyTable;
+        historyId.value = button.dataset.historyId;
+        category.value = button.dataset.category;
+        itemName.value = button.dataset.itemName;
+        description.value = button.dataset.description;
+        newDate.value = button.dataset.currentDate;
+
+        modal.classList.remove('hidden');
+    }
+
+    closeEffectivityDateModal() {
+        const modal = document.getElementById('effectivityDateModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        const form = document.getElementById('effectivityDateForm');
+        if (form) {
+            form.reset();
+        }
+    }
+
+    async updateEffectivityDate() {
+        const historyTable = document.getElementById('effectivityHistoryTable');
+        const historyId = document.getElementById('effectivityHistoryId');
+        const newDate = document.getElementById('newEffectivityDate');
+        const saveBtn = document.getElementById('saveEffectivityDateBtn');
+
+        if (!historyTable || !historyId || !newDate) return;
+
+        const data = {
+            history_table: historyTable.value,
+            history_id: parseInt(historyId.value),
+            new_effectivity_date: newDate.value
+        };
+
+        try {
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Updating...';
+            }
+
+            const response = await fetch('/api/admin/effectivity-dates/update', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to update effectivity date');
+            }
+
+            // Show success message
+            this.showToast(result.message, 'success');
+
+            // Close modal and refresh list
+            this.closeEffectivityDateModal();
+            this.loadPendingChanges();
+
+        } catch (error) {
+            console.error('Error updating effectivity date:', error);
+            this.showToast('Error: ' + error.message, 'error');
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Update';
+            }
+        }
+    }
+
+    // ===================================================================
+    // BILL GENERATION SCHEDULE MANAGEMENT
+    // ===================================================================
+
+    async loadBillGenerationSchedules() {
+        try {
+            const response = await fetch('/api/admin/effectivity-dates/schedules', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load schedules');
+            }
+
+            const data = await response.json();
+            
+            // Populate form fields
+            const billGenDay = document.getElementById('billGenerationDay');
+            const billGenTime = document.getElementById('billGenerationTime');
+            const applyPendingTime = document.getElementById('applyPendingChangesTime');
+
+            if (billGenDay && data.billGeneration) {
+                billGenDay.value = data.billGeneration.day || 1;
+            }
+            if (billGenTime && data.billGeneration) {
+                billGenTime.value = data.billGeneration.time || '07:00';
+            }
+            if (applyPendingTime && data.applyPendingChanges) {
+                applyPendingTime.value = data.applyPendingChanges.time || '06:00';
+            }
+
+        } catch (error) {
+            console.error('Error loading schedules:', error);
+            this.showToast('Failed to load schedules', 'error');
+        }
+    }
+
+    toggleScheduleEditMode(isEditing) {
+        const scheduleDefaultButtons = document.getElementById('scheduleDefaultButtons');
+        const scheduleEditButtons = document.getElementById('scheduleEditButtons');
+        const billGenDay = document.getElementById('billGenerationDay');
+        const billGenTime = document.getElementById('billGenerationTime');
+        const applyPendingTime = document.getElementById('applyPendingChangesTime');
+
+        if (scheduleDefaultButtons) {
+            scheduleDefaultButtons.classList.toggle('hidden', isEditing);
+        }
+        if (scheduleEditButtons) {
+            scheduleEditButtons.classList.toggle('hidden', !isEditing);
+        }
+
+        // Enable/disable inputs
+        if (billGenDay) billGenDay.readOnly = !isEditing;
+        if (billGenTime) billGenTime.readOnly = !isEditing;
+        if (applyPendingTime) applyPendingTime.readOnly = !isEditing;
+    }
+
+    async saveBillGenerationSchedules() {
+        const billGenDay = document.getElementById('billGenerationDay');
+        const billGenTime = document.getElementById('billGenerationTime');
+        const applyPendingTime = document.getElementById('applyPendingChangesTime');
+        const saveBtn = document.getElementById('saveScheduleBtn');
+
+        if (!billGenDay || !billGenTime || !applyPendingTime) return;
+
+        const data = {
+            billGeneration: {
+                day: parseInt(billGenDay.value),
+                time: billGenTime.value
+            },
+            applyPendingChanges: {
+                time: applyPendingTime.value
+            }
+        };
+
+        try {
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            }
+
+            const response = await fetch('/api/admin/effectivity-dates/schedules', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to update schedules');
+            }
+
+            this.showToast('Schedules updated successfully!', 'success');
+            this.toggleScheduleEditMode(false);
+
+        } catch (error) {
+            console.error('Error saving schedules:', error);
+            this.showToast('Error: ' + error.message, 'error');
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save';
+            }
+        }
+    }
+
+    // Change Effectivity Modal Methods
+    setupChangeEffectivityModal() {
+        const modal = document.getElementById('changeEffectivityModal');
+        const closeBtn = document.getElementById('closeChangeEffectivityModal');
+        const confirmTodayBtn = document.getElementById('confirmEffectiveToday');
+        const confirmFutureBtn = document.getElementById('confirmFutureDate');
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                this.pendingChangeRequest = null;
+            });
+        }
+
+        if (confirmTodayBtn) {
+            confirmTodayBtn.addEventListener('click', () => {
+                this.handleChangeConfirmation(true);
+            });
+        }
+
+        if (confirmFutureBtn) {
+            confirmFutureBtn.addEventListener('click', () => {
+                this.handleChangeConfirmation(false);
+            });
+        }
+
+        // Close on backdrop click
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                    this.pendingChangeRequest = null;
+                }
+            });
+        }
+    }
+
+    showChangeEffectivityModal(changeData) {
+        const modal = document.getElementById('changeEffectivityModal');
+        const detailsDiv = document.getElementById('changeDetails');
+        
+        if (!modal || !detailsDiv) return;
+
+        let detailsHtml = '';
+        
+        if (changeData.changeType === 'utility_rate') {
+            const data = changeData.changeData;
+            detailsHtml = `
+                <strong>Utility Rate Change:</strong><br>
+                Utility: ${data.utility_type}<br>
+                Old Rate: ₱${parseFloat(data.old_rate).toFixed(2)}<br>
+                New Rate: ₱${parseFloat(data.new_rate).toFixed(2)}<br>
+                ${data.old_monthly_rate ? `Old Monthly: ₱${parseFloat(data.old_monthly_rate).toFixed(2)}<br>` : ''}
+                ${data.new_monthly_rate ? `New Monthly: ₱${parseFloat(data.new_monthly_rate).toFixed(2)}<br>` : ''}
+            `;
+        } else if (changeData.changeType === 'rental_rate') {
+            const data = changeData.changeData;
+            detailsHtml = `
+                <strong>Rental Rate Change:</strong><br>
+                Stall: ${data.table_number}<br>
+                Old Daily Rate: ₱${parseFloat(data.old_daily_rate).toFixed(2)}<br>
+                New Daily Rate: ₱${parseFloat(data.new_daily_rate).toFixed(2)}<br>
+                ${data.old_monthly_rate ? `Old Monthly: ₱${parseFloat(data.old_monthly_rate).toFixed(2)}<br>` : ''}
+                ${data.new_monthly_rate ? `New Monthly: ₱${parseFloat(data.new_monthly_rate).toFixed(2)}<br>` : ''}
+            `;
+        } else if (changeData.changeType === 'schedule') {
+            const changes = Array.isArray(changeData.changeData) ? changeData.changeData : [changeData.changeData];
+            detailsHtml = '<strong>Schedule Changes:</strong><br>';
+            changes.forEach(change => {
+                detailsHtml += `
+                    ${change.type}: ${change.old_day} → ${change.new_day}<br>
+                `;
+            });
+        } else if (changeData.changeType === 'billing_setting') {
+            const changes = Array.isArray(changeData.changeData) ? changeData.changeData : [changeData.changeData];
+            detailsHtml = '<strong>Billing Setting Changes:</strong><br>';
+            changes.forEach(change => {
+                detailsHtml += `
+                    ${change.utility_type} - ${change.field_changed}: ${(change.old_value * 100).toFixed(2)}% → ${(change.new_value * 100).toFixed(2)}%<br>
+                `;
+            });
+        } else if (changeData.changeType === 'utility_rate_batch') {
+            const changes = Array.isArray(changeData.changeData) ? changeData.changeData : [changeData.changeData];
+            detailsHtml = '<strong>Utility Rate Changes:</strong><br>';
+            changes.forEach(change => {
+                detailsHtml += `
+                    ${change.utility_type}: ₱${parseFloat(change.old_rate).toFixed(2)} → ₱${parseFloat(change.new_rate).toFixed(2)}<br>
+                `;
+            });
+        } else if (changeData.changeType === 'rental_rate_batch') {
+            const changes = Array.isArray(changeData.changeData) ? changeData.changeData : [changeData.changeData];
+            detailsHtml = '<strong>Rental Rate Changes:</strong><br>';
+            changes.forEach(change => {
+                detailsHtml += `
+                    Stall ${change.table_number}: ₱${parseFloat(change.old_daily_rate).toFixed(2)}/day → ₱${parseFloat(change.new_daily_rate).toFixed(2)}/day<br>
+                `;
+            });
+        }
+
+        detailsDiv.innerHTML = detailsHtml;
+        modal.classList.remove('hidden');
+    }
+
+    async handleChangeConfirmation(effectiveToday) {
+        if (!this.pendingChangeRequest) return;
+
+        const modal = document.getElementById('changeEffectivityModal');
+        modal.classList.add('hidden');
+
+        const { url, method, headers, body } = this.pendingChangeRequest;
+        
+        // Add effectiveToday to body
+        const requestBody = JSON.parse(body);
+        requestBody.effectiveToday = effectiveToday;
+
+        try {
+            const response = await fetch(url, {
+                method,
+                headers,
+                body: JSON.stringify(requestBody),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to save change');
+            }
+
+            if (data.redirect) {
+                this.showToast(data.message || 'Redirecting to Effectivity Date Management...', 'info');
+                setTimeout(() => {
+                    window.location.href = data.redirectUrl || '/superadmin#effectivityDateManagementSection';
+                }, 1500);
+            } else {
+                this.showToast(data.message || 'Change saved successfully!', 'success');
+                
+                // Refetch relevant data
+                if (url.includes('utility-rates')) {
+                    if (url.includes('batch-update')) {
+                        // For batch updates, refetch all utility rates
+                        await this.fetchUtilityRates();
+                        this.utilityRateHistory = [];
+                        this.utilityRateHistoryPage = 1;
+                        this.utilityRateHistoryHasMore = true;
+                        await this.fetchUtilityRateHistory();
+                    } else {
+                        await this.fetchUtilityRates();
+                        await this.fetchUtilityRateHistory();
+                    }
+                } else if (url.includes('rental-rates')) {
+                    if (url.includes('batch-update')) {
+                        // For batch updates, refetch all rental rates
+                        await this.fetchAllRentalRates();
+                        this.rentalRateHistory = [];
+                        this.rentalRateHistoryPage = 1;
+                        this.rentalRateHistoryHasMore = true;
+                        await this.fetchRentalRateHistory();
+                        // Re-render the table
+                        this.filterAndRenderRates(this.rentalRatesPagination.current_page || 1);
+                    } else {
+                        // Individual update
+                        await this.fetchAllRentalRates();
+                        this.filterAndRenderRates(this.rentalRatesPagination.current_page || 1);
+                    }
+                } else if (url.includes('schedules')) {
+                    await this.fetchBillingDateSchedules();
+                    this.billingDateHistory = [];
+                    this.billingDateHistoryPage = 1;
+                    this.billingDateHistoryHasMore = true;
+                    await this.fetchBillingDateHistory();
+                } else if (url.includes('billing-settings')) {
+                    await this.fetchBillingSettings();
+                    this.billingSettingsHistory = [];
+                    this.billingSettingsHistoryPage = 1;
+                    this.billingSettingsHistoryHasMore = true;
+                    await this.fetchBillingSettingsHistory();
+                }
+            }
+        } catch (error) {
+            this.showToast(error.message || 'Error saving change', 'error');
+        } finally {
+            this.pendingChangeRequest = null;
+        }
+    }
+
+    async handleChangeDetection(response, url, method, headers, body) {
+        // Clone response to read it without consuming the original
+        const clonedResponse = response.clone();
+        const data = await clonedResponse.json();
+        
+        if (data.changeDetected && data.requiresConfirmation) {
+            // Store the pending request
+            this.pendingChangeRequest = { url, method, headers, body };
+            
+            // Show modal
+            this.showChangeEffectivityModal(data);
+            
+            // Return a special flag to indicate the request was intercepted
+            return { intercepted: true, data };
+        }
+        
+        return { intercepted: false, data };
+    }
+
 }
 
 document.addEventListener("DOMContentLoaded", () => {

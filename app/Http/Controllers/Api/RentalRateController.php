@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Stall; // It's better to use the model
 use App\Services\AuditLogger;
-use App\Services\AnnouncementService;
+use App\Services\ChangeNotificationService;
 
 class RentalRateController extends Controller
 {
@@ -104,7 +104,7 @@ class RentalRateController extends Controller
      * Update multiple stall rates at once.
      */
 // In RentalRateController.php -> batchUpdate()
-    public function batchUpdate(Request $request)
+    public function batchUpdate(Request $request, ChangeNotificationService $notificationService)
     {
         $validatedData = $request->validate([
             'stalls' => 'required|array',
@@ -113,12 +113,62 @@ class RentalRateController extends Controller
             'stalls.*.dailyRate' => 'required|numeric',
             // 'stalls.*.monthlyRate' => 'required|numeric', // <-- REMOVE THIS LINE
             'stalls.*.area' => 'nullable|numeric|min:0',
+            'effectivityDate' => 'nullable|date',
+            'effectiveToday' => 'nullable|boolean',
         ]);
 
-        DB::transaction(function () use ($validatedData) {
-            $announcementService = new AnnouncementService();
+        // First, detect changes
+        $changes = [];
+        foreach ($validatedData['stalls'] as $stallData) {
+            $stall = Stall::with('section')->find($stallData['id']);
+            if (!$stall) continue;
+
+            $oldDailyRate = (float) $stall->daily_rate;
+            $oldMonthlyRate = (float) $stall->monthly_rate;
+            $newDailyRate = (float) $stallData['dailyRate'];
+            $newMonthlyRate = isset($stallData['monthlyRate']) ? (float) $stallData['monthlyRate'] : ($newDailyRate * 30);
+            
+            $epsilon = 0.01;
+            $dailyRateChanged = abs($oldDailyRate - $newDailyRate) > $epsilon;
+            $monthlyRateChanged = abs($oldMonthlyRate - $newMonthlyRate) > $epsilon;
+
+            if ($dailyRateChanged || $monthlyRateChanged) {
+                $changes[] = [
+                    'stall_id' => $stall->id,
+                    'table_number' => $stall->table_number,
+                    'old_daily_rate' => $oldDailyRate,
+                    'new_daily_rate' => $newDailyRate,
+                    'old_monthly_rate' => $oldMonthlyRate,
+                    'new_monthly_rate' => $newMonthlyRate,
+                ];
+            }
+        }
+
+        if (empty($changes)) {
+            return response()->json(['message' => 'No changes detected.']);
+        }
+
+        // Check if we need to show modal
+        $effectiveToday = $request->input('effectiveToday');
+        
+        if ($effectiveToday === null) {
+            // Return change info for modal
+            return response()->json([
+                'changeDetected' => true,
+                'changeType' => 'rental_rate_batch',
+                'changeData' => $changes,
+                'requiresConfirmation' => true,
+            ]);
+        }
+
+        DB::transaction(function () use ($validatedData, $effectiveToday, $notificationService) {
+            // Default to 1st of next month since bills are generated monthly on the 1st
+            $effectivityDate = isset($validatedData['effectivityDate']) && $validatedData['effectivityDate']
+                ? \Carbon\Carbon::parse($validatedData['effectivityDate'])->format('Y-m-d')
+                : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
             $auditDetails = [
                 'count' => count($validatedData['stalls']),
+                'effectivity_date' => $effectivityDate,
                 'changes' => []
             ];
             
@@ -162,41 +212,22 @@ class RentalRateController extends Controller
                             'new_daily_rate' => $newDailyRate,
                             'old_monthly_rate' => $oldMonthlyRate,
                             'new_monthly_rate' => $newMonthlyRate,
+                            'effectivity_date' => $effectivityDate,
                         ];
                     }
                     
                     if ($dailyRateChanged || $monthlyRateChanged) {
-                        try {
-                            \Illuminate\Support\Facades\Log::info('Creating rental rate change announcement', [
-                                'stall_id' => $stall->id,
-                                'table_number' => $stall->table_number,
-                                'old_daily' => $oldDailyRate,
-                                'new_daily' => $newDailyRate,
-                                'old_monthly' => $oldMonthlyRate,
-                                'new_monthly' => $newMonthlyRate,
-                            ]);
-                            
-                            $announcement = $announcementService->createRentalRateChangeAnnouncement(
+                        // Send SMS if effective today (run in background)
+                        if ($effectiveToday) {
+                            register_shutdown_function(function() use ($notificationService, $stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate) {
+                                $notificationService->sendRentalRateChangeNotification(
                                 $stall,
                                 $oldDailyRate,
                                 $newDailyRate,
                                 $oldMonthlyRate,
                                 $newMonthlyRate
                             );
-                            
-                            if ($announcement) {
-                                \Illuminate\Support\Facades\Log::info('Rental rate change announcement created successfully', [
-                                    'announcement_id' => $announcement->id,
-                                    'stall_id' => $stall->id,
-                                ]);
-                            }
-                        } catch (\Exception $e) {
-                            // Log error but don't fail the transaction
-                            \Illuminate\Support\Facades\Log::error('Failed to create rental rate change announcement', [
-                                'stall_id' => $stall->id,
-                                'error' => $e->getMessage(),
-                                'trace' => $e->getTraceAsString(),
-                            ]);
+                            });
                         }
                     } else {
                         \Illuminate\Support\Facades\Log::debug('No rate change detected for stall', [
@@ -221,22 +252,31 @@ class RentalRateController extends Controller
             }
         });
 
-        return response()->json(['message' => 'Rates updated successfully!']);
+        if ($effectiveToday) {
+            return response()->json(['message' => 'Rental rates updated and notifications sent!']);
+        } else {
+            return response()->json([
+                'message' => 'Please adjust effectivity date in Effectivity Date Management',
+                'redirect' => true,
+                'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+            ]);
+        }
     }
 
 
     /**
      * Update a specific stall's rental rate.
      */
-    public function update(Request $request, $stall)
+    public function update(Request $request, $stall, ChangeNotificationService $notificationService)
     {
         $validatedData = $request->validate([
             'tableNumber' => 'sometimes|string',
             'dailyRate' => 'sometimes|numeric|min:0',
             'area' => 'sometimes|numeric|min:0',
+            'effectivityDate' => 'nullable|date',
+            'effectiveToday' => 'nullable|boolean',
         ]);
 
-        DB::transaction(function () use ($validatedData, $stall) {
             $stallModel = Stall::with('section')->find($stall);
             
             if (!$stallModel) {
@@ -246,29 +286,65 @@ class RentalRateController extends Controller
             $oldDailyRate = (float) $stallModel->daily_rate;
             $oldMonthlyRate = (float) $stallModel->monthly_rate;
             
+        // Check if rate will change
+        $newDailyRate = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
+        $rateChanged = $oldDailyRate !== $newDailyRate;
+
+        if (!$rateChanged && !isset($validatedData['tableNumber']) && !isset($validatedData['area'])) {
+            // No change, just update if other fields changed
+            $stallModel->update(array_filter($validatedData));
+            return response()->json(['message' => 'Rental rate updated successfully!']);
+        }
+
+        // Rate changed - check if we need to show modal
+        $effectiveToday = $request->input('effectiveToday');
+        
+        if ($rateChanged && $effectiveToday === null) {
+            // Return change info for modal
+            $stallModel->refresh();
+            $newMonthlyRate = (float) $stallModel->monthly_rate;
+            return response()->json([
+                'changeDetected' => true,
+                'changeType' => 'rental_rate',
+                'changeData' => [
+                    'stall_id' => $stallModel->id,
+                    'table_number' => $stallModel->table_number,
+                    'old_daily_rate' => $oldDailyRate,
+                    'new_daily_rate' => $newDailyRate,
+                    'old_monthly_rate' => $oldMonthlyRate,
+                    'new_monthly_rate' => $newMonthlyRate,
+                ],
+                'requiresConfirmation' => true,
+            ]);
+        }
+
+        // Process based on effectiveToday
+        DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService) {
             $stallModel->update(array_filter($validatedData));
             $stallModel->refresh();
             
-            $newDailyRate = (float) $stallModel->daily_rate;
             $newMonthlyRate = (float) $stallModel->monthly_rate;
             
-            // Create draft announcement if rates changed
-            if ($oldDailyRate !== $newDailyRate || $oldMonthlyRate !== $newMonthlyRate) {
-                try {
-                    $announcementService = new AnnouncementService();
-                    $announcementService->createRentalRateChangeAnnouncement(
+            if ($effectiveToday) {
+                // Effective today - update immediately, send SMS
+                $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
+                
+                // Send SMS notification and regenerate bills in background
+                register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate) {
+                    $notificationService->sendRentalRateChangeNotification(
                         $stallModel,
                         $oldDailyRate,
                         $newDailyRate,
                         $oldMonthlyRate,
                         $newMonthlyRate
                     );
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Failed to create rental rate change announcement: ' . $e->getMessage());
-                }
+                });
+            } else {
+                // Not effective today - save with default future date
+                $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
             }
             
-            // Store audit details with old/new values
+            // Store audit details
             $auditDetails = [
                 'stall_id' => $stallModel->id,
                 'table_number' => $stallModel->table_number,
@@ -277,6 +353,7 @@ class RentalRateController extends Controller
                 'new_daily_rate' => $newDailyRate,
                 'old_monthly_rate' => $oldMonthlyRate,
                 'new_monthly_rate' => $newMonthlyRate,
+                'effectivity_date' => $effectivityDate,
             ];
             
             AuditLogger::log(
@@ -287,7 +364,15 @@ class RentalRateController extends Controller
             );
         });
 
-        return response()->json(['message' => 'Rental rate updated successfully!']);
+        if ($effectiveToday) {
+            return response()->json(['message' => 'Rental rate updated and notifications sent!']);
+        } else {
+            return response()->json([
+                'message' => 'Please adjust effectivity date in Effectivity Date Management',
+                'redirect' => true,
+                'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+            ]);
+        }
     }
 
     /**
@@ -417,6 +502,7 @@ class RentalRateController extends Controller
                         'new_daily_rate' => isset($change['new_daily_rate']) ? (float) $change['new_daily_rate'] : null,
                         'old_monthly_rate' => isset($change['old_monthly_rate']) ? (float) $change['old_monthly_rate'] : null,
                         'new_monthly_rate' => isset($change['new_monthly_rate']) ? (float) $change['new_monthly_rate'] : null,
+                        'effectivity_date' => $change['effectivity_date'] ?? $details['effectivity_date'] ?? null,
                         'changed_at' => (new \DateTime($item->changed_at))->format(\DateTime::ATOM),
                     ]);
                 }
@@ -457,6 +543,7 @@ class RentalRateController extends Controller
                         'new_daily_rate' => $newDailyRate,
                         'old_monthly_rate' => $oldMonthlyRate,
                         'new_monthly_rate' => $newMonthlyRate,
+                        'effectivity_date' => $details['effectivity_date'] ?? null,
                         'changed_at' => (new \DateTime($item->changed_at))->format(\DateTime::ATOM),
                     ]);
                 } else {

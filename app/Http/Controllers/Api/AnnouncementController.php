@@ -17,6 +17,38 @@ class AnnouncementController extends Controller
         return Announcement::latest()->get();
     }
 
+    public function show(Announcement $announcement)
+    {
+        return response()->json($announcement);
+    }
+
+    /**
+     * Get vendors list for announcement recipient selection
+     */
+    public function getVendorsForSelection()
+    {
+        $vendors = User::select('users.id', 'users.name')
+            ->with(['stall:id,vendor_id,table_number', 'stall.section:id,name'])
+            ->whereHas('role', function ($query) {
+                $query->where('name', 'Vendor');
+            })
+            ->whereHas('stall') // Only vendors with assigned stalls
+            ->active()
+            ->get()
+            ->map(function ($vendor) {
+                return [
+                    'id' => $vendor->id,
+                    'name' => $vendor->name,
+                    'stall_number' => optional($vendor->stall)->table_number ?? 'N/A',
+                    'section' => optional(optional($vendor->stall)->section)->name ?? 'Unassigned',
+                ];
+            })
+            ->sortBy('name')
+            ->values();
+
+        return response()->json($vendors);
+    }
+
     public function active(Request $request)
     {
         // Get all active announcements
@@ -187,8 +219,11 @@ class AnnouncementController extends Controller
             'is_active' => 'boolean',
             'recipients' => 'nullable|array',
             'recipients.staff' => 'boolean',
+            'recipients.meter_reader_clerk' => 'boolean',
             'recipients.all_sections' => 'boolean',
             'recipients.sections' => 'nullable|array',
+            'recipients.vendor_ids' => 'nullable|array',
+            'recipients.vendor_ids.*' => 'integer|exists:users,id',
         ]);
 
         $announcement = Announcement::create($validated);
@@ -210,14 +245,18 @@ class AnnouncementController extends Controller
             'is_active' => 'boolean',
             'recipients' => 'nullable|array',
             'recipients.staff' => 'boolean',
+            'recipients.meter_reader_clerk' => 'boolean',
             'recipients.all_sections' => 'boolean',
             'recipients.sections' => 'nullable|array',
+            'recipients.vendor_ids' => 'nullable|array',
+            'recipients.vendor_ids.*' => 'integer|exists:users,id',
         ]);
 
         $wasActive = $announcement->is_active;
         $announcement->update($validated);
 
         // Send SMS and create in-app notifications if announcement was just activated
+        // When is_active changes from false to true, send notifications and SMS
         if ($announcement->is_active && !$wasActive) {
             $this->sendAnnouncementSms($announcement, $smsService);
             $this->createAnnouncementNotifications($announcement);
@@ -242,31 +281,83 @@ class AnnouncementController extends Controller
             $recipients = collect();
             $recipientSettings = $announcement->recipients ?? [];
 
-            // Get vendors based on recipient settings
+            // Log for debugging template announcements
+            Log::info("Sending SMS for announcement", [
+                'announcement_id' => $announcement->id,
+                'announcement_type' => $announcement->announcement_type,
+                'related_utility' => $announcement->related_utility,
+                'has_recipient_settings' => !empty($recipientSettings),
+                'recipient_settings' => $recipientSettings
+            ]);
+
+            // Get specific vendors if selected
+            if (!empty($recipientSettings['vendor_ids']) && is_array($recipientSettings['vendor_ids'])) {
+                $specificVendors = User::vendors()
+                    ->active()
+                    ->whereNotNull('contact_number')
+                    ->whereIn('id', $recipientSettings['vendor_ids'])
+                    ->get();
+                $recipients = $recipients->merge($specificVendors);
+            }
+
+            // Get vendors based on section settings (only if specific vendors not selected or in addition to them)
             if (!empty($recipientSettings['all_sections']) || !empty($recipientSettings['sections'])) {
                 $vendorsQuery = User::vendors()
                     ->active()
                     ->whereNotNull('contact_number');
 
+                // Exclude specific vendors if they were already added
+                if (!empty($recipientSettings['vendor_ids']) && is_array($recipientSettings['vendor_ids'])) {
+                    $vendorsQuery->whereNotIn('id', $recipientSettings['vendor_ids']);
+                }
+
                 // If "All Sections" is selected, get all vendors
                 // Otherwise, filter by specific sections
                 if (empty($recipientSettings['all_sections']) && !empty($recipientSettings['sections']) && is_array($recipientSettings['sections'])) {
-                    $vendorsQuery->whereHas('section', function($query) use ($recipientSettings) {
+                    Log::info("Filtering vendors by sections", [
+                        'sections' => $recipientSettings['sections'],
+                        'announcement_id' => $announcement->id
+                    ]);
+                    
+                    // Use stall.section relationship since vendors are related to sections through stalls
+                    $vendorsQuery->whereHas('stall.section', function($query) use ($recipientSettings) {
                         $query->whereIn('name', $recipientSettings['sections']);
                     });
                 }
 
                 $vendors = $vendorsQuery->get();
+                Log::info("Found vendors for selected sections", [
+                    'vendor_count' => $vendors->count(),
+                    'sections' => $recipientSettings['sections'] ?? 'all_sections',
+                    'announcement_id' => $announcement->id
+                ]);
+                
                 $recipients = $recipients->merge($vendors);
             }
 
-            // Legacy support: if no recipients specified, use old logic
-            if ($recipients->isEmpty() && empty($recipientSettings)) {
+            // Legacy support: if no recipients specified, use old logic based on announcement type
+            // This handles template-generated announcements that don't have recipients set
+            $hasAnyRecipientSettings = !empty($recipientSettings) && (
+                !empty($recipientSettings['vendor_ids']) ||
+                !empty($recipientSettings['all_sections']) ||
+                !empty($recipientSettings['sections']) ||
+                !empty($recipientSettings['staff']) ||
+                !empty($recipientSettings['meter_reader_clerk'])
+            );
+            
+            if ($recipients->isEmpty() && !$hasAnyRecipientSettings) {
+                Log::info("Using legacy recipient logic for template announcement", [
+                    'announcement_id' => $announcement->id,
+                    'related_utility' => $announcement->related_utility,
+                    'related_stall_id' => $announcement->related_stall_id
+                ]);
+                
                 // For rent announcements, only send to the specific vendor who owns the stall
                 if ($announcement->related_utility === 'Rent' && $announcement->related_stall_id) {
                     $stall = \App\Models\Stall::with('vendor')->find($announcement->related_stall_id);
                     if ($stall && $stall->vendor && $stall->vendor->contact_number) {
                         $recipients = collect([$stall->vendor]);
+                        Log::info("Found rental announcement vendor", ['vendor_id' => $stall->vendor->id]);
                     }
                 } else {
                     // Get all vendors with contact numbers
@@ -277,25 +368,41 @@ class AnnouncementController extends Controller
                     // Filter vendors by section if this is a water-related announcement
                     if ($announcement->related_utility === 'Water') {
                         // Only send to vendors in Wet Section (exclude Dry Section, Semi-Wet, Semi-Dry, Dry Goods)
-                        $vendorsQuery->whereHas('section', function($query) {
+                        $vendorsQuery->whereHas('stall.section', function($query) {
                             $query->whereIn('name', ['Wet Section', 'Wet']);
                         });
                     }
 
                     $recipients = $vendorsQuery->get();
+                    Log::info("Found vendors for legacy logic", [
+                        'utility' => $announcement->related_utility,
+                        'vendor_count' => $recipients->count()
+                    ]);
                 }
             }
 
-            // Add staff if selected
-            if (!empty($recipientSettings['staff']) || empty($recipientSettings)) {
+            // Add staff if selected OR if no recipients were specified (legacy behavior for template announcements)
+            if (!empty($recipientSettings['staff']) || !$hasAnyRecipientSettings) {
                 $staff = User::whereHas('role', function($query) {
-                    $query->whereIn('name', ['Staff', 'Meter Reader Clerk']);
+                    $query->where('name', 'Staff');
                 })
                 ->active()
                 ->whereNotNull('contact_number')
                 ->get();
 
                 $recipients = $recipients->merge($staff);
+            }
+
+            // Add Meter Reader Clerk if selected
+            if (!empty($recipientSettings['meter_reader_clerk'])) {
+                $meterReaderClerks = User::whereHas('role', function($query) {
+                    $query->where('name', 'Meter Reader Clerk');
+                })
+                ->active()
+                ->whereNotNull('contact_number')
+                ->get();
+
+                $recipients = $recipients->merge($meterReaderClerks);
             }
             
             Log::info("Sending announcement SMS to {$recipients->count()} recipients");
@@ -336,15 +443,30 @@ class AnnouncementController extends Controller
             $recipients = collect();
             $recipientSettings = $announcement->recipients ?? [];
 
-            // Get vendors based on recipient settings
+            // Get specific vendors if selected
+            if (!empty($recipientSettings['vendor_ids']) && is_array($recipientSettings['vendor_ids'])) {
+                $specificVendors = User::vendors()
+                    ->active()
+                    ->whereIn('id', $recipientSettings['vendor_ids'])
+                    ->get();
+                $recipients = $recipients->merge($specificVendors);
+            }
+
+            // Get vendors based on section settings (only if specific vendors not selected or in addition to them)
             if (!empty($recipientSettings['all_sections']) || !empty($recipientSettings['sections'])) {
                 $vendorsQuery = User::vendors()
                     ->active();
 
+                // Exclude specific vendors if they were already added
+                if (!empty($recipientSettings['vendor_ids']) && is_array($recipientSettings['vendor_ids'])) {
+                    $vendorsQuery->whereNotIn('id', $recipientSettings['vendor_ids']);
+                }
+
                 // If "All Sections" is selected, get all vendors
                 // Otherwise, filter by specific sections
                 if (empty($recipientSettings['all_sections']) && !empty($recipientSettings['sections']) && is_array($recipientSettings['sections'])) {
-                    $vendorsQuery->whereHas('section', function($query) use ($recipientSettings) {
+                    // Use stall.section relationship since vendors are related to sections through stalls
+                    $vendorsQuery->whereHas('stall.section', function($query) use ($recipientSettings) {
                         $query->whereIn('name', $recipientSettings['sections']);
                     });
                 }
@@ -353,8 +475,17 @@ class AnnouncementController extends Controller
                 $recipients = $recipients->merge($vendors);
             }
 
-            // Legacy support: if no recipients specified, use old logic
-            if ($recipients->isEmpty() && empty($recipientSettings)) {
+            // Legacy support: if no recipients specified, use old logic based on announcement type
+            // This handles template-generated announcements that don't have recipients set
+            $hasRecipientSettings = !empty($recipientSettings) && (
+                !empty($recipientSettings['vendor_ids']) ||
+                !empty($recipientSettings['all_sections']) ||
+                !empty($recipientSettings['sections']) ||
+                !empty($recipientSettings['staff']) ||
+                !empty($recipientSettings['meter_reader_clerk'])
+            );
+            
+            if ($recipients->isEmpty() && !$hasRecipientSettings) {
                 // For rent announcements, only send to the specific vendor who owns the stall
                 if ($announcement->related_utility === 'Rent' && $announcement->related_stall_id) {
                     $stall = \App\Models\Stall::with('vendor')->find($announcement->related_stall_id);
@@ -369,7 +500,7 @@ class AnnouncementController extends Controller
                     // Filter vendors by section if this is a water-related announcement
                     if ($announcement->related_utility === 'Water') {
                         // Only send to vendors in Wet Section (exclude Dry Section, Semi-Wet, Semi-Dry, Dry Goods)
-                        $vendorsQuery->whereHas('section', function($query) {
+                        $vendorsQuery->whereHas('stall.section', function($query) {
                             $query->whereIn('name', ['Wet Section', 'Wet']);
                         });
                     }
@@ -378,15 +509,26 @@ class AnnouncementController extends Controller
                 }
             }
 
-            // Add staff if selected
-            if (!empty($recipientSettings['staff']) || empty($recipientSettings)) {
+            // Add staff if selected OR if no recipients were specified (legacy behavior for template announcements)
+            if (!empty($recipientSettings['staff']) || !$hasRecipientSettings) {
                 $staff = User::whereHas('role', function($query) {
-                    $query->whereIn('name', ['Staff', 'Meter Reader Clerk']);
+                    $query->where('name', 'Staff');
                 })
                 ->active()
                 ->get();
 
                 $recipients = $recipients->merge($staff);
+            }
+
+            // Add Meter Reader Clerk if selected
+            if (!empty($recipientSettings['meter_reader_clerk'])) {
+                $meterReaderClerks = User::whereHas('role', function($query) {
+                    $query->where('name', 'Meter Reader Clerk');
+                })
+                ->active()
+                ->get();
+
+                $recipients = $recipients->merge($meterReaderClerks);
             }
             
             Log::info("Creating in-app notifications for announcement to {$recipients->count()} recipients");

@@ -129,6 +129,9 @@ class VendorController extends Controller
             return $periodDate->format('F Y');
         });
         
+        // Calculate total outstanding balance (sum of all unpaid bills' amount_after_due)
+        $totalOutstandingBalance = $outstandingBills->sum('amount_after_due');
+        
         // Cache utility rates (rarely changes)
         $utilityRates = cache()->remember('utility_rates', 3600, function () {
             return Rate::whereIn('utility_type', ['Electricity', 'Water'])
@@ -148,6 +151,7 @@ class VendorController extends Controller
             'vendor' => $vendor,
             'outstandingBills' => $outstandingBills,
             'groupedBills' => $groupedBills,
+            'totalOutstandingBalance' => $totalOutstandingBalance,
             'utilityRates' => $utilityRates,
             'stallData' => $stallData,
             'billingSettings' => $billingSettings,

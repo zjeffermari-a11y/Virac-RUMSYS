@@ -13,6 +13,32 @@
     </div>
 </div>
 
+{{-- Please be advised Banner --}}
+<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded-lg shadow-sm" role="alert">
+    <p class="font-bold">Please be advised:</p>
+    <p>Official bills for the new month are generated at 7:00 AM on the 1st day of the month. In case of inconsistencies or errors, please report them to Market Operations.</p>
+</div>
+
+{{-- Total Outstanding Balance Card --}}
+@php
+    $totalOutstandingBalance = 0;
+    foreach ($outstandingBills as $bill) {
+        $totalOutstandingBalance += $bill->display_amount_due ?? $bill->amount;
+    }
+@endphp
+@if ($outstandingBills->isNotEmpty())
+    <div class="bg-white border-2 p-6 rounded-2xl mb-8 shadow-lg" style="border-color: #E6E8EB;">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xl font-bold text-gray-800 mb-1">Total Outstanding Balance</p>
+            </div>
+            <div class="text-right">
+                <h3 class="text-3xl font-bold text-red-600">₱{{ number_format($totalOutstandingBalance, 2) }}</h3>
+            </div>
+        </div>
+    </div>
+@endif
+
 <div class="flex flex-col lg:flex-row gap-8">
     {{-- Unpaid Bills Section --}}
     <div class="w-full lg:w-2/3">
@@ -24,20 +50,34 @@
                         <tr class="table-header">
                             <th class="px-4 py-2 text-left">Category</th>
                             <th class="px-4 py-2 text-left">Period Covered</th>
-                            <th class="px-4 py-2 text-right">Amount</th>
+                            <th class="px-4 py-2 text-right">Amount Due</th>
                         </tr>
                     </thead>
                     <tbody>
                         @php $totalDue = 0; @endphp
                         @forelse ($outstandingBills as $bill)
+                            @php
+                                $amountDue = $bill->display_amount_due ?? $bill->amount;
+                                $totalDue += $amountDue;
+                            @endphp
                             <tr class="table-row">
                                 <td class="px-4 py-2">{{ $bill->utility_type }}</td>
                                 <td class="px-4 py-2">
                                     {{ \Carbon\Carbon::parse($bill->period_end)->format('F Y') }}
                                 </td>
-                                <td class="px-4 py-2 text-right">₱{{ number_format($bill->amount, 2) }}</td>
+                                <td class="px-4 py-2 text-right">
+                                    @if (($bill->penalty_applied ?? 0) > 0 || ($bill->discount_applied ?? 0) > 0)
+                                        <div class="flex flex-col items-end">
+                                            <span class="text-sm text-gray-500 line-through">₱{{ number_format($bill->original_amount, 2) }}</span>
+                                            <span class="font-semibold {{ ($bill->discount_applied ?? 0) > 0 ? 'text-green-600' : 'text-red-600' }}">
+                                                ₱{{ number_format($amountDue, 2) }}
+                                            </span>
+                                        </div>
+                                    @else
+                                        <span>₱{{ number_format($amountDue, 2) }}</span>
+                                    @endif
+                                </td>
                             </tr>
-                            @php $totalDue += $bill->amount; @endphp
                         @empty
                             <tr class="table-row">
                                 <td colspan="3" class="text-center py-8 text-gray-500">This vendor has no
@@ -76,7 +116,7 @@
                             Paid</label>
                         <input type="number" name="amount_paid" id="amount_paid" step="0.01"
                             class="w-full p-2 border border-gray-300 rounded-md"
-                            value="{{ number_format($totalDue, 2, '.', '') }}" required>
+                            value="{{ number_format($totalOutstandingBalance, 2, '.', '') }}" required>
                     </div>
                     <div class="mb-6">
                         <label for="payment_date" class="block text-sm font-medium text-gray-700 mb-2">Payment

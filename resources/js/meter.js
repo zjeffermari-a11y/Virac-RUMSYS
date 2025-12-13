@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
             meterReadings: window.meterReadings || [],
             editRequests: window.editRequestsData || [],
             notifications: [],
+            allNotifications: [], // For notifications page
             unreadCount: window.unreadNotificationsCount || 0,
             readingsSubmitted: false,
             currentlyEditingStallId: null,
@@ -364,6 +365,11 @@ document.addEventListener("DOMContentLoaded", () => {
             navigate(sectionId) {
                 window.location.hash = sectionId;
                 MeterApp.state.activeSection = sectionId;
+                
+                // Fetch notifications when notifications section is activated
+                if (sectionId === "notificationsSection") {
+                    MeterApp.methods.fetchAllNotifications();
+                }
             },
             openModal(modalId) {
                 const modal = MeterApp.elements[modalId];
@@ -665,6 +671,94 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 return "Just now";
             },
+
+            // Fetch all notifications for notifications page
+            async fetchAllNotifications() {
+                try {
+                    const response = await fetch("/notifications/fetch-all", {
+                        headers: {
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                        },
+                        credentials: "same-origin",
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch notifications");
+                    }
+
+                    const data = await response.json();
+                    MeterApp.state.allNotifications = data.notifications || [];
+                    MeterApp.state.unreadCount = data.unread_count || 0;
+
+                    // Render notifications if we're on the notifications section
+                    if (MeterApp.state.activeSection === "notificationsSection") {
+                        MeterApp.render.renderNotificationsList();
+                    }
+                } catch (error) {
+                    console.error("Error fetching all notifications:", error);
+                }
+            },
+
+            // Mark all notifications as read
+            async markAllAsRead() {
+                try {
+                    const response = await fetch("/notifications/mark-as-read", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "same-origin",
+                    });
+
+                    if (response.ok) {
+                        // Update local state
+                        MeterApp.state.allNotifications = MeterApp.state.allNotifications.map(n => ({
+                            ...n,
+                            read_at: n.read_at || new Date().toISOString()
+                        }));
+                        MeterApp.state.unreadCount = 0;
+                        MeterApp.render.renderNotificationsList();
+                        this.showNotification("All notifications marked as read", "success");
+                    }
+                } catch (error) {
+                    console.error("Error marking all as read:", error);
+                    this.showNotification("Failed to mark notifications as read", "error");
+                }
+            },
+
+            // Mark single notification as read
+            async markSingleNotificationAsRead(notificationId) {
+                try {
+                    const response = await fetch(`/notifications/${notificationId}/mark-as-read`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                .getAttribute("content"),
+                        },
+                        credentials: "same-origin",
+                    });
+
+                    if (response.ok) {
+                        // Update local state
+                        MeterApp.state.allNotifications = MeterApp.state.allNotifications.map(n => {
+                            if (n.id == notificationId) {
+                                return { ...n, read_at: new Date().toISOString() };
+                            }
+                            return n;
+                        });
+                        MeterApp.state.unreadCount = Math.max(0, MeterApp.state.unreadCount - 1);
+                        MeterApp.render.renderNotificationsList();
+                    }
+                } catch (error) {
+                    console.error("Error marking notification as read:", error);
+                }
+            },
         },
         render: {
             all() {
@@ -672,9 +766,114 @@ document.addEventListener("DOMContentLoaded", () => {
                 this.readingTable();
                 this.notificationTable(); // This is for the main "Edit Request" page table
                 this.notificationDropdown();
+                this.renderNotificationsList(); // Render notifications page
                 this.viewState();
                 this.navigation();
                 this.pagination();
+            },
+            
+            // Render notifications list for notifications page
+            renderNotificationsList() {
+                const list = document.getElementById("notificationsList");
+                const loader = document.getElementById("notificationsLoader");
+                const noMessage = document.getElementById("noNotificationsMessage");
+                const unreadBadge = document.getElementById("unreadCountBadge");
+                const unreadText = document.getElementById("unreadCountText");
+
+                if (!list || !loader || !noMessage) return;
+
+                // Only render if we're on the notifications section
+                if (MeterApp.state.activeSection !== "notificationsSection") {
+                    return;
+                }
+
+                const notifications = MeterApp.state.allNotifications || [];
+
+                if (notifications.length === 0) {
+                    loader.classList.add("hidden");
+                    list.classList.add("hidden");
+                    noMessage.classList.remove("hidden");
+                    if (unreadBadge) unreadBadge.classList.add("hidden");
+                    return;
+                }
+
+                loader.classList.add("hidden");
+                list.classList.remove("hidden");
+                noMessage.classList.add("hidden");
+
+                // Update unread badge
+                if (unreadBadge && MeterApp.state.unreadCount > 0) {
+                    unreadBadge.classList.remove("hidden");
+                    if (unreadText) unreadText.textContent = MeterApp.state.unreadCount;
+                } else if (unreadBadge) {
+                    unreadBadge.classList.add("hidden");
+                }
+
+                list.innerHTML = notifications.map((notification) => {
+                    const isUnread = !notification.read_at;
+                    const timeAgo = MeterApp.methods.formatTimeAgo(notification.created_at);
+                    const formattedDate = new Date(notification.created_at).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+
+                    // Parse message if it's JSON
+                    let messageText = notification.message || notification.title || "Notification";
+                    try {
+                        const parsed = JSON.parse(notification.message);
+                        messageText = parsed.text || parsed.message || notification.title || messageText;
+                    } catch (e) {
+                        // Not JSON, use as is
+                    }
+
+                    // Escape HTML
+                    const escapeHtml = (text) => {
+                        const div = document.createElement('div');
+                        div.textContent = text;
+                        return div.innerHTML;
+                    };
+
+                    const bgColor = isUnread ? 'bg-blue-50 border-blue-200' : 'bg-white';
+
+                    return `
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow ${bgColor}">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-start gap-3">
+                                        ${isUnread ? '<div class="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>' : '<div class="w-2 h-2 mr-3"></div>'}
+                                        <div class="flex-1">
+                                            <h3 class="font-semibold text-gray-800 mb-1">${escapeHtml(notification.title || 'Notification')}</h3>
+                                            <p class="text-sm text-gray-600 mb-2">${escapeHtml(messageText)}</p>
+                                            <div class="flex items-center gap-4 text-xs text-gray-500">
+                                                <span><i class="fas fa-clock mr-1"></i>${timeAgo}</span>
+                                                <span><i class="fas fa-calendar mr-1"></i>${formattedDate}</span>
+                                                ${notification.sender_name ? `<span><i class="fas fa-user mr-1"></i>From: ${escapeHtml(notification.sender_name)}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                ${isUnread ? `
+                                    <button class="mark-notification-read-btn ml-4 text-indigo-600 hover:text-indigo-800 transition-colors" 
+                                            data-id="${notification.id}" 
+                                            title="Mark as read">
+                                        <i class="fas fa-check-circle"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+
+                // Attach event listeners to mark as read buttons
+                list.querySelectorAll(".mark-notification-read-btn").forEach(btn => {
+                    btn.addEventListener("click", async (e) => {
+                        const notificationId = e.currentTarget.dataset.id;
+                        await MeterApp.methods.markSingleNotificationAsRead(notificationId);
+                    });
+                });
             },
             //--ARCHIVES READING RENDDR--//
             appendArchives(newReadings) {
@@ -1343,6 +1542,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 archiveSectionButtons: document.querySelectorAll(
                     "#archivesSection .section-nav-btn"
                 ),
+                markAllAsReadBtn: document.getElementById("markAllAsReadBtn"),
             };
 
             this.setupEventListeners();
@@ -1372,6 +1572,11 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 this.state.activeSection = "homeSection";
                 window.location.hash = "homeSection";
+            }
+
+            // Fetch all notifications if on notifications section
+            if (this.state.activeSection === "notificationsSection") {
+                this.methods.fetchAllNotifications();
             }
 
             const handler = {
@@ -1624,6 +1829,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 }
             });
+
+            // Mark all as read button
+            if (this.elements.markAllAsReadBtn) {
+                this.elements.markAllAsReadBtn.addEventListener("click", () => {
+                    MeterApp.methods.markAllAsRead();
+                });
+            }
 
             // Event listeners for all modal confirmation and cancel buttons
             document

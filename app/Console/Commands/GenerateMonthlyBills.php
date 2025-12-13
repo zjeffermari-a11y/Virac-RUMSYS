@@ -29,9 +29,13 @@ class GenerateMonthlyBills extends Command
         // FIX: Make sure we get the actual days in the utility month (e.g., 31 for August)
         $daysInUtilityMonth = $utilityPeriodEnd->day; // This gets the last day number = total days
 
-        // FIX: Explicitly get the daily rate (not monthly_rate)
-        $waterRate = Rate::where('utility_type', 'Water')->value('rate'); // This should be 5.00
-        $electricityRate = Rate::where('utility_type', 'Electricity')->value('rate');
+        // Get effective rates
+        // For utilities (water/electricity), check effectivity dates in:
+        // 1. The utility period (previous month) - for normal generation
+        // 2. The current month - if regenerating due to effectivity date change
+        // For rent, check effectivity dates in the current month
+        $waterRate = $this->getEffectiveRate('Water', $utilityPeriodStart, $utilityPeriodEnd, $rentPeriodStart, $rentPeriodEnd);
+        $electricityRate = $this->getEffectiveRate('Electricity', $utilityPeriodStart, $utilityPeriodEnd, $rentPeriodStart, $rentPeriodEnd);
         
         $schedules = DB::table('schedules')->get()->keyBy('schedule_type');
         $stalls = Stall::whereHas('vendor')->with('vendor', 'section')->get();
@@ -156,5 +160,56 @@ class GenerateMonthlyBills extends Command
         $key = "Disconnection - {$type}";
         $day = $schedules->get($key)->description ?? null;
         return is_numeric($day) ? $billingPeriod->copy()->day((int)$day)->toDateString() : null;
+    }
+
+    /**
+     * Get the effective rate for a utility type, checking for pending rate changes
+     * with effectivity dates in the specified period(s)
+     * 
+     * @param string $utilityType The utility type (Water, Electricity, Rent)
+     * @param Carbon $utilityPeriodStart Start of the utility period (previous month for water/electricity)
+     * @param Carbon $utilityPeriodEnd End of the utility period
+     * @param Carbon|null $currentMonthStart Start of current month (for rent or emergency regeneration)
+     * @param Carbon|null $currentMonthEnd End of current month
+     */
+    private function getEffectiveRate($utilityType, $utilityPeriodStart, $utilityPeriodEnd, $currentMonthStart = null, $currentMonthEnd = null)
+    {
+        $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn('rate_histories', 'effectivity_date');
+        
+        if ($hasEffectivityDate) {
+            // Check for rate changes effective in the utility period (normal case)
+            $pendingRateChange = DB::table('rate_histories as rh')
+                ->join('rates as r', 'rh.rate_id', '=', 'r.id')
+                ->where('r.utility_type', $utilityType)
+                ->whereNotNull('rh.effectivity_date')
+                ->where(function($query) use ($utilityPeriodStart, $utilityPeriodEnd, $currentMonthStart, $currentMonthEnd) {
+                    // Check utility period
+                    $query->where(function($q) use ($utilityPeriodStart, $utilityPeriodEnd) {
+                        $q->whereDate('rh.effectivity_date', '>=', $utilityPeriodStart)
+                          ->whereDate('rh.effectivity_date', '<=', $utilityPeriodEnd);
+                    });
+                    
+                    // Also check current month if provided (for emergency regeneration)
+                    if ($currentMonthStart && $currentMonthEnd) {
+                        $query->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
+                            $q->whereDate('rh.effectivity_date', '>=', $currentMonthStart)
+                              ->whereDate('rh.effectivity_date', '<=', $currentMonthEnd);
+                        });
+                    }
+                })
+                ->orderBy('rh.effectivity_date', 'asc')
+                ->orderBy('rh.changed_at', 'desc')
+                ->select('rh.new_rate')
+                ->first();
+            
+            if ($pendingRateChange) {
+                $this->info("Using pending rate change for {$utilityType}: ₱{$pendingRateChange->new_rate}");
+                return (float) $pendingRateChange->new_rate;
+            }
+        }
+        
+        // Otherwise, use the current rate from the rates table
+        $currentRate = Rate::where('utility_type', $utilityType)->value('rate');
+        return $currentRate ? (float) $currentRate : 0;
     }
 }

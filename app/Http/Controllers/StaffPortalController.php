@@ -44,7 +44,7 @@ class StaffPortalController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture' => $user->profile_picture_url,
+                    'profile_picture' => $user->profile_picture ? Storage::url($user->profile_picture) : null,
                 ];
             })
             ->sort(function ($a, $b) {
@@ -113,6 +113,55 @@ class StaffPortalController extends Controller
         $outstandingBills = $vendor->billings()
             ->where('status', 'unpaid')
             ->get();
+
+        // Get billing settings for penalty/interest calculations
+        $billingSettings = BillingSetting::all()->keyBy('utility_type');
+        $today = Carbon::today();
+
+        // Calculate actual outstanding balance for each bill (including penalties/interest)
+        foreach ($outstandingBills as $bill) {
+            $bill->original_amount = (float) $bill->amount;
+            $originalDueDate = Carbon::parse($bill->due_date);
+            $settings = $billingSettings->get($bill->utility_type);
+
+            // Initialize calculation properties
+            $bill->interest_months = 0;
+            $bill->discount_applied = 0;
+            $bill->penalty_applied = 0;
+            $bill->display_amount_due = $bill->original_amount;
+
+            if ($today->gt($originalDueDate)) {
+                // Bill is OVERDUE - calculate penalties/interest
+                if ($bill->utility_type === 'Rent' && $settings) {
+                    $interest_months = (int) floor($originalDueDate->floatDiffInMonths($today));
+                    $surcharge = $bill->original_amount * (float)($settings->surcharge_rate ?? 0);
+                    $interest = $bill->original_amount * (float)($settings->monthly_interest_rate ?? 0) * $interest_months;
+                    
+                    $bill->interest_months = $interest_months;
+                    $bill->penalty_applied = $surcharge + $interest;
+                    $bill->display_amount_due = $bill->original_amount + $surcharge + $interest;
+                } else if ($settings) {
+                    // For utilities (Water, Electricity)
+                    $penalty = $bill->original_amount * (float)($settings->penalty_rate ?? 0);
+                    $bill->penalty_applied = $penalty;
+                    $bill->display_amount_due = $bill->original_amount + $penalty;
+                }
+            } else {
+                // Bill is NOT YET OVERDUE
+                $bill->display_amount_due = $bill->original_amount;
+                
+                // Check for early payment discount for Rent
+                if ($today->day <= 15) {
+                    $billMonth = Carbon::parse($bill->period_start)->format('Y-m');
+                    $currentMonth = $today->format('Y-m');
+                    if ($billMonth === $currentMonth && $bill->utility_type === 'Rent' && $settings && (float)$settings->discount_rate > 0) {
+                        $discountAmount = $bill->original_amount * (float)$settings->discount_rate;
+                        $bill->display_amount_due = $bill->original_amount - $discountAmount;
+                        $bill->discount_applied = $discountAmount;
+                    }
+                }
+            }
+        }
 
         return view('staff_portal.partials.outstanding_bills', [
             'vendor' => $vendor,
@@ -307,10 +356,14 @@ class StaffPortalController extends Controller
             return $periodDate->format('F Y');
         });
 
+        // Calculate total outstanding balance (sum of all unpaid bills' amount_after_due)
+        $totalOutstandingBalance = $outstandingBills->sum('amount_after_due');
+
         return view('staff_portal.partials._view-as-vendor-partial', [
             'vendor' => $vendor,
             'groupedBills' => $groupedBills,
             'outstandingBills' => $outstandingBills,
+            'totalOutstandingBalance' => $totalOutstandingBalance,
             'billingSettings' => $billingSettings,
             'utilityRates' => $utilityRates,
         ]);

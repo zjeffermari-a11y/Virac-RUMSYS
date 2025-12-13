@@ -11,10 +11,8 @@ return new class extends Migration {
             $table->foreignId('role_id')->constrained('roles')->onDelete('cascade');
             $table->string('name');
             $table->string('username')->unique();
-            $table->string('email')->nullable()->unique(); // Ensuring email exists from start
             $table->string('password');
             $table->string('contact_number')->nullable();  
-            $table->longText('profile_picture')->nullable(); // Consolidated from later migrations
             $table->date('application_date')->nullable(); 
             $table->timestamps();
         });

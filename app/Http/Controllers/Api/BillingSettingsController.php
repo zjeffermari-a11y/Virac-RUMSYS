@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cache;
 use App\Models\AuditTrail;
 use App\Services\AuditLogger;
-use App\Services\AnnouncementService;
+use App\Services\ChangeNotificationService;
 
 class BillingSettingsController extends Controller
 {
@@ -28,7 +28,7 @@ class BillingSettingsController extends Controller
     /**
      * Update billing settings in a batch.
      */
-    public function update(Request $request)
+    public function update(Request $request, ChangeNotificationService $notificationService)
     {
         $validator = Validator::make($request->all(), [
             'settings' => 'required|array',
@@ -38,6 +38,8 @@ class BillingSettingsController extends Controller
             'settings.*.monthly_interest_rate' => 'sometimes|numeric|min:0|max:1',
             'settings.*.penalty_rate' => 'sometimes|numeric|min:0|max:1',
             'user_id' => 'required|integer|exists:users,id', // Add validation for user_id
+            'effectivityDate' => 'nullable|date',
+            'effectiveToday' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -45,61 +47,106 @@ class BillingSettingsController extends Controller
         }
 
         try {
+            // First, detect changes
+            $changes = [];
+            foreach ($request->settings as $settingData) {
+                $setting = BillingSetting::find($settingData['id']);
+                if (!$setting) continue;
+
+                $fieldsToCompare = [
+                    'discount_rate', 'surcharge_rate',
+                    'monthly_interest_rate', 'penalty_rate'
+                ];
+
+                foreach ($fieldsToCompare as $field) {
+                    if (isset($settingData[$field]) && $setting->$field != $settingData[$field]) {
+                        $changes[] = [
+                            'billing_setting_id' => $setting->id,
+                            'utility_type' => $setting->utility_type,
+                            'field_changed' => str_replace('_', ' ', ucwords($field, '_')),
+                            'old_value' => $setting->$field,
+                            'new_value' => $settingData[$field],
+                        ];
+                    }
+                }
+            }
+
+            if (empty($changes)) {
+                return response()->json(['message' => 'No changes detected.']);
+            }
+
+            // Check if we need to show modal
+            $effectiveToday = $request->input('effectiveToday');
+            
+            if ($effectiveToday === null) {
+                // Return change info for modal
+                return response()->json([
+                    'changeDetected' => true,
+                    'changeType' => 'billing_setting',
+                    'changeData' => $changes,
+                    'requiresConfirmation' => true,
+                ]);
+            }
+
+            // Process based on effectiveToday
             $user = Auth::user();
 
-            DB::transaction(function () use ($request, $user) {
+            DB::transaction(function () use ($request, $user, $effectiveToday, $notificationService, $changes) {
+                // Default to 1st of next month since bills are generated monthly on the 1st
+                $effectivityDate = $effectiveToday
+                    ? \Carbon\Carbon::now()->format('Y-m-d')
+                    : (isset($request->effectivityDate) && $request->effectivityDate
+                        ? \Carbon\Carbon::parse($request->effectivityDate)->format('Y-m-d')
+                        : \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d'));
+                
                 $allChanges = [];
                 foreach ($request->settings as $settingData) {
                     $setting = BillingSetting::find($settingData['id']);
                     if (!$setting) continue;
 
-                    $changes = [];
-                    // Define the fields we want to track for changes
+                    $settingChanges = [];
                     $fieldsToCompare = [
                         'discount_rate', 'surcharge_rate',
                         'monthly_interest_rate', 'penalty_rate'
                     ];
 
                     foreach ($fieldsToCompare as $field) {
-                        // Check if the field exists in the submitted data and is different from the DB value
                         if (isset($settingData[$field]) && $setting->$field != $settingData[$field]) {
                             $oldValue = $setting->$field;
                             $newValue = $settingData[$field];
                             
-                            $changes[] = [
+                            $settingChanges[] = [
                                 'billing_setting_id' => $setting->id,
-                                'changed_by' => $request->user_id, // Use user_id from the request
-                                'field_changed' => str_replace('_', ' ', ucwords($field, '_')), // Format for readability
-                                'old_value' => $oldValue * 100, // Store as percentage
-                                'new_value' => $newValue * 100, // Store as percentage
+                                'changed_by' => $request->user_id,
+                                'field_changed' => str_replace('_', ' ', ucwords($field, '_')),
+                                'old_value' => $oldValue * 100,
+                                'new_value' => $newValue * 100,
                                 'changed_at' => now(),
+                                'effectivity_date' => $effectivityDate,
                             ];
                             $setting->$field = $newValue;
 
-                            // Create draft announcement for billing setting change
-                            try {
-                                $announcementService = new AnnouncementService();
-                                $announcementService->createBillingSettingChangeAnnouncement(
+                            // Send SMS if effective today (run in background)
+                            if ($effectiveToday) {
+                                register_shutdown_function(function() use ($notificationService, $setting, $field, $oldValue, $newValue) {
+                                    $notificationService->sendBillingSettingChangeNotification(
                                     $setting->utility_type,
                                     $field,
                                     $oldValue,
                                     $newValue
                                 );
-                            } catch (\Exception $e) {
-                                // Log error but don't fail the transaction
-                                \Illuminate\Support\Facades\Log::error('Failed to create billing setting change announcement: ' . $e->getMessage());
+                                });
                             }
                         }
                     }
 
-                    if (!empty($changes)) {
+                    if (!empty($settingChanges)) {
                         $setting->save();
-                        DB::table('billing_setting_histories')->insert($changes);
-                        $allChanges = array_merge($allChanges, $changes);
+                        DB::table('billing_setting_histories')->insert($settingChanges);
+                        $allChanges = array_merge($allChanges, $settingChanges);
                     }
                 }
                 
-                // Clear cache when settings are updated
                 Cache::forget('billing_settings');
 
                 if (!empty($allChanges)) {
@@ -107,13 +154,22 @@ class BillingSettingsController extends Controller
                         'Updated Billing Settings',
                         'Billing Settings',
                         'Success',
-                        ['changes' => $allChanges]
+                        ['changes' => $allChanges, 'effectivity_date' => $effectivityDate]
                     );
                 }
             });
 
             Cache::forget('billing_settings');
 
+            if ($effectiveToday) {
+                return response()->json(['message' => 'Billing settings updated and notifications sent!']);
+            } else {
+                return response()->json([
+                    'message' => 'Please adjust effectivity date in Effectivity Date Management',
+                    'redirect' => true,
+                    'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                ]);
+            }
         } catch (\Exception $e) {
             return response()->json(['message' => 'An error occurred while updating settings.', 'error' => $e->getMessage()], 500);
         }
@@ -126,28 +182,38 @@ class BillingSettingsController extends Controller
      */
     public function history()
     {
-        $history = DB::table('billing_setting_histories as bsh')
-            ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
-            ->join('users', 'bsh.changed_by', '=', 'users.id')
-            ->select(
+        // Check if effectivity_date column exists
+        $hasEffectivityDate = DB::getSchemaBuilder()->hasColumn('billing_setting_histories', 'effectivity_date');
+        
+        $selectFields = [
                 'bs.utility_type',
                 'bsh.field_changed',
                 'bsh.old_value',
                 'bsh.new_value',
                 'bsh.changed_at'
-            )
+        ];
+        
+        if ($hasEffectivityDate) {
+            $selectFields[] = 'bsh.effectivity_date';
+        }
+        
+        $history = DB::table('billing_setting_histories as bsh')
+            ->join('billing_settings as bs', 'bsh.billing_setting_id', '=', 'bs.id')
+            ->join('users', 'bsh.changed_by', '=', 'users.id')
+            ->select($selectFields)
             ->orderBy('bsh.changed_at', 'desc')
             ->paginate(20);
 
-        return response()->json($history);
-    }
+        // Format dates
+        $history->getCollection()->transform(function ($item) use ($hasEffectivityDate) {
+            if ($hasEffectivityDate && isset($item->effectivity_date) && $item->effectivity_date) {
+                $item->effectivity_date = (new \DateTime($item->effectivity_date))->format('Y-m-d');
+            } else {
+                $item->effectivity_date = null;
+            }
+            return $item;
+        });
 
-    /**
-     * Get Semaphore credit balance.
-     */
-    public function getCredits(\App\Services\SemaphoreService $semaphoreService)
-    {
-        $credits = $semaphoreService->checkBalance();
-        return response()->json(['credits' => $credits ?? 'N/A']);
+        return response()->json($history);
     }
 }

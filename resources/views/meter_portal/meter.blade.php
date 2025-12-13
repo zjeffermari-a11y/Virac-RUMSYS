@@ -40,10 +40,15 @@
             <i class="fas fa-bolt"></i>
             <span>Electricity Meter Reading</span>
         </a>
-        <a href="#notificationSection" data-section="notificationSection"
+        <a href="#notificationsSection" data-section="notificationsSection"
             class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer flex items-center space-x-3">
             <i class="fas fa-bell"></i>
-            <span>Edit Request</span>
+            <span>Notifications</span>
+        </a>
+        <a href="#notificationSection" data-section="notificationSection"
+            class="nav-link text-black font-medium rounded-xl p-3 mb-2 hover:bg-gradient-to-r hover:from-[#9466ff] hover:to-[#4f46e5] cursor-pointer flex items-center space-x-3">
+            <i class="fas fa-edit"></i>
+            <span>Edit Requests</span>
         </a>
         {{-- This is the new link for the archives page --}}
         <a href="#archivesSection" data-section="archivesSection"
@@ -198,6 +203,37 @@
                 </button>
             </div>
             <div id="paginationContainer" class="mt-6 flex flex-wrap justify-center items-center gap-2"></div>
+        </div>
+    </div>
+
+    <div id="notificationsSection" class="dashboard-section">
+        @include('layouts.partials.content-header', ['title' => 'Notifications'])
+
+        <div class="card-table p-4 md:p-6 rounded-2xl shadow-soft">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+                <div class="flex items-center gap-4">
+                    <button id="markAllAsReadBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg transition-smooth flex items-center gap-2">
+                        <i class="fas fa-check-double"></i>
+                        <span>Mark All as Read</span>
+                    </button>
+                    <span id="unreadCountBadge" class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hidden">
+                        <span id="unreadCountText">0</span> unread
+                    </span>
+                </div>
+            </div>
+
+            <div id="notificationsLoader" class="text-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin mr-2"></i>Loading notifications...
+            </div>
+
+            <div id="notificationsList" class="space-y-3 hidden">
+                {{-- Notifications will be populated by JavaScript --}}
+            </div>
+
+            <div id="noNotificationsMessage" class="text-center py-8 text-gray-500 hidden">
+                <i class="fas fa-bell-slash text-4xl mb-4 text-gray-400"></i>
+                <p class="text-lg">You have no notifications.</p>
+            </div>
         </div>
     </div>
 
@@ -375,7 +411,7 @@
                     <div class="relative inline-block">
                         <div id="profilePictureContainer" class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mx-auto mb-4 border-4 border-market-primary shadow-lg">
                             @if(auth()->user()->profile_picture)
-                                <img id="profilePictureImg" src="{{ auth()->user()->profile_picture_url }}" 
+                                <img id="profilePictureImg" src="{{ Storage::url(auth()->user()->profile_picture) }}" 
                                      alt="Profile Picture" class="w-full h-full object-cover">
                             @else
                                 <div id="profilePicturePlaceholder" class="w-full h-full flex items-center justify-center">

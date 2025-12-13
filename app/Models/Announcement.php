@@ -18,6 +18,7 @@ class Announcement extends Model
         'related_utility',
         'related_stall_id',
         'recipients',
+        'effectivity_date',
     ];
 
     protected $casts = [

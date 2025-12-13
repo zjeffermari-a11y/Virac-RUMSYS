@@ -48,7 +48,7 @@ class StaffController extends Controller
                     'stallNumber' => optional($user->stall)->table_number ?? 'N/A',
                     'daily_rate' => optional($user->stall)->daily_rate,
                     'area' => optional($user->stall)->area,
-                    'profile_picture' => $user->profile_picture_url,
+                    'profile_picture' => $user->profile_picture ? Storage::url($user->profile_picture) : null,
                 ];
             });
     
@@ -738,8 +738,7 @@ class StaffController extends Controller
      * Upload profile picture for a vendor (staff only)
      */
     public function uploadVendorProfilePicture(Request $request, $vendorId)
-{
-    try {
+    {
         $vendor = User::with('role')->findOrFail($vendorId);
         
         // Ensure the user is a vendor
@@ -748,255 +747,89 @@ class StaffController extends Controller
                 'user_id' => $vendorId,
                 'role' => $vendor->role ? $vendor->role->name : 'No role'
             ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'User is not a vendor.'
-            ], 403);
+            return response()->json(['message' => 'User is not a vendor.'], 403);
         }
 
-        // Validate the upload
-        $request->validate([
-            'profile_picture' => [
-                'required',
-                'image',
-                'mimes:jpeg,png,jpg,gif,webp',
-                'max:5120' // 5MB
-            ]
+        $validated = $request->validate([
+            'profile_picture' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', // 2MB max
         ], [
             'profile_picture.required' => 'Please select an image to upload.',
             'profile_picture.image' => 'The file must be an image.',
-            'profile_picture.mimes' => 'The image must be a jpeg, png, jpg, gif, or webp file.',
-            'profile_picture.max' => 'The image must not be larger than 5MB.',
+            'profile_picture.mimes' => 'The image must be a jpeg, png, jpg, or gif file.',
+            'profile_picture.max' => 'The image must not be larger than 2MB.',
         ]);
 
-        Log::info('Starting vendor profile picture upload', [
-            'vendor_id' => $vendorId,
-            'vendor_name' => $vendor->name,
-            'file_size' => $request->file('profile_picture')->getSize(),
-            'file_mime' => $request->file('profile_picture')->getMimeType(),
-        ]);
-
-        // Delete old profile picture if exists
-        if ($vendor->profile_picture) {
-            try {
-                Storage::disk('b2')->delete($vendor->profile_picture);
-                Log::info('Old vendor profile picture deleted', [
-                    'vendor_id' => $vendorId,
-                    'old_path' => $vendor->profile_picture
-                ]);
-            } catch (\Exception $e) {
-                Log::warning('Could not delete old vendor profile picture', [
-                    'vendor_id' => $vendorId,
-                    'path' => $vendor->profile_picture,
-                    'error' => $e->getMessage()
-                ]);
+        try {
+            // Delete old profile picture if exists
+            if ($vendor->profile_picture) {
+                Storage::disk('public')->delete($vendor->profile_picture);
             }
-        }
 
-        // Get the uploaded file
-        $file = $request->file('profile_picture');
-        
-        // Generate a unique filename
-        $extension = $file->getClientOriginalExtension();
-        $filename = sprintf(
-            'vendor_%s_%s.%s',
-            $vendorId,
-            time() . '_' . \Illuminate\Support\Str::random(8),
-            $extension
-        );
-        
-        Log::info('Uploading vendor file to B2', [
-            'filename' => $filename,
-            'size' => $file->getSize(),
-            'mime_type' => $file->getMimeType()
-        ]);
-        
-        // Upload to B2 (vendors/profile-pictures folder)
-        $path = Storage::disk('b2')->putFileAs(
-            'vendors/profile-pictures',
-            $file,
-            $filename
-        );
-        
-        if (!$path) {
-            throw new \Exception('Failed to upload file to B2 storage');
+            // Store the image
+            $image = $request->file('profile_picture');
+            $filename = 'profile_' . $vendor->id . '_' . time() . '.' . $image->getClientOriginalExtension();
+            $path = $image->storeAs('profile-pictures', $filename, 'public');
+
+            // Update vendor record
+            $vendor->profile_picture = $path;
+            $vendor->save();
+
+            AuditLogger::log(
+                'Uploaded Vendor Profile Picture',
+                'Vendor Management',
+                'Success',
+                ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
+            );
+
+            // Generate absolute URL for the profile picture
+            $url = Storage::disk('public')->url($path);
+            // Ensure it's an absolute URL
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                $url = asset($url);
+            }
+            
+            return response()->json([
+                'message' => 'Vendor profile picture uploaded successfully.',
+                'profile_picture_url' => $url
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Vendor profile picture upload failed: ' . $e->getMessage(), [
+                'vendor_id' => $vendorId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Failed to upload vendor profile picture: ' . $e->getMessage()
+            ], 500);
         }
-        
-        Log::info('Vendor file uploaded to B2 successfully', [
-            'path' => $path
-        ]);
-        
-        // Verify file exists
-        $exists = Storage::disk('b2')->exists($path);
-        if (!$exists) {
-            throw new \Exception('File upload verification failed - file does not exist on B2');
-        }
-        
-        // Update vendor record in database
-        $vendor->profile_picture = $path;
-        $vendor->save();
-        
-        // Get the public URL from B2 (not temporary URL)
-        $url = Storage::disk('b2')->temporaryUrl($path, now()->addDays(7));
-        
-        Log::info('Vendor profile picture uploaded successfully', [
-            'vendor_id' => $vendorId,
-            'path' => $path,
-            'url' => $url,
-            'size' => $file->getSize()
-        ]);
-        
-        // Log audit trail
-        AuditLogger::log(
-            'Uploaded Vendor Profile Picture',
-            'Vendor Management',
-            'Success',
-            [
-                'vendor_id' => $vendor->id,
-                'vendor_name' => $vendor->name,
-                'staff_id' => Auth::id(),
-                'path' => $path
-            ]
-        );
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Vendor profile picture uploaded successfully',
-            'data' => [
-                'path' => $path,
-                'url' => $url,
-                'vendor' => [
-                    'id' => $vendor->id,
-                    'name' => $vendor->name,
-                    'profile_picture' => $path,
-                    'profile_picture_url' => $url
-                ]
-            ],
-            'profile_picture_url' => $url // Also at root level for easier access
-        ], 200);
-        
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        Log::warning('Validation failed for vendor profile picture upload', [
-            'vendor_id' => $vendorId,
-            'errors' => $e->errors()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $e->errors()
-        ], 422);
-        
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-        Log::error('Vendor not found', ['vendor_id' => $vendorId]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Vendor not found'
-        ], 404);
-        
-    } catch (\Exception $e) {
-        Log::error('Vendor profile picture upload error', [
-            'vendor_id' => $vendorId ?? null,
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to upload vendor profile picture',
-            'error' => config('app.debug') ? $e->getMessage() : 'An error occurred during upload'
-        ], 500);
     }
-}
 
     /**
      * Remove profile picture for a vendor (staff only)
      */
-   public function removeVendorProfilePicture(Request $request, $vendorId)
-{
-    try {
-        $vendor = User::with('role')->findOrFail($vendorId);
+    public function removeVendorProfilePicture(Request $request, $vendorId)
+    {
+        $vendor = User::findOrFail($vendorId);
         
         // Ensure the user is a vendor
         if (!$vendor->role || $vendor->role->name !== 'Vendor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'User is not a vendor.'
-            ], 403);
+            return response()->json(['message' => 'User is not a vendor.'], 403);
         }
         
         if ($vendor->profile_picture) {
-            // Delete from B2 (not 'public' disk)
-            try {
-                Storage::disk('b2')->delete($vendor->profile_picture);
-                Log::info('Vendor profile picture file deleted from B2', [
-                    'vendor_id' => $vendorId,
-                    'path' => $vendor->profile_picture
-                ]);
-            } catch (\Exception $e) {
-                Log::warning('Could not delete vendor profile picture from B2', [
-                    'vendor_id' => $vendorId,
-                    'path' => $vendor->profile_picture,
-                    'error' => $e->getMessage()
-                ]);
-                // Continue anyway to update database
-            }
-            
-            // Update database
+            Storage::disk('public')->delete($vendor->profile_picture);
             $vendor->profile_picture = null;
             $vendor->save();
-            
-            Log::info('Vendor profile picture removed', [
-                'vendor_id' => $vendorId
-            ]);
 
-            // Log audit trail
             AuditLogger::log(
                 'Removed Vendor Profile Picture',
                 'Vendor Management',
                 'Success',
-                [
-                    'vendor_id' => $vendor->id,
-                    'vendor_name' => $vendor->name,
-                    'staff_id' => Auth::id()
-                ]
+                ['vendor_id' => $vendor->id, 'staff_id' => Auth::id()]
             );
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor profile picture removed successfully.'
-            ], 200);
+            return response()->json(['message' => 'Vendor profile picture removed successfully.']);
         }
 
-        return response()->json([
-            'success' => false,
-            'message' => 'No profile picture to remove.'
-        ], 400);
-        
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-        Log::error('Vendor not found for profile picture removal', [
-            'vendor_id' => $vendorId
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Vendor not found'
-        ], 404);
-        
-    } catch (\Exception $e) {
-        Log::error('Vendor profile picture deletion error', [
-            'vendor_id' => $vendorId,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to remove vendor profile picture'
-        ], 500);
-    }
+        return response()->json(['message' => 'No profile picture to remove.'], 400);
     }
 }
