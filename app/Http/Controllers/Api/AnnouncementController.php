@@ -418,6 +418,31 @@ class AnnouncementController extends Controller
                     $result = $smsService->send($contactNumber, $message);
                     if ($result['success']) {
                         $successCount++;
+                        
+                        // Store SMS message in notifications table
+                        try {
+                            $adminUser = \App\Models\User::whereHas('role', function($query) {
+                                $query->where('name', 'Admin');
+                            })->first();
+                            
+                            DB::table('notifications')->insert([
+                                'recipient_id' => $user->id,
+                                'sender_id' => $adminUser ? $adminUser->id : null,
+                                'channel' => 'sms',
+                                'title' => 'Announcement',
+                                'message' => json_encode([
+                                    'text' => $message,
+                                    'type' => 'announcement',
+                                    'announcement_id' => $announcement->id,
+                                ]),
+                                'status' => 'sent',
+                                'sent_at' => now(),
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error("Failed to store announcement SMS notification: " . $e->getMessage());
+                        }
                     } else {
                         $failCount++;
                         Log::warning("Failed to send announcement SMS to user {$user->id}: {$result['message']}");

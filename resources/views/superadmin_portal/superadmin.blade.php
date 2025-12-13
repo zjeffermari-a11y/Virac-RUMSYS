@@ -846,6 +846,7 @@
                                         <option value="Billing Setting Change Notification">Billing Setting Change Notification</option>
                                         <option value="Rental Rate Change Notification">Rental Rate Change Notification</option>
                                         <option value="Policy Change Notification">Policy Change Notification</option>
+                                        <option value="Announcement">Announcement</option>
                                     </select>
                                 </div>
                                 

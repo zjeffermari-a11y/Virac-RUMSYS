@@ -216,6 +216,8 @@ class NotificationTemplateController extends Controller
             'Billing Setting Change Notification',
             'Rental Rate Change Notification',
             'Policy Change Notification',
+            'Announcement',
+            'SMS Notification',
         ];
         
         // Build base query - if recipient filter is needed, join users from the start
