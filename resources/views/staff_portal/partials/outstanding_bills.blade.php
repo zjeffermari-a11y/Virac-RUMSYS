@@ -33,7 +33,7 @@
                 <p class="text-xl font-bold text-gray-800 mb-1">Total Outstanding Balance</p>
             </div>
             <div class="text-right">
-                <h3 class="text-3xl font-bold text-red-600">₱{{ number_format($totalOutstandingBalance, 2) }}</h3>
+                <h3 class="text-2xl font-bold text-red-600">₱{{ number_format($totalOutstandingBalance, 2) }}</h3>
             </div>
         </div>
     </div>

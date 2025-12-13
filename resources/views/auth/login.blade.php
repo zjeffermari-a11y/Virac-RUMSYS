@@ -118,8 +118,8 @@
                                     required
                                     class="block w-full pl-10 pr-10 py-2.5 border-2 border-gray-300 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all"
                                     placeholder="Enter your password">
-                                <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-auto">
-                                    <i class="fas fa-eye text-gray-400 cursor-pointer hover:text-gray-600 text-sm" id="eyeIcon"></i>
+                                <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-3 flex items-center z-10 bg-transparent border-0 cursor-pointer">
+                                    <i class="fas fa-eye text-gray-400 hover:text-gray-600 text-sm" id="eyeIcon"></i>
                                 </button>
                             </div>
                         </div>
@@ -175,16 +175,17 @@
 
     <script>
         // Password toggle functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const toggleButton = document.getElementById('togglePassword');
-            if (toggleButton) {
-                toggleButton.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const passwordInput = document.getElementById('password');
-                    const eyeIcon = document.getElementById('eyeIcon');
-                    
-                    if (passwordInput && eyeIcon) {
+        (function() {
+            function initPasswordToggle() {
+                const toggleButton = document.getElementById('togglePassword');
+                const passwordInput = document.getElementById('password');
+                const eyeIcon = document.getElementById('eyeIcon');
+                
+                if (toggleButton && passwordInput && eyeIcon) {
+                    toggleButton.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
                         if (passwordInput.type === 'password') {
                             passwordInput.type = 'text';
                             eyeIcon.classList.remove('fa-eye');
@@ -194,10 +195,17 @@
                             eyeIcon.classList.remove('fa-eye-slash');
                             eyeIcon.classList.add('fa-eye');
                         }
-                    }
-                });
+                    });
+                }
             }
-        });
+            
+            // Try immediately and also on DOMContentLoaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initPasswordToggle);
+            } else {
+                initPasswordToggle();
+            }
+        })();
 
         // Form submission handler
         document.getElementById('loginForm').addEventListener('submit', function(e) {
