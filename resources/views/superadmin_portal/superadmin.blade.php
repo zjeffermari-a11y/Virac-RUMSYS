@@ -877,6 +877,9 @@
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <div id="sentMessagesTotalCount" class="text-sm text-gray-600"></div>
+                                    <button id="debugSentMessagesBtn" class="bg-yellow-100 text-yellow-700 px-4 py-2 rounded-lg hover:bg-yellow-200 transition-colors text-sm border border-yellow-300">
+                                        <i class="fas fa-bug mr-2"></i>Debug
+                                    </button>
                                     <button id="refreshSentMessagesBtn" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm border border-gray-300">
                                         <i class="fas fa-sync-alt mr-2"></i>Refresh
                                     </button>

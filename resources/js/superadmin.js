@@ -1324,7 +1324,15 @@ class SuperAdminDashboard {
         const refreshSentMessagesBtn = document.getElementById('refreshSentMessagesBtn');
         if (refreshSentMessagesBtn) {
             refreshSentMessagesBtn.addEventListener('click', () => {
-                this.fetchSentMessages();
+                this.fetchSentMessages(1);
+            });
+        }
+
+        // Debug sent messages button
+        const debugSentMessagesBtn = document.getElementById('debugSentMessagesBtn');
+        if (debugSentMessagesBtn) {
+            debugSentMessagesBtn.addEventListener('click', () => {
+                this.debugSentMessages();
             });
         }
     }
@@ -1509,6 +1517,62 @@ class SuperAdminDashboard {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    async debugSentMessages() {
+        try {
+            const response = await fetch('/api/notification-templates/debug-sent-messages', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP ${response.status}: Failed to fetch debug info`);
+            }
+            
+            const data = await response.json();
+            const debugInfo = data.debug_info || {};
+            
+            // Format the debug information
+            let debugMessage = '=== SMS Messages Debug Info ===\n\n';
+            debugMessage += `Table Exists: ${debugInfo.table_exists ? 'Yes' : 'No'}\n`;
+            debugMessage += `Has Channel Column: ${debugInfo.has_channel_column ? 'Yes' : 'No'}\n`;
+            debugMessage += `Has Status Column: ${debugInfo.has_status_column ? 'Yes' : 'No'}\n\n`;
+            debugMessage += `Total SMS Notifications: ${debugInfo.total_sms_notifications || 0}\n`;
+            debugMessage += `Sent SMS Notifications: ${debugInfo.sent_sms_notifications || 0}\n\n`;
+            
+            if (debugInfo.by_title && debugInfo.by_title.length > 0) {
+                debugMessage += 'Messages by Type:\n';
+                debugInfo.by_title.forEach(item => {
+                    debugMessage += `  - ${item.title}: ${item.count}\n`;
+                });
+                debugMessage += '\n';
+            }
+            
+            if (debugInfo.recent_messages && debugInfo.recent_messages.length > 0) {
+                debugMessage += 'Recent Messages (last 10):\n';
+                debugInfo.recent_messages.forEach((msg, index) => {
+                    const date = new Date(msg.sent_at || msg.created_at);
+                    debugMessage += `  ${index + 1}. [${msg.title}] to ${msg.recipient_name} at ${date.toLocaleString()}\n`;
+                });
+            } else {
+                debugMessage += 'No recent messages found.\n';
+            }
+            
+            // Show in alert or console
+            console.log(debugMessage);
+            alert(debugMessage);
+            
+            // Also log the full JSON for detailed inspection
+            console.log('Full debug data:', debugInfo);
+            
+        } catch (error) {
+            console.error('Error fetching debug info:', error);
+            alert(`Failed to fetch debug info: ${error.message}\n\nCheck browser console for details.`);
+        }
     }
 
     updateCharacterCount(editorElement) {
