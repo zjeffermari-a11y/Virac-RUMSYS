@@ -615,6 +615,20 @@ class EffectivityDateController extends Controller
                 // Don't fail the request if SMS fails
             }
 
+            // Log the effectivity date update
+            AuditLogger::log(
+                'Updated Effectivity Date',
+                'Effectivity Date Management',
+                'Success',
+                [
+                    'history_table' => $historyTable,
+                    'history_id' => $historyId,
+                    'old_effectivity_date' => $oldEffectivityDate,
+                    'new_effectivity_date' => $newEffectivityDate,
+                    'changes_applied' => $shouldApplyChange
+                ]
+            );
+
             $message = $shouldApplyChange 
                 ? 'Effectivity date updated, changes applied, and notifications sent.'
                 : 'Effectivity date updated successfully. Notifications will be sent when the effectivity date arrives.';

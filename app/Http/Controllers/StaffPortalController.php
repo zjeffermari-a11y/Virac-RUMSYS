@@ -13,6 +13,7 @@ use Illuminate\View\View;
 use App\Models\BillingSetting;
 use App\Models\Rate;
 use App\Http\Controllers\Api\DashboardController;
+use App\Services\AuditLogger;
 use Carbon\Carbon;
 
 class StaffPortalController extends Controller
@@ -202,6 +203,7 @@ class StaffPortalController extends Controller
                 $billingSettings = BillingSetting::all()->keyBy('utility_type');
                 $paymentDate = Carbon::parse($request->payment_date);
 
+                $paymentDetails = [];
                 foreach ($unpaidBills as $bill) {
                     $originalAmount = (float) $bill->amount;
                     $dueDate = Carbon::parse($bill->due_date);
@@ -240,9 +242,37 @@ class StaffPortalController extends Controller
 
                     $bill->status = 'paid';
                     $bill->save();
+                    
+                    $paymentDetails[] = [
+                        'billing_id' => $bill->id,
+                        'utility_type' => $bill->utility_type,
+                        'original_amount' => $originalAmount,
+                        'amount_paid' => $finalAmount,
+                        'payment_date' => $request->payment_date,
+                    ];
                 }
+                
+                // Log payment recording
+                AuditLogger::log(
+                    'Recorded Payment',
+                    'Payments',
+                    'Success',
+                    [
+                        'vendor_id' => $vendor->id,
+                        'vendor_name' => $vendor->name,
+                        'payment_count' => count($paymentDetails),
+                        'total_amount' => array_sum(array_column($paymentDetails, 'amount_paid')),
+                        'payments' => $paymentDetails
+                    ]
+                );
             });
         } catch (\Exception $e) {
+            AuditLogger::log(
+                'Attempted to Record Payment',
+                'Payments',
+                'Failure',
+                ['vendor_id' => $vendor->id ?? null, 'error' => $e->getMessage()]
+            );
             return back()->with('error', 'Failed to record payment: ' . $e->getMessage());
         }
 

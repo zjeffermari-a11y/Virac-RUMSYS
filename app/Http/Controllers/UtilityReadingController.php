@@ -48,8 +48,26 @@ public function storeBulk(Request $request)
                     $finalPreviousReading = (float)$readingData['previous'];
                 }
 
+                $oldCurrentReading = $reading->current_reading;
+                $oldPreviousReading = $reading->previous_reading;
+                
                 $reading->update($updateData);
 
+                // Log the reading update
+                AuditLogger::log(
+                    'Updated Utility Reading',
+                    'Utility Readings',
+                    'Success',
+                    [
+                        'reading_id' => $reading->id,
+                        'stall_id' => $reading->stall_id,
+                        'utility_type' => $reading->utility_type,
+                        'old_current_reading' => $oldCurrentReading,
+                        'new_current_reading' => $reading->current_reading,
+                        'old_previous_reading' => $oldPreviousReading,
+                        'new_previous_reading' => $reading->previous_reading ?? $oldPreviousReading,
+                    ]
+                );
                 
                 $approvedRequest = $reading->editRequests->where('status', 'approved')->first();
                 if ($approvedRequest) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use App\Models\User;
 use App\Services\SmsService;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -230,6 +231,13 @@ class AnnouncementController extends Controller
 
         $announcement = Announcement::create($validated);
 
+        AuditLogger::log(
+            'Created Announcement',
+            'Announcements',
+            'Success',
+            ['announcement_id' => $announcement->id, 'title' => $announcement->title, 'is_active' => $announcement->is_active]
+        );
+
         // Announcements are always created as drafts - no automatic sending
         // Admin must manually activate them later
 
@@ -252,7 +260,30 @@ class AnnouncementController extends Controller
         ]);
 
         $wasActive = $announcement->is_active;
+        $oldTitle = $announcement->title;
         $announcement->update($validated);
+
+        // Log the update
+        $changes = [];
+        if (isset($validated['title']) && $oldTitle != $validated['title']) {
+            $changes['title'] = ['old' => $oldTitle, 'new' => $validated['title']];
+        }
+        if (isset($validated['is_active']) && $wasActive != $validated['is_active']) {
+            $changes['is_active'] = ['old' => $wasActive, 'new' => $validated['is_active']];
+        }
+        if (isset($validated['content'])) {
+            $changes['content'] = ['updated' => true];
+        }
+        if (isset($validated['recipients'])) {
+            $changes['recipients'] = ['updated' => true];
+        }
+
+        AuditLogger::log(
+            'Updated Announcement',
+            'Announcements',
+            'Success',
+            ['announcement_id' => $announcement->id, 'changes' => $changes, 'was_activated' => ($announcement->is_active && !$wasActive)]
+        );
 
         // Send SMS and create in-app notifications if announcement was just activated
         // When is_active changes from false to true, send notifications and SMS
@@ -267,7 +298,17 @@ class AnnouncementController extends Controller
 
     public function destroy(Announcement $announcement)
     {
+        $announcementId = $announcement->id;
+        $announcementTitle = $announcement->title;
+        
         $announcement->delete();
+
+        AuditLogger::log(
+            'Deleted Announcement',
+            'Announcements',
+            'Success',
+            ['announcement_id' => $announcementId, 'title' => $announcementTitle]
+        );
 
         return response()->json(['message' => 'Announcement deleted successfully']);
     }

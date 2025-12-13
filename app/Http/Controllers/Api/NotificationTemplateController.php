@@ -7,7 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use App\Models\User; 
-use App\Services\SmsService; 
+use App\Services\SmsService;
+use App\Services\AuditLogger; 
 
 class NotificationTemplateController extends Controller
 {
@@ -66,7 +67,13 @@ class NotificationTemplateController extends Controller
                     'overdue_alert_template' => $validatedData['overdue_alert']['template'],
                 ];
 
+                $changes = [];
                 foreach ($templatesToSave as $name => $message) {
+                    // Get old value before update
+                    $oldTemplate = DB::table('sms_notification_settings')
+                        ->where('name', $name)
+                        ->value('message_template');
+                    
                     // Use updateOrInsert:
                     // - If a template with this 'name' exists, it will be updated.
                     // - If not, a new one will be inserted.
@@ -76,6 +83,24 @@ class NotificationTemplateController extends Controller
                             'message_template' => $message, // Values to update or insert
                             'updated_at' => now(),
                         ]
+                    );
+                    
+                    if ($oldTemplate && $oldTemplate != $message) {
+                        $changes[$name] = [
+                            'old' => $oldTemplate,
+                            'new' => $message
+                        ];
+                    } elseif (!$oldTemplate) {
+                        $changes[$name] = ['action' => 'created', 'template' => $message];
+                    }
+                }
+                
+                if (!empty($changes)) {
+                    AuditLogger::log(
+                        'Updated SMS Notification Templates',
+                        'Notification Templates',
+                        'Success',
+                        ['templates_updated' => $changes]
                     );
                 }
             });
