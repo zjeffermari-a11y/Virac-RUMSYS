@@ -37,23 +37,27 @@ class VendorController extends Controller
         $currentMonthEnd = $today->copy()->endOfMonth();
         
         // Include unpaid bills OR paid bills from current month
-        // Use leftJoin for more explicit control over the payment_date filter
-        $outstandingBills = Billing::where('billing.stall_id', $vendor->stall->id)
-            ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
+        // Use whereExists subquery for precise payment_date filtering
+        $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
             ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
-                $query->where('billing.status', 'unpaid')
+                $query->where('status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
-                        $q->where('billing.status', 'paid')
-                            ->whereNotNull('payments.payment_date')
-                            ->whereBetween('payments.payment_date', [
-                                $currentMonthStart->toDateString(),
-                                $currentMonthEnd->toDateString()
-                            ]);
+                        $q->where('status', 'paid')
+                            ->whereExists(function($subQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                $subQuery->select(DB::raw(1))
+                                    ->from('payments')
+                                    ->whereColumn('payments.billing_id', 'billing.id')
+                                    ->whereNotNull('payments.payment_date')
+                                    ->whereBetween('payments.payment_date', [
+                                        $currentMonthStart->toDateString(),
+                                        $currentMonthEnd->toDateString()
+                                    ]);
+                            });
                     });
             })
-            ->select('billing.id', 'billing.stall_id', 'billing.utility_type', 'billing.period_start', 'billing.period_end', 'billing.amount', 'billing.due_date', 'billing.disconnection_date', 'billing.status', 'billing.consumption', 'billing.current_reading', 'billing.previous_reading', 'billing.rate')
             ->with('payment:id,billing_id,amount_paid,payment_date')
-            ->orderBy('billing.due_date', 'desc')
+            ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
+            ->orderBy('due_date', 'desc')
             ->get();
 
         // Cache billing settings (rarely changes)
@@ -195,23 +199,27 @@ class VendorController extends Controller
     $currentMonthEnd = $today->copy()->endOfMonth();
     
     // Include unpaid bills OR paid bills from current month
-    // Use leftJoin for more explicit control over the payment_date filter
-    $outstandingBills = Billing::where('billing.stall_id', $vendor->stall->id)
-        ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
+    // Use whereExists subquery for precise payment_date filtering
+    $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
         ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
-            $query->where('billing.status', 'unpaid')
+            $query->where('status', 'unpaid')
                 ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
-                    $q->where('billing.status', 'paid')
-                        ->whereNotNull('payments.payment_date')
-                        ->whereBetween('payments.payment_date', [
-                            $currentMonthStart->toDateString(),
-                            $currentMonthEnd->toDateString()
-                        ]);
+                    $q->where('status', 'paid')
+                        ->whereExists(function($subQuery) use ($currentMonthStart, $currentMonthEnd) {
+                            $subQuery->select(DB::raw(1))
+                                ->from('payments')
+                                ->whereColumn('payments.billing_id', 'billing.id')
+                                ->whereNotNull('payments.payment_date')
+                                ->whereBetween('payments.payment_date', [
+                                    $currentMonthStart->toDateString(),
+                                    $currentMonthEnd->toDateString()
+                                ]);
+                        });
                 });
         })
-        ->select('billing.id', 'billing.stall_id', 'billing.utility_type', 'billing.period_start', 'billing.period_end', 'billing.amount', 'billing.due_date', 'billing.disconnection_date', 'billing.status', 'billing.consumption', 'billing.current_reading', 'billing.previous_reading', 'billing.rate')
         ->with('payment:id,billing_id,amount_paid,payment_date')
-        ->orderBy('billing.due_date', 'desc')
+        ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
+        ->orderBy('due_date', 'desc')
         ->get();
 
     // Cache billing settings (rarely changes)
