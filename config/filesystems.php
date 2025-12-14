@@ -69,7 +69,7 @@ return [
             'endpoint' => env('B2_ENDPOINT'),
             'url' => env('B2_URL'), // Public URL for the bucket (e.g., https://f005.backblazeb2.com/file/bucket-name/)
             'use_path_style_endpoint' => true,
-            'visibility' => 'public', // Profile pictures should be publicly accessible
+            'visibility' => env('B2_VISIBILITY', 'public'), // 'public' or 'private' - use 'public' for profile pictures
             'throw' => false,
         ],
 

@@ -217,15 +217,26 @@ class User extends Authenticatable
         }
         
         try {
-            // Generate URL from B2 - returns full public URL
-            $url = \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
+            $visibility = config('filesystems.disks.b2.visibility', 'public');
             
-            // If URL is not a full URL, construct it manually using B2_URL config
-            if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                $b2Url = config('filesystems.disks.b2.url');
-                if ($b2Url) {
-                    // Construct full URL: B2_URL + path
-                    $url = rtrim($b2Url, '/') . '/' . ltrim($this->profile_picture, '/');
+            if ($visibility === 'private') {
+                // For private buckets, use temporary signed URLs (valid for 1 year)
+                $url = \Illuminate\Support\Facades\Storage::disk('b2')->temporaryUrl(
+                    $this->profile_picture,
+                    now()->addYear(),
+                    ['ResponseContentDisposition' => 'inline']
+                );
+            } else {
+                // For public buckets, use public URLs
+                $url = \Illuminate\Support\Facades\Storage::disk('b2')->url($this->profile_picture);
+                
+                // If URL is not a full URL, construct it manually using B2_URL config
+                if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                    $b2Url = config('filesystems.disks.b2.url');
+                    if ($b2Url) {
+                        // Construct full URL: B2_URL + path
+                        $url = rtrim($b2Url, '/') . '/' . ltrim($this->profile_picture, '/');
+                    }
                 }
             }
             

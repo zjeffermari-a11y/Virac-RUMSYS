@@ -10,8 +10,15 @@ This application uses Backblaze B2 for storing profile pictures instead of local
 
 ## Setup Instructions
 
-### 1. Create a B2 Bucket
+### 1. Use Existing Bucket or Create New One
 
+**Option A: Use Existing Bucket (Recommended if you already have one)**
+- If you already have a bucket (like `vpm-bucket` or `laravel-bucket`), you can use it
+- **Important:** For profile pictures, you have two choices:
+  1. **Make bucket Public** (recommended for profile pictures) - Go to bucket settings and change "Type" from "Private" to "Public"
+  2. **Keep bucket Private** - The code will use signed URLs (automatically handled)
+
+**Option B: Create a New Bucket**
 1. Log in to your Backblaze account
 2. Go to "Buckets" section
 3. Click "Create a Bucket"
@@ -42,11 +49,22 @@ Add the following to your `.env` file:
 # Backblaze B2 Configuration
 B2_KEY_ID=your_key_id_here
 B2_APPLICATION_KEY=your_application_key_here
-B2_BUCKET_NAME=your-bucket-name
+B2_BUCKET_NAME=vpm-bucket
 B2_REGION=us-east-005
-B2_ENDPOINT=https://f005.backblazeb2.com
-B2_URL=https://f005.backblazeb2.com/file/your-bucket-name
+B2_ENDPOINT=s3.us-east-005.backblazeb2.com
+B2_URL=https://f005.backblazeb2.com/file/vpm-bucket
+B2_VISIBILITY=public
 ```
+
+**For your existing buckets:**
+- **Bucket Name:** Use `vpm-bucket` or `laravel-bucket` (whichever you prefer)
+- **Endpoint:** `s3.us-east-005.backblazeb2.com` (same for both buckets)
+- **B2_URL:** 
+  - For `vpm-bucket`: `https://f005.backblazeb2.com/file/vpm-bucket` (check your bucket's download URL)
+  - For `laravel-bucket`: `https://f005.backblazeb2.com/file/laravel-bucket` (check your bucket's download URL)
+- **B2_VISIBILITY:** 
+  - `public` if you made the bucket public (recommended)
+  - `private` if you want to keep it private (uses signed URLs)
 
 **Important Notes:**
 - Replace `your_key_id_here` with your actual Key ID
