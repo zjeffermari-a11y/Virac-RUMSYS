@@ -1004,10 +1004,10 @@ const MarketApp = {
                     btn.disabled = false;
                     btn.innerHTML = originalText;
                 }
-                });
-            }
+            });
+        },
 
-            // Contact number update
+        setupContactNumberUpdate() {
             const updateContactNumberBtn = document.getElementById("updateContactNumberBtn");
             const contactNumberInput = document.getElementById("contactNumberInput");
             if (updateContactNumberBtn && contactNumberInput) {
@@ -1063,7 +1063,8 @@ const MarketApp = {
                         updateContactNumberBtn.innerHTML = originalText;
                     }
                 });
-            },
+            }
+        },
 
         setupProfilePictureUpload() {
             const input = document.getElementById("profilePictureInput");
@@ -3130,7 +3131,8 @@ const MarketApp = {
             
             // Setup password change form
             MarketApp.methods.setupPasswordChangeForm();
-            
+            MarketApp.methods.setupContactNumberUpdate();
+
             // Setup profile picture upload
             MarketApp.methods.setupProfilePictureUpload();
         } catch (error) {
