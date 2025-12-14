@@ -535,21 +535,23 @@ class StaffController extends Controller
         $currentMonthEnd = $today->copy()->endOfMonth();
         
         // Include unpaid bills OR paid bills from current month
-        $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
+        // Use leftJoin for more explicit control over the payment_date filter
+        $outstandingBills = Billing::where('billing.stall_id', $vendor->stall->id)
+            ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
             ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
-                $query->where('status', 'unpaid')
+                $query->where('billing.status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
-                        $q->where('status', 'paid')
-                            ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
-                                $paymentQuery->whereBetween('payment_date', [
-                                    $currentMonthStart->toDateString(),
-                                    $currentMonthEnd->toDateString()
-                                ]);
-                            });
+                        $q->where('billing.status', 'paid')
+                            ->whereNotNull('payments.payment_date')
+                            ->whereBetween('payments.payment_date', [
+                                $currentMonthStart->toDateString(),
+                                $currentMonthEnd->toDateString()
+                            ]);
                     });
             })
+            ->select('billing.*')
             ->with('payment')
-            ->orderBy('due_date', 'desc')
+            ->orderBy('billing.due_date', 'desc')
             ->get();
 
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
