@@ -122,6 +122,9 @@ Route::post('/user-settings/change-password', [UserSettingsController::class, 'c
 Route::post('/user-settings/upload-profile-picture', [UserSettingsController::class, 'uploadProfilePicture'])->middleware('auth:sanctum');
 Route::delete('/user-settings/remove-profile-picture', [UserSettingsController::class, 'removeProfilePicture'])->middleware('auth:sanctum');
 
+// Route for updating contact number
+Route::put('/user-settings/update-contact-number', [UserSettingsController::class, 'updateContactNumber'])->middleware('auth:sanctum');
+
 use App\Http\Controllers\Api\AuditTrailController;
 
 // route for fetching audit trail logs

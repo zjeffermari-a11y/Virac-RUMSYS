@@ -2964,6 +2964,7 @@ class SuperAdminDashboard {
                 throw new Error("Failed to update status.");
             }
 
+            const result = await response.json();
             this.showToast(`Request has been ${newStatus}.`, "success");
 
             const requestIndex = this.readingEditRequests.findIndex(
@@ -2971,6 +2972,9 @@ class SuperAdminDashboard {
             );
             if (requestIndex > -1) {
                 this.readingEditRequests[requestIndex].status = newStatus;
+                if (result.request && result.request.processed_at) {
+                    this.readingEditRequests[requestIndex].processed_at = result.request.processed_at;
+                }
                 this.renderReadingEditRequestsTable();
             }
         } catch (error) {
@@ -5178,12 +5182,70 @@ class SuperAdminDashboard {
                 } catch (error) {
                     console.error("Password change error:", error);
                     this.showToast("An error occurred. Please try again.", "error");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
-            });
-        }
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                });
+            }
+
+            // Contact number update
+            const updateContactNumberBtn = document.getElementById("updateContactNumberBtn");
+            const contactNumberInput = document.getElementById("contactNumberInput");
+            if (updateContactNumberBtn && contactNumberInput) {
+                // Format input to only allow digits
+                contactNumberInput.addEventListener("input", (e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+                });
+
+                updateContactNumberBtn.addEventListener("click", async () => {
+                    const contactNumber = contactNumberInput.value.trim();
+                    
+                    if (!contactNumber) {
+                        this.showToast("Please enter a contact number", "error");
+                        return;
+                    }
+
+                    if (!/^09\d{9}$/.test(contactNumber)) {
+                        this.showToast("Contact number must be 11 digits starting with 09", "error");
+                        return;
+                    }
+
+                    const originalText = updateContactNumberBtn.innerHTML;
+                    updateContactNumberBtn.disabled = true;
+                    updateContactNumberBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+
+                    try {
+                        const response = await fetch("/api/user-settings/update-contact-number", {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Accept: "application/json",
+                                "X-CSRF-TOKEN": document
+                                    .querySelector('meta[name="csrf-token"]')
+                                    .getAttribute("content"),
+                            },
+                            credentials: "include",
+                            body: JSON.stringify({ contact_number: contactNumber }),
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            this.showToast(result.message || "Contact number updated successfully!", "success");
+                        } else {
+                            const errorMsg = result.message || result.errors?.contact_number?.[0] || "Failed to update contact number";
+                            this.showToast(errorMsg, "error");
+                        }
+                    } catch (error) {
+                        console.error("Contact number update error:", error);
+                        this.showToast("An error occurred. Please try again.", "error");
+                    } finally {
+                        updateContactNumberBtn.disabled = false;
+                        updateContactNumberBtn.innerHTML = originalText;
+                    }
+                });
+            }
 
         // Profile picture upload
         const profilePictureInput = document.getElementById("profilePictureInput");

@@ -800,12 +800,12 @@
                     @php
                         $user = auth()->user();
                         $profileDetails = [
-                            ['icon' => 'fa-user', 'label' => 'Name', 'value' => $user->name],
-                            ['icon' => 'fa-at', 'label' => 'Username', 'value' => $user->username],
-                            ['icon' => 'fa-user-tag', 'label' => 'Role', 'value' => $user->role->name ?? 'N/A'],
-                            ['icon' => 'fa-phone', 'label' => 'Contact Number', 'value' => $user->contact_number ?? 'Not set'],
-                            ['icon' => 'fa-calendar', 'label' => 'Last Login', 'value' => $user->last_login ? \Carbon\Carbon::parse($user->last_login)->format('F j, Y g:i A') : 'Never'],
-                            ['icon' => 'fa-info-circle', 'label' => 'Status', 'value' => ucfirst($user->status ?? 'active')],
+                            ['icon' => 'fa-user', 'label' => 'Name', 'value' => $user->name, 'editable' => false],
+                            ['icon' => 'fa-at', 'label' => 'Username', 'value' => $user->username, 'editable' => false],
+                            ['icon' => 'fa-user-tag', 'label' => 'Role', 'value' => $user->role->name ?? 'N/A', 'editable' => false],
+                            ['icon' => 'fa-phone', 'label' => 'Contact Number', 'value' => $user->contact_number ?? 'Not set', 'editable' => true, 'field' => 'contact_number'],
+                            ['icon' => 'fa-calendar', 'label' => 'Last Login', 'value' => $user->last_login ? \Carbon\Carbon::parse($user->last_login)->format('F j, Y g:i A') : 'Never', 'editable' => false],
+                            ['icon' => 'fa-info-circle', 'label' => 'Status', 'value' => ucfirst($user->status ?? 'active'), 'editable' => false],
                         ];
                     @endphp
                     @foreach ($profileDetails as $detail)
@@ -813,7 +813,24 @@
                             <i class="fas {{ $detail['icon'] }} text-market-primary w-8 text-center"></i>
                             <div class="flex-1 ml-4">
                                 <span class="text-sm text-gray-600">{{ $detail['label'] }}</span>
-                                <p class="font-semibold text-gray-800">{{ $detail['value'] }}</p>
+                                @if($detail['editable'] ?? false)
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <input type="text" 
+                                               id="contactNumberInput" 
+                                               value="{{ $detail['value'] === 'Not set' ? '' : $detail['value'] }}" 
+                                               placeholder="09XXXXXXXXX"
+                                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-market-primary focus:border-transparent"
+                                               maxlength="11"
+                                               pattern="^09\d{9}$">
+                                        <button id="updateContactNumberBtn" 
+                                                class="bg-market-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-market-secondary transition-colors">
+                                            <i class="fas fa-save"></i> Update
+                                        </button>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1">Must be 11 digits starting with 09</p>
+                                @else
+                                    <p class="font-semibold text-gray-800">{{ $detail['value'] }}</p>
+                                @endif
                             </div>
                         </div>
                     @endforeach

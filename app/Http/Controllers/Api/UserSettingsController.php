@@ -283,4 +283,43 @@ class UserSettingsController extends Controller
 
         return response()->json(['message' => 'No profile picture to remove.'], 400);
     }
+
+    /**
+     * Update user contact number
+     */
+    public function updateContactNumber(Request $request)
+    {
+        $user = Auth::user();
+        
+        $validated = $request->validate([
+            'contact_number' => [
+                'required',
+                'string',
+                'regex:/^09\d{9}$/',
+            ],
+        ], [
+            'contact_number.required' => 'Contact number is required.',
+            'contact_number.regex' => 'Contact number must be a valid 11-digit number starting with 09.',
+        ]);
+
+        $oldContactNumber = $user->contact_number;
+        $user->contact_number = $validated['contact_number'];
+        $user->save();
+
+        AuditLogger::log(
+            'Updated Contact Number',
+            'User Settings',
+            'Success',
+            [
+                'user_id' => $user->id,
+                'old_contact_number' => $oldContactNumber,
+                'new_contact_number' => $validated['contact_number']
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Contact number updated successfully.',
+            'contact_number' => $user->contact_number
+        ]);
+    }
 }

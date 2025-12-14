@@ -1000,12 +1000,70 @@ const MarketApp = {
                 } catch (error) {
                     console.error("Password change error:", error);
                     MarketApp.methods.showToast("An error occurred. Please try again.", "error");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
-            });
-        },
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                });
+            }
+
+            // Contact number update
+            const updateContactNumberBtn = document.getElementById("updateContactNumberBtn");
+            const contactNumberInput = document.getElementById("contactNumberInput");
+            if (updateContactNumberBtn && contactNumberInput) {
+                // Format input to only allow digits
+                contactNumberInput.addEventListener("input", (e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+                });
+
+                updateContactNumberBtn.addEventListener("click", async () => {
+                    const contactNumber = contactNumberInput.value.trim();
+                    
+                    if (!contactNumber) {
+                        MarketApp.methods.showNotification("Please enter a contact number", "error");
+                        return;
+                    }
+
+                    if (!/^09\d{9}$/.test(contactNumber)) {
+                        MarketApp.methods.showNotification("Contact number must be 11 digits starting with 09", "error");
+                        return;
+                    }
+
+                    const originalText = updateContactNumberBtn.innerHTML;
+                    updateContactNumberBtn.disabled = true;
+                    updateContactNumberBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+
+                    try {
+                        const response = await fetch("/api/user-settings/update-contact-number", {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Accept: "application/json",
+                                "X-CSRF-TOKEN": document
+                                    .querySelector('meta[name="csrf-token"]')
+                                    .getAttribute("content"),
+                            },
+                            credentials: "include",
+                            body: JSON.stringify({ contact_number: contactNumber }),
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            MarketApp.methods.showNotification(result.message || "Contact number updated successfully!", "success");
+                        } else {
+                            const errorMsg = result.message || result.errors?.contact_number?.[0] || "Failed to update contact number";
+                            MarketApp.methods.showNotification(errorMsg, "error");
+                        }
+                    } catch (error) {
+                        console.error("Contact number update error:", error);
+                        MarketApp.methods.showNotification("An error occurred. Please try again.", "error");
+                    } finally {
+                        updateContactNumberBtn.disabled = false;
+                        updateContactNumberBtn.innerHTML = originalText;
+                    }
+                });
+            },
 
         setupProfilePictureUpload() {
             const input = document.getElementById("profilePictureInput");
