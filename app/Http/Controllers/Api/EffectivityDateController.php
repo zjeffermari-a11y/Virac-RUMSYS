@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use App\Models\Schedule;
+use App\Models\Stall;
 use App\Services\AuditLogger;
 use App\Services\ChangeNotificationService;
 use Carbon\Carbon;
@@ -602,14 +603,9 @@ class EffectivityDateController extends Controller
                         // Batch update - send notification for each stall
                         foreach ($details['changes'] as $change) {
                             if (isset($change['id'])) {
-                                $stall = DB::table('stalls')->where('id', $change['id'])->first();
-                                if ($stall) {
-                                    // Create a simple object for the notification service
-                                    $stallModel = (object) [
-                                        'id' => $stall->id,
-                                        'table_number' => $stall->table_number,
-                                        'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
-                                    ];
+                                // Load the actual Stall model with vendor relationship
+                                $stallModel = Stall::with('vendor')->find($change['id']);
+                                if ($stallModel) {
                                     Log::info('Sending rental rate change SMS from EffectivityDateController', [
                                         'stall' => $stallModel->table_number,
                                         'new_effectivity_date' => $newEffectivityDate,
@@ -636,14 +632,9 @@ class EffectivityDateController extends Controller
                             }
                         }
                     } elseif (isset($details['stall_id'])) {
-                        // Single stall update
-                        $stall = DB::table('stalls')->where('id', $details['stall_id'])->first();
-                        if ($stall) {
-                            $stallModel = (object) [
-                                'id' => $stall->id,
-                                'table_number' => $stall->table_number,
-                                'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
-                            ];
+                        // Single stall update - Load the actual Stall model with vendor relationship
+                        $stallModel = Stall::with('vendor')->find($details['stall_id']);
+                        if ($stallModel) {
                             Log::info('Sending rental rate change SMS from EffectivityDateController (single stall)', [
                                 'stall' => $stallModel->table_number,
                                 'new_effectivity_date' => $newEffectivityDate,

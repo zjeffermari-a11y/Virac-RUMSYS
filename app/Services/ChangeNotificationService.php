@@ -434,12 +434,29 @@ class ChangeNotificationService
     private function getRecipientsForRentalRate($stall)
     {
         $recipients = collect();
-        
+
         // Get the vendor who owns this stall
-        if ($stall->vendor) {
-            $recipients->push($stall->vendor);
+        // Handle both Eloquent models and stdClass objects
+        if (is_object($stall) && (method_exists($stall, 'getAttribute') || isset($stall->vendor))) {
+            $vendor = method_exists($stall, 'getAttribute') 
+                ? $stall->vendor 
+                : (isset($stall->vendor) ? $stall->vendor : null);
+            
+            if ($vendor) {
+                $recipients->push($vendor);
+            }
+        } elseif (is_object($stall) && isset($stall->id)) {
+            // If we have a stall ID but no vendor relationship, try to find the vendor
+            try {
+                $stallModel = \App\Models\Stall::with('vendor')->find($stall->id);
+                if ($stallModel && $stallModel->vendor) {
+                    $recipients->push($stallModel->vendor);
+                }
+            } catch (\Exception $e) {
+                Log::warning("Could not load vendor for stall {$stall->id}: " . $e->getMessage());
+            }
         }
-        
+
         // Add staff
         $staff = User::whereHas('role', function($query) {
             $query->where('name', 'Staff');
@@ -447,7 +464,7 @@ class ChangeNotificationService
             ->whereNotNull('contact_number')
             ->get();
         $recipients = $recipients->merge($staff);
-        
+
         return $recipients->unique('id');
     }
 
