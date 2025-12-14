@@ -538,23 +538,26 @@ class StaffController extends Controller
         $currentMonthEnd = $today->copy()->endOfMonth();
         
         // Include unpaid bills OR paid bills from current month
-        // Use leftJoin for more explicit control over the payment_date filter
-        $outstandingBills = Billing::where('billing.stall_id', $vendor->stall->id)
-            ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
+        // Use whereExists subquery for precise payment_date filtering
+        $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
             ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
-                $query->where('billing.status', 'unpaid')
+                $query->where('status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
-                        $q->where('billing.status', 'paid')
-                            ->whereNotNull('payments.payment_date')
-                            ->whereBetween('payments.payment_date', [
-                                $currentMonthStart->toDateString(),
-                                $currentMonthEnd->toDateString()
-                            ]);
+                        $q->where('status', 'paid')
+                            ->whereExists(function($subQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                $subQuery->select(DB::raw(1))
+                                    ->from('payments')
+                                    ->whereColumn('payments.billing_id', 'billing.id')
+                                    ->whereNotNull('payments.payment_date')
+                                    ->whereBetween('payments.payment_date', [
+                                        $currentMonthStart->toDateString(),
+                                        $currentMonthEnd->toDateString()
+                                    ]);
+                            });
                     });
             })
-            ->select('billing.*')
             ->with('payment')
-            ->orderBy('billing.due_date', 'desc')
+            ->orderBy('due_date', 'desc')
             ->get();
 
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
