@@ -592,24 +592,40 @@ class ChangeNotificationService
             
             return $bill ? (float) $bill->amount : null;
         } else {
-            // For utilities, recalculate with new rate
-            $bill = Billing::where('stall_id', $user->stall->id)
-                ->where('utility_type', $utilityType)
-                ->whereYear('period_start', Carbon::now()->year)
-                ->whereMonth('period_start', Carbon::now()->subMonth()->month)
-                ->first();
-            
-            if (!$bill) {
-                return null;
+            // For utilities, calculate with new rate
+            if ($utilityType === 'Water') {
+                // For Water: days_in_current_month × new_rate
+                if ($newRate !== null) {
+                    $daysInCurrentMonth = Carbon::now()->daysInMonth;
+                    return (float) ($daysInCurrentMonth * $newRate);
+                }
+            } else if ($utilityType === 'Electricity') {
+                // For Electricity: Try to get current month bill first, then previous month
+                $currentMonthStart = Carbon::now()->startOfMonth();
+                $bill = Billing::where('stall_id', $user->stall->id)
+                    ->where('utility_type', 'Electricity')
+                    ->where('period_start', $currentMonthStart->toDateString())
+                    ->first();
+                
+                // If no current month bill, try previous month
+                if (!$bill) {
+                    $bill = Billing::where('stall_id', $user->stall->id)
+                        ->where('utility_type', 'Electricity')
+                        ->whereYear('period_start', Carbon::now()->year)
+                        ->whereMonth('period_start', Carbon::now()->subMonth()->month)
+                        ->first();
+                }
+                
+                if ($bill && $newRate !== null) {
+                    // Get consumption from bill
+                    $consumption = $bill->consumption ?? ($bill->current_reading - $bill->previous_reading);
+                    if ($consumption > 0) {
+                        return (float) ($consumption * $newRate);
+                    }
+                }
             }
             
-            // Recalculate with new rate
-            $consumption = $bill->consumption ?? ($bill->current_reading - $bill->previous_reading);
-            if ($newRate !== null && $consumption > 0) {
-                return (float) ($consumption * $newRate);
-            }
-            
-            return (float) $bill->amount;
+            return null;
         }
     }
 
