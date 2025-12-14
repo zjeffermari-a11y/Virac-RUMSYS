@@ -479,7 +479,15 @@ class AnnouncementController extends Controller
             
             Log::info("Sending announcement SMS to {$recipients->count()} recipients");
 
-            $message = "ANNOUNCEMENT: {$announcement->title}\n\n{$announcement->content}\n\n- Virac Public Market";
+            // Check if content already includes signature to avoid duplicates
+            $content = $announcement->content;
+            $hasSignature = str_contains($content, '- Virac Public Market') || str_contains($content, '- Virac Public Market Administration');
+            
+            if (!$hasSignature) {
+                $content .= "\n\n- Virac Public Market";
+            }
+            
+            $message = "ANNOUNCEMENT: {$announcement->title}\n\n{$content}";
 
             $successCount = 0;
             $failCount = 0;

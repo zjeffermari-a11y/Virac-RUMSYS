@@ -285,7 +285,6 @@ class ChangeNotificationService
             $recipients = $this->getRecipientsForSchedule($scheduleType, $utilityType);
             
             $message = $this->buildScheduleChangeMessage($scheduleType, $utilityType, $oldDay, $newDay);
-            $message .= "\n\n- Virac Public Market";
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Schedule Change: {$scheduleType}", $message);
@@ -296,7 +295,7 @@ class ChangeNotificationService
                 $this->regenerateCurrentMonthBills();
             }
             
-            // Send SMS in background
+            // Send SMS in background (sendSmsInBackground will add "- Virac Public Market")
             $this->sendSmsInBackground($recipients, $message);
             
             return ['success' => true, 'sent' => $recipients->count(), 'failed' => 0, 'processing' => 'background'];
