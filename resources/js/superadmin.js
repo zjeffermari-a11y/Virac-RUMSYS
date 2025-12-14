@@ -6435,11 +6435,11 @@ class SuperAdminDashboard {
         const btn = this.elements.saveAnnouncementBtn;
         if (!btn) return;
         
-        // Publish Immediately feature removed - always show "Save" or "Update"
+        // Publish Immediately feature removed - always show "Send" or "Update and Send"
         if (isEditMode) {
-            btn.innerHTML = '<i class="fas fa-save"></i> <span>Update Announcement</span>';
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Update and Send Announcement</span>';
         } else {
-            btn.innerHTML = '<i class="fas fa-save"></i> <span>Save Announcement</span>';
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Send Announcement</span>';
         }
     }
 

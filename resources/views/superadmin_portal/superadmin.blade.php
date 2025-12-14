@@ -1564,7 +1564,7 @@
                             <button type="submit" id="saveAnnouncementBtn"
                                 class="w-full bg-gradient-to-r from-market-primary to-market-secondary text-white py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
                                 <i class="fas fa-paper-plane"></i>
-                                <span>Post Announcement</span>
+                                <span>Send Announcement</span>
                             </button>
                             </div>
                         </form>
