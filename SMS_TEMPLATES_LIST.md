@@ -228,11 +228,235 @@ An bagong total: P{{new_total_due}}. Salamat!
 
 ---
 
+---
+
+## 4. Effectivity Date SMS Templates
+
+**Note:** These templates are **dynamically generated** in code (not stored in database or JSON files). They are sent when effectivity dates are applied for rate changes, schedule changes, and billing setting changes.
+
+### 4.1. Utility Rate Change Notification
+
+**Template Name:** `rate_change_notification` (dynamic)
+
+**Used By:**
+- `ChangeNotificationService::sendRateChangeNotification()`
+- `ApplyPendingRateChanges` command (when effectivity date arrives)
+- Triggered when utility rates (Water/Electricity) are changed
+
+**Template Structure:**
+```
+RATE CHANGE: {utility_type} rate updated.
+Old rate: ₱{old_rate}/{unit}
+Old rate: ₱{old_rate}/{unit} (Monthly: ₱{old_monthly_rate})
+New rate: ₱{new_rate}/{unit}
+New rate: ₱{new_rate}/{unit} (Monthly: ₱{new_monthly_rate})
+Effective: {current_date}
+
+Your current month bill: ₱{current_bill_amount}
+
+- Virac Public Market
+```
+
+**Variables:**
+- `{utility_type}` - Water or Electricity
+- `{old_rate}` - Previous rate per unit
+- `{new_rate}` - New rate per unit
+- `{old_monthly_rate}` - Previous monthly rate (if applicable)
+- `{new_monthly_rate}` - New monthly rate (if applicable)
+- `{unit}` - "kWh" for Electricity, "day" for Water
+- `{current_date}` - Current date (e.g., "December 15, 2025")
+- `{current_bill_amount}` - Recalculated bill amount with new rate
+
+**Example:**
+```
+RATE CHANGE: Electricity rate updated.
+Old rate: ₱31.00/kWh (Monthly: ₱0.00)
+New rate: ₱35.00/kWh (Monthly: ₱0.00)
+Effective: December 15, 2025
+
+Your current month bill: ₱1,750.00
+
+- Virac Public Market
+```
+
+---
+
+### 4.2. Rental Rate Change Notification
+
+**Template Name:** `rental_rate_change_notification` (dynamic)
+
+**Used By:**
+- `ChangeNotificationService::sendRentalRateChangeNotification()`
+- Triggered when stall rental rates are changed
+
+**Template Structure:**
+```
+RENTAL RATE CHANGE: Stall {stall_number} rate updated.
+Old rate: ₱{old_daily_rate}/day
+Old rate: ₱{old_daily_rate}/day (Monthly: ₱{old_monthly_rate})
+New rate: ₱{new_daily_rate}/day
+New rate: ₱{new_daily_rate}/day (Monthly: ₱{new_monthly_rate})
+Effective: {current_date}
+
+Your current month bill: ₱{current_bill_amount}
+Discounted amount: ₱{discounted_amount}
+
+- Virac Public Market
+```
+
+**Variables:**
+- `{stall_number}` - Stall/table number (e.g., "MS-04")
+- `{old_daily_rate}` - Previous daily rate
+- `{new_daily_rate}` - New daily rate
+- `{old_monthly_rate}` - Previous monthly rate (if applicable)
+- `{new_monthly_rate}` - New monthly rate (if applicable)
+- `{current_date}` - Current date
+- `{current_bill_amount}` - Recalculated bill amount with new rate
+- `{discounted_amount}` - Discounted amount (if payment is on or before 15th and discount rate exists)
+
+**Example:**
+```
+RENTAL RATE CHANGE: Stall MS-04 rate updated.
+Old rate: ₱126.00/day (Monthly: ₱3,780.00)
+New rate: ₱130.00/day (Monthly: ₱3,900.00)
+Effective: December 15, 2025
+
+Your current month bill: ₱3,900.00
+Discounted amount: ₱195.00
+
+- Virac Public Market
+```
+
+---
+
+### 4.3. Schedule Change Notification
+
+**Template Name:** `schedule_change_notification` (dynamic)
+
+**Used By:**
+- `ChangeNotificationService::sendScheduleChangeNotification()`
+- Triggered when due dates, disconnection dates, or meter reading schedules are changed
+
+**Template Structure:**
+
+**For Disconnection Date:**
+```
+DISCONNECTION DATE CHANGE: {utility_type} disconnection date updated.
+New disconnection date: Day {new_day} of each month
+Effective: {current_date}
+
+- Virac Public Market
+```
+
+**For Due Date:**
+```
+DUE DATE CHANGE: {utility_type} due date updated.
+New due date: Day {new_day} of each month
+Effective: {current_date}
+
+- Virac Public Market
+```
+
+**For Meter Reading Schedule:**
+```
+METER READING SCHEDULE CHANGE: {utility_type} meter reading schedule updated.
+New schedule: Day {new_day} of each month
+Effective: {current_date}
+
+- Virac Public Market
+```
+
+**Variables:**
+- `{utility_type}` - Water, Electricity, or Rent
+- `{new_day}` - New day of the month (1-31)
+- `{current_date}` - Current date
+
+**Example:**
+```
+DUE DATE CHANGE: Rent due date updated.
+New due date: Day 5 of each month
+Effective: December 15, 2025
+
+- Virac Public Market
+```
+
+---
+
+### 4.4. Billing Setting Change Notification
+
+**Template Name:** `billing_setting_change_notification` (dynamic)
+
+**Used By:**
+- `ChangeNotificationService::sendBillingSettingChangeNotification()`
+- Triggered when billing settings (discount rate, surcharge rate, penalty rate, monthly interest rate) are changed
+
+**Template Structure:**
+```
+BILLING SETTING CHANGE: {setting_display} for {utility_type} updated.
+Old value: {old_value}%
+New value: {new_value}%
+Effective: {current_date}
+
+- Virac Public Market
+```
+
+**Variables:**
+- `{setting_display}` - User-friendly setting name:
+  - "Surcharge Rate" (for `surcharge_rate`)
+  - "Monthly Interest Rate" (for `monthly_interest_rate`)
+  - "Penalty Rate" (for `penalty_rate`)
+  - "Discount Rate" (for `discount_rate`)
+- `{utility_type}` - Water, Electricity, or Rent
+- `{old_value}` - Previous percentage value (multiplied by 100)
+- `{new_value}` - New percentage value (multiplied by 100)
+- `{current_date}` - Current date
+
+**Example:**
+```
+BILLING SETTING CHANGE: Discount Rate for Rent updated.
+Old value: 5.00%
+New value: 7.00%
+Effective: December 15, 2025
+
+- Virac Public Market
+```
+
+---
+
+## Effectivity Date SMS Notes
+
+1. **Dynamic Generation**: These templates are **not stored** in the database or JSON files. They are built programmatically in `ChangeNotificationService.php`.
+
+2. **Effectivity Date Logic**: 
+   - When a change is made with an effectivity date in the future, the change is stored in history tables (`rate_histories`, `billing_setting_histories`, `schedule_histories`)
+   - The `ApplyPendingRateChanges` command runs daily (via scheduler) to check for pending changes
+   - When the effectivity date arrives, the change is applied and SMS notifications are sent
+
+3. **Automatic Bill Regeneration**: When effectivity date changes are applied:
+   - Current month bills are deleted and regenerated with new rates/settings
+   - Outstanding balances are automatically updated
+   - SMS notifications include the new bill amount
+
+4. **Recipients**:
+   - **Rate Changes**: All vendors using the utility + Staff + Meter Reader Clerks (for Electricity)
+   - **Rental Rate Changes**: Specific stall vendor + Staff
+   - **Schedule Changes**: All affected vendors + Staff + Meter Reader Clerks (for meter reading/disconnection)
+   - **Billing Setting Changes**: All affected vendors + Staff
+
+5. **SMS Storage**: All effectivity date SMS messages are stored in the `notifications` table with:
+   - `channel`: 'sms'
+   - `type`: 'change_notification', 'rental_rate_change', etc.
+   - `title`: Automatically generated based on change type
+
+---
+
 ## Related Files
 
-- `config/message_templates.json` - Default templates
+- `config/message_templates.json` - Default templates (bill statement, payment reminder, overdue alert)
 - `app/Services/SmsService.php` - Template processing and sending
+- `app/Services/ChangeNotificationService.php` - **Effectivity date SMS message builders**
 - `app/Http/Controllers/Api/NotificationTemplateController.php` - Template management API
 - `app/Console/Commands/SendBillingStatements.php` - Bill statement sender
 - `app/Console/Commands/SendPaymentReminders.php` - Payment reminder sender
 - `app/Console/Commands/SendOverdueAlerts.php` - Overdue alert sender
+- `app/Console/Commands/ApplyPendingRateChanges.php` - **Applies effectivity date changes and sends SMS**
