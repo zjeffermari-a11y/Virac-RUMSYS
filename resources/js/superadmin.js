@@ -48,13 +48,14 @@ class SuperAdminDashboard {
             window.INITIAL_STATE?.unreadNotificationsCount || 0;
 
         // New properties for SMS Schedules
-        this.readingEditRequests =
-            window.INITIAL_STATE?.editRequests?.data?.map((req) => ({
-                id: req.id,
-                request_date: req.created_at,
-                request_reason: req.reason,
-                status: req.status,
-            })) || [];
+        // Initialize edit requests from initial state
+        const initialEditRequests = window.INITIAL_STATE?.editRequests;
+        this.readingEditRequests = (initialEditRequests?.data || initialEditRequests || []).map((req) => ({
+            id: req.id,
+            request_date: req.created_at,
+            request_reason: req.reason || '',
+            status: req.status || 'pending',
+        }));
 
         this.users = window.INITIAL_STATE?.systemUsers || [];
         this.allUsers = window.INITIAL_STATE?.systemUsers || []; // New property to hold all users for client-side filtering
@@ -967,6 +968,16 @@ class SuperAdminDashboard {
             case "announcementSection":
                 await this.fetchAnnouncements();
                 await this.loadAnnouncementRecipients();
+                break;
+            case "notificationSection":
+                // Reset edit requests state when section is opened
+                if (this.readingEditRequests.length === 0) {
+                    this.readingEditRequestsPage = 1;
+                    this.readingEditRequestsHasMore = true;
+                    await this.fetchReadingEditRequests();
+                } else {
+                    this.renderReadingEditRequestsTable();
+                }
                 break;
             // The 'notificationSection' still needs to fetch SMS settings dynamically
         }

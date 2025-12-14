@@ -14,10 +14,20 @@ use App\Services\AuditLogger;
 
 class ReadingEditRequestController extends Controller
 {
-    public function index()
+    public function index(Request $request = null)
     {
-        // Fetch all requests, ordered by the newest first, and paginate them.
-        $requests = ReadingEditRequest::latest()->paginate(20);
+        // Fetch all requests with relationships, ordered by the newest first, and paginate them.
+        $requests = ReadingEditRequest::with(['utilityReading.stall', 'requestedBy', 'approvedBy'])
+            ->latest()
+            ->paginate(20);
+
+        // Transform the data to include stall information
+        $requests->getCollection()->transform(function ($request) {
+            $request->stall_number = $request->utilityReading && $request->utilityReading->stall 
+                ? $request->utilityReading->stall->table_number 
+                : 'N/A';
+            return $request;
+        });
 
         return response()->json($requests);
     }
