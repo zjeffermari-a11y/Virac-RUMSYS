@@ -4446,6 +4446,18 @@ class SuperAdminDashboard {
                 !isEditing
             );
         }
+        
+        // Hide "Change Detected" modal when entering edit mode
+        // Modal should only show after Save is clicked, not during editing
+        if (isEditing) {
+            const changeModal = document.getElementById('changeEffectivityModal');
+            if (changeModal) {
+                changeModal.classList.add('hidden');
+            }
+            // Clear any pending change request when starting to edit
+            this.pendingChangeRequest = null;
+        }
+        
         this.filterAndRenderRates(this.rentalRatesPagination.current_page || 1);
     }
 
