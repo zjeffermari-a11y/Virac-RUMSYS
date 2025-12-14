@@ -83,7 +83,7 @@ class ChangeNotificationService
                     if ($utilityType) {
                         $currentBill = $this->getCurrentMonthBill($user, $utilityType, $newRate, $newMonthlyRate);
                         if ($currentBill) {
-                            $personalizedMessage .= "\n\nYour current month bill: ₱" . number_format($currentBill, 2);
+                            $personalizedMessage .= "\n\nBayadan sa bulan na ini: ₱" . number_format($currentBill, 2);
                         }
                     }
                     
@@ -498,16 +498,12 @@ class ChangeNotificationService
     private function buildRateChangeMessage($utilityType, $oldRate, $newRate, $oldMonthlyRate = null, $newMonthlyRate = null)
     {
         $unit = $utilityType === 'Electricity' ? 'kWh' : 'day';
-        $message = "RATE CHANGE: {$utilityType} rate updated.\n";
-        $message .= "Old rate: ₱" . number_format($oldRate, 2) . "/{$unit}";
-        if ($oldMonthlyRate) {
-            $message .= " (Monthly: ₱" . number_format($oldMonthlyRate, 2) . ")";
-        }
-        $message .= "\nNew rate: ₱" . number_format($newRate, 2) . "/{$unit}";
+        $message = "RATE CHANGE: {$utilityType} rate inupdate.\n";
+        $message .= "Bagong rate: ₱" . number_format($newRate, 2) . "/{$unit}";
         if ($newMonthlyRate) {
             $message .= " (Monthly: ₱" . number_format($newMonthlyRate, 2) . ")";
         }
-        $message .= "\nEffective: " . Carbon::now()->format('F d, Y');
+        $message .= "\nEpektibo sa: " . Carbon::now()->format('F d, Y');
         
         return $message;
     }
@@ -518,11 +514,7 @@ class ChangeNotificationService
     private function buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate = null, $newMonthlyRate = null)
     {
         $message = "RENTAL RATE CHANGE: Stall {$stall->table_number} rate inupdate.\n";
-        $message .= "Lumang rate: ₱" . number_format($oldDailyRate, 2) . "/day";
-        if ($oldMonthlyRate) {
-            $message .= " (Monthly: ₱" . number_format($oldMonthlyRate, 2) . ")";
-        }
-        $message .= "\nBagong rate: ₱" . number_format($newDailyRate, 2) . "/day";
+        $message .= "Bagong rate: ₱" . number_format($newDailyRate, 2) . "/day";
         if ($newMonthlyRate) {
             $message .= " (Monthly: ₱" . number_format($newMonthlyRate, 2) . ")";
         }
