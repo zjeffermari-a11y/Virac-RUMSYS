@@ -93,15 +93,21 @@ class ScheduleController extends Controller
                             'updated_at' => now(),
                         ]);
 
-                        // Send SMS notification in background
-                        register_shutdown_function(function() use ($notificationService, $oldDay, $newDay) {
+                        // Send SMS notification immediately
+                        // Call directly - the notification service handles background sending internally
+                        try {
+                            $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
                             $notificationService->sendScheduleChangeNotification(
                                 'Meter Reading',
                                 'Electricity',
                                 $oldDay,
-                                $newDay
+                                $newDay,
+                                $effectivityDate // Pass today's date as effectivity date
                             );
-                        });
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error("Error sending meter reading schedule change notification: " . $e->getMessage());
+                            // Don't fail the request if SMS fails
+                        }
                     } else {
                         // Not effective today - save to history with future date, don't update main table, don't send SMS yet
                         // Don't update main table yet
@@ -342,17 +348,23 @@ class ScheduleController extends Controller
                             ['type' => $type, 'utility_type' => $utilityType, 'schedule_type' => $scheduleType, 'old_value' => $oldDay, 'new_value' => $newDay, 'effectivity_date' => $effectivityDate]
                         );
 
-                        // Send SMS if effective today (run in background)
+                        // Send SMS if effective today
+                        // Call directly - the notification service handles background sending internally
                         if ($effectiveToday) {
-                            register_shutdown_function(function() use ($notificationService, $type, $oldDay, $newDay) {
+                            try {
                                 $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $type);
+                                $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
                                 $notificationService->sendScheduleChangeNotification(
                                     $type,
                                     $utilityType,
                                     $oldDay,
-                                    $newDay
+                                    $newDay,
+                                    $effectivityDate // Pass today's date as effectivity date
                                 );
-                            });
+                            } catch (\Exception $e) {
+                                \Illuminate\Support\Facades\Log::error("Error sending schedule change notification: " . $e->getMessage());
+                                // Don't fail the request if SMS fails
+                            }
                         }
                     }
                 }

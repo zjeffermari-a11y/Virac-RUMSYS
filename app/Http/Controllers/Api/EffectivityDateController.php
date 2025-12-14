@@ -573,13 +573,15 @@ class EffectivityDateController extends Controller
                             Log::info('Schedule change SMS notification sent', ['success' => $smsSent, 'result' => $result]);
                         } else {
                             $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $schedule->schedule_type);
-                            $notificationService->sendScheduleChangeNotification(
+                            $result = $notificationService->sendScheduleChangeNotification(
                                 $schedule->schedule_type,
                                 $utilityType,
                                 $currentRecord->old_value,
                                 $currentRecord->new_value,
                                 $newEffectivityDate // Pass the chosen effectivity date
                             );
+                            $smsSent = $result['success'] ?? false;
+                            Log::info('Schedule change SMS notification sent', ['success' => $smsSent, 'result' => $result]);
                         }
                     }
                 } elseif ($historyTable === 'billing_setting_histories') {
