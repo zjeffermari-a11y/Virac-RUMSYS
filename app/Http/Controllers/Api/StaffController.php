@@ -220,6 +220,15 @@ class StaffController extends Controller
             })
             ->with('payment')
             ->get();
+        
+        // Additional safeguard: Filter out any October payments that might have slipped through
+        $allOutstandingBills = $allOutstandingBills->filter(function($bill) use ($currentMonthStart) {
+            if ($bill->status === 'paid' && $bill->payment && $bill->payment->payment_date) {
+                $paymentDate = \Carbon\Carbon::parse($bill->payment->payment_date);
+                return $paymentDate->gte($currentMonthStart);
+            }
+            return true;
+        })->values();
 
         return response()->json($allOutstandingBills);
     }
@@ -559,6 +568,15 @@ class StaffController extends Controller
             ->with('payment')
             ->orderBy('due_date', 'desc')
             ->get();
+        
+        // Additional safeguard: Filter out any October payments that might have slipped through
+        $outstandingBills = $outstandingBills->filter(function($bill) use ($currentMonthStart) {
+            if ($bill->status === 'paid' && $bill->payment && $bill->payment->payment_date) {
+                $paymentDate = Carbon::parse($bill->payment->payment_date);
+                return $paymentDate->gte($currentMonthStart);
+            }
+            return true;
+        })->values();
 
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
         $today = Carbon::today();

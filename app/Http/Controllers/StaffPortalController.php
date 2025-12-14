@@ -121,9 +121,12 @@ class StaffPortalController extends Controller
                 $query->where('status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
                         $q->where('status', 'paid')
-                            ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
-                                $paymentQuery->whereNotNull('payment_date')
-                                    ->whereBetween('payment_date', [
+                            ->whereExists(function($subQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                $subQuery->select(DB::raw(1))
+                                    ->from('payments')
+                                    ->whereColumn('payments.billing_id', 'billing.id')
+                                    ->whereNotNull('payments.payment_date')
+                                    ->whereBetween('payments.payment_date', [
                                         $currentMonthStart->toDateString(),
                                         $currentMonthEnd->toDateString()
                                     ]);
@@ -132,6 +135,15 @@ class StaffPortalController extends Controller
             })
             ->with('payment')
             ->get();
+        
+        // Additional safeguard: Filter out any October payments that might have slipped through
+        $outstandingBills = $outstandingBills->filter(function($bill) use ($currentMonthStart) {
+            if ($bill->status === 'paid' && $bill->payment && $bill->payment->payment_date) {
+                $paymentDate = Carbon::parse($bill->payment->payment_date);
+                return $paymentDate->gte($currentMonthStart);
+            }
+            return true;
+        })->values();
 
         // Get billing settings for penalty/interest calculations
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
@@ -339,6 +351,19 @@ class StaffPortalController extends Controller
             ->with('payment')
             ->orderBy('due_date', 'desc')
             ->get();
+        
+        // Additional safeguard: Filter out any October payments that might have slipped through
+        // This ensures October payments are definitely excluded even if query has issues
+        $outstandingBills = $outstandingBills->filter(function($bill) use ($currentMonthStart) {
+            // If bill is paid, check payment_date
+            if ($bill->status === 'paid' && $bill->payment && $bill->payment->payment_date) {
+                $paymentDate = Carbon::parse($bill->payment->payment_date);
+                // Exclude if payment_date is before current month
+                return $paymentDate->gte($currentMonthStart);
+            }
+            // Include unpaid bills
+            return true;
+        })->values();
         
         // Debug: Log if October payments are found (should be 0)
         $octoberPayments = $outstandingBills->filter(function($bill) {

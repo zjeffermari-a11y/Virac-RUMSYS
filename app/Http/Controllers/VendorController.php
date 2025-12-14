@@ -59,6 +59,15 @@ class VendorController extends Controller
             ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
             ->orderBy('due_date', 'desc')
             ->get();
+        
+        // Additional safeguard: Filter out any October payments that might have slipped through
+        $outstandingBills = $outstandingBills->filter(function($bill) use ($currentMonthStart) {
+            if ($bill->status === 'paid' && $bill->payment && $bill->payment->payment_date) {
+                $paymentDate = Carbon::parse($bill->payment->payment_date);
+                return $paymentDate->gte($currentMonthStart);
+            }
+            return true;
+        })->values();
 
         // Cache billing settings (rarely changes)
         $billingSettings = cache()->remember('billing_settings', 3600, function () {
@@ -221,6 +230,15 @@ class VendorController extends Controller
         ->select('id', 'stall_id', 'utility_type', 'period_start', 'period_end', 'amount', 'due_date', 'disconnection_date', 'status', 'consumption', 'current_reading', 'previous_reading', 'rate')
         ->orderBy('due_date', 'desc')
         ->get();
+    
+    // Additional safeguard: Filter out any October payments that might have slipped through
+    $outstandingBills = $outstandingBills->filter(function($bill) use ($currentMonthStart) {
+        if ($bill->status === 'paid' && $bill->payment && $bill->payment->payment_date) {
+            $paymentDate = Carbon::parse($bill->payment->payment_date);
+            return $paymentDate->gte($currentMonthStart);
+        }
+        return true;
+    })->values();
 
     // Cache billing settings (rarely changes)
     $billingSettings = cache()->remember('billing_settings', 3600, function () {
