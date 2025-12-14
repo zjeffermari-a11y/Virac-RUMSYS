@@ -94,7 +94,7 @@ class ReadingEditRequestController extends Controller
             'request' => [
                 'id' => $readingEditRequest->id,
                 'status' => $readingEditRequest->status,
-                'processed_at' => $readingEditRequest->processed_at,
+                'date_of_approval_rejection' => $readingEditRequest->date_of_approval_rejection,
             ]
         ]);
     }
