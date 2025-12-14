@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('reading_edit_requests', function (Blueprint $table) {
-            $table->timestamp('processed_at')->nullable()->after('approved_by');
+            $table->timestamp('processed_at')->nullable();
         });
     }
 
