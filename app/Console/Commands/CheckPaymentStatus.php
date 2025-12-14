@@ -85,6 +85,8 @@ class CheckPaymentStatus extends Command
         // Check bills that should be in outstanding balance
         $this->info("2. Bills That SHOULD Be in Outstanding Balance:");
         $this->line("-----------------------------------");
+        $this->info("Current Month Range: " . $currentMonthStart->format('Y-m-d') . " to " . $currentMonthEnd->format('Y-m-d'));
+        $this->line("");
         
         $outstandingBills = DB::table('billing')
             ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
@@ -103,6 +105,7 @@ class CheckPaymentStatus extends Command
                 $query->where('billing.status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
                         $q->where('billing.status', 'paid')
+                            ->whereNotNull('payments.payment_date')
                             ->whereBetween('payments.payment_date', [
                                 $currentMonthStart->toDateString(),
                                 $currentMonthEnd->toDateString()
