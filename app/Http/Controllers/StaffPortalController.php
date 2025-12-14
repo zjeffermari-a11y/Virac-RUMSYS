@@ -316,7 +316,8 @@ class StaffPortalController extends Controller
         $currentMonthStart = $today->copy()->startOfMonth();
         $currentMonthEnd = $today->copy()->endOfMonth();
         
-        // Include unpaid bills OR paid bills from current month
+        // Include unpaid bills OR paid bills from current month only
+        // This ensures payments from previous months (like October) are excluded
         $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
             ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
                 $query->where('status', 'unpaid')
@@ -334,6 +335,23 @@ class StaffPortalController extends Controller
             ->with('payment')
             ->orderBy('due_date', 'desc')
             ->get();
+        
+        // Debug: Log if October payments are found (should be 0)
+        $octoberPayments = $outstandingBills->filter(function($bill) {
+            if (!$bill->payment || !$bill->payment->payment_date) return false;
+            $paymentDate = Carbon::parse($bill->payment->payment_date);
+            return $paymentDate->year == 2025 && $paymentDate->month == 10;
+        });
+        
+        if ($octoberPayments->isNotEmpty()) {
+            \Log::warning('October payments found in outstanding balance for vendor ' . $vendor->id, [
+                'vendor_id' => $vendor->id,
+                'stall_id' => $vendor->stall->id,
+                'october_payments_count' => $octoberPayments->count(),
+                'current_month' => $today->format('Y-m'),
+                'payment_ids' => $octoberPayments->pluck('id')->toArray()
+            ]);
+        }
 
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
         
