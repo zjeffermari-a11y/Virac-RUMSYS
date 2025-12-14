@@ -1268,6 +1268,14 @@ document.addEventListener("DOMContentLoaded", () => {
                         const statusClass =
                             statusClasses[req.status] || "status-pending";
 
+                        const processedDate = req.processed_at 
+                            ? new Date(req.processed_at).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                            })
+                            : "-";
+
                         row.innerHTML = `
                             <td data-label="Request Date" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(
                                 req.requestDate
@@ -1283,6 +1291,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             req.status || 'Pending'
                         }</span>
                             </td>
+                            <td data-label="Processed Date" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${processedDate}</td>
                         `;
                         notificationTableBody.appendChild(row);
                     });
