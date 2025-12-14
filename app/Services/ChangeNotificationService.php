@@ -315,7 +315,6 @@ class ChangeNotificationService
             $recipients = $this->getRecipientsForBillingSetting($utilityType);
             
             $message = $this->buildBillingSettingChangeMessage($utilityType, $settingName, $oldValue, $newValue);
-            $message .= "\n\n- Virac Public Market";
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Billing Setting Change: {$utilityType}", $message);
@@ -558,7 +557,7 @@ class ChangeNotificationService
         ];
         
         $settingDisplay = $settingLabels[$settingName] ?? ucwords(str_replace('_', ' ', $settingName));
-        $message = "BAGONG BILLING SETTING : {$settingDisplay} para sa {$utilityType} inupdated.\n";
+        $message = "BAGONG BILLING SETTING : {$settingDisplay} para sa {$utilityType} inupdate.\n";
         $message .= "Lumang value: " . number_format($oldValue * 100, 2) . "%\n";
         $message .= "Bagong value: " . number_format($newValue * 100, 2) . "%";
         $message .= "\nEpektibo: " . Carbon::now()->format('F d, Y');
