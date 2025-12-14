@@ -28,12 +28,12 @@ class AuditTrailController extends Controller
             // Build select fields - use LEFT JOINs to handle orphaned records gracefully
             $selectFields = [
                 'at.id',
-                'at.created_at as date_time',
+                    'at.created_at as date_time',
                 'at.user_id',
                 'at.role_id',
-                'at.action',
-                'at.module',
-                'at.result',
+                    'at.action',
+                    'at.module',
+                    'at.result',
                 DB::raw('COALESCE(u.name, \'[Deleted User]\') as user_name'),
                 DB::raw('COALESCE(r.name, \'[Deleted Role]\') as user_role')
             ];

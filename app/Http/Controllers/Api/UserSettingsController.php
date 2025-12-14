@@ -141,18 +141,29 @@ class UserSettingsController extends Controller
 
             // Generate absolute URL for the profile picture from B2
             try {
-                // B2 returns full public URLs when visibility is 'public'
-                $url = Storage::disk('b2')->url($path);
+                $visibility = config('filesystems.disks.b2.visibility', 'public');
                 
-                // If URL is not a full URL, construct it manually using B2_URL config
-                if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                    $b2Url = config('filesystems.disks.b2.url');
-                    if ($b2Url) {
-                        // Construct full URL: B2_URL + path
-                        $url = rtrim($b2Url, '/') . '/' . ltrim($path, '/');
-                    } else {
-                        // Fallback: use Storage URL even if relative
-                        $url = Storage::disk('b2')->url($path);
+                if ($visibility === 'private') {
+                    // For private buckets, use temporary signed URLs (valid for 1 year)
+                    $url = Storage::disk('b2')->temporaryUrl(
+                        $path,
+                        now()->addYear(),
+                        ['ResponseContentDisposition' => 'inline']
+                    );
+                } else {
+                    // For public buckets, use public URLs
+                    $url = Storage::disk('b2')->url($path);
+                    
+                    // If URL is not a full URL, construct it manually using B2_URL config
+                    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                        $b2Url = config('filesystems.disks.b2.url');
+                        if ($b2Url) {
+                            // Construct full URL: B2_URL + path
+                            $url = rtrim($b2Url, '/') . '/' . ltrim($path, '/');
+                        } else {
+                            // Fallback: use Storage URL even if relative
+                            $url = Storage::disk('b2')->url($path);
+                        }
                     }
                 }
                 

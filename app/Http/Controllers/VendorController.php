@@ -43,10 +43,11 @@ class VendorController extends Controller
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
                         $q->where('status', 'paid')
                             ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
-                                $paymentQuery->whereBetween('payment_date', [
-                                    $currentMonthStart->toDateString(),
-                                    $currentMonthEnd->toDateString()
-                                ]);
+                                $paymentQuery->whereNotNull('payment_date')
+                                    ->whereBetween('payment_date', [
+                                        $currentMonthStart->toDateString(),
+                                        $currentMonthEnd->toDateString()
+                                    ]);
                             });
                     });
             })

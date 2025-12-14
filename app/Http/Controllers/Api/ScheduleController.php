@@ -334,7 +334,7 @@ class ScheduleController extends Controller
                         
                         // Create specific action name
                         $actionName = "Updated {$utilityType} {$scheduleType} Schedule";
-                        
+
                         AuditLogger::log(
                             $actionName,
                             'Schedules',
@@ -568,7 +568,7 @@ class ScheduleController extends Controller
                         } else {
                             $actionName = 'Updated SMS Schedule';
                         }
-                        
+
                         AuditLogger::log(
                             $actionName,
                             'Schedules',

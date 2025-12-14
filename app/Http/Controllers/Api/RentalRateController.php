@@ -403,66 +403,66 @@ class RentalRateController extends Controller
         $auditId = null;
         try {
             DB::transaction(function () use ($validatedData, $stallModel, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $effectiveToday, $notificationService, &$auditId) {
-                // Calculate new rates
-                $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
+            // Calculate new rates
+            $newDailyRateValue = isset($validatedData['dailyRate']) ? (float) $validatedData['dailyRate'] : $oldDailyRate;
+            
+            if ($effectiveToday) {
+                // Effective today - update immediately, send SMS
+                $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
                 
-                if ($effectiveToday) {
-                    // Effective today - update immediately, send SMS
-                    $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
-                    
-                    // Update the stall
-                    $stallModel->update(array_filter($validatedData));
-                    $stallModel->refresh();
+                // Update the stall
+                $stallModel->update(array_filter($validatedData));
+                $stallModel->refresh();
                     
                     // Get the actual updated monthly rate from database (may be calculated by DB)
                     $newMonthlyRateValue = (float) $stallModel->monthly_rate;
-                    
-                    // Send SMS notification and regenerate bills in background
-                    register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
-                        $notificationService->sendRentalRateChangeNotification(
-                            $stallModel,
-                            $oldDailyRate,
-                            $newDailyRateValue,
-                            $oldMonthlyRate,
-                            $newMonthlyRateValue
-                        );
-                    });
-                } else {
-                    // Not effective today - DON'T update the stall yet, just save to audit with future date
-                    $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
+                
+                // Send SMS notification and regenerate bills in background
+                register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
+                    $notificationService->sendRentalRateChangeNotification(
+                        $stallModel,
+                        $oldDailyRate,
+                        $newDailyRateValue,
+                        $oldMonthlyRate,
+                        $newMonthlyRateValue
+                    );
+                });
+            } else {
+                // Not effective today - DON'T update the stall yet, just save to audit with future date
+                $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
                     // Calculate expected monthly rate (daily * 30)
                     $newMonthlyRateValue = $newDailyRateValue * 30;
                     
-                    // Only update non-rate fields (like tableNumber, area) if they changed
-                    $nonRateUpdates = array_filter($validatedData, function($key) {
-                        return !in_array($key, ['dailyRate', 'monthlyRate']);
-                    }, ARRAY_FILTER_USE_KEY);
-                    if (!empty($nonRateUpdates)) {
-                        $stallModel->update($nonRateUpdates);
+                // Only update non-rate fields (like tableNumber, area) if they changed
+                $nonRateUpdates = array_filter($validatedData, function($key) {
+                    return !in_array($key, ['dailyRate', 'monthlyRate']);
+                }, ARRAY_FILTER_USE_KEY);
+                if (!empty($nonRateUpdates)) {
+                    $stallModel->update($nonRateUpdates);
                         $stallModel->refresh();
-                    }
                 }
-                
-                // Store audit details - always use the calculated values
-                $auditDetails = [
-                    'stall_id' => $stallModel->id,
-                    'table_number' => $stallModel->table_number,
-                    'section' => $stallModel->section->name ?? 'N/A',
-                    'old_daily_rate' => $oldDailyRate,
-                    'new_daily_rate' => $newDailyRateValue,
-                    'old_monthly_rate' => $oldMonthlyRate,
-                    'new_monthly_rate' => $newMonthlyRateValue,
-                    'effectivity_date' => $effectivityDate,
-                ];
-                
+            }
+            
+            // Store audit details - always use the calculated values
+            $auditDetails = [
+                'stall_id' => $stallModel->id,
+                'table_number' => $stallModel->table_number,
+                'section' => $stallModel->section->name ?? 'N/A',
+                'old_daily_rate' => $oldDailyRate,
+                'new_daily_rate' => $newDailyRateValue,
+                'old_monthly_rate' => $oldMonthlyRate,
+                'new_monthly_rate' => $newMonthlyRateValue,
+                'effectivity_date' => $effectivityDate,
+            ];
+            
                 // Always log the audit trail - this is critical for tracking changes
                 // Log BEFORE any potential rollback to ensure it's saved
                 $auditId = AuditLogger::log(
-                    'Updated Rental Rate',
-                    'Rental Rates',
-                    'Success',
-                    $auditDetails
-                );
+                'Updated Rental Rate',
+                'Rental Rates',
+                'Success',
+                $auditDetails
+            );
                 
                 // Log if audit log creation failed
                 if (!$auditId) {

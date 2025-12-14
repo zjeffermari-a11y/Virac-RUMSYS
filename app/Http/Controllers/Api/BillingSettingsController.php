@@ -177,15 +177,15 @@ class BillingSettingsController extends Controller
                         $fieldsList = implode(", ", array_unique($fields));
                         $actionName = "Updated {$utilityType} Billing Settings ({$fieldsList})";
                         
-                        AuditLogger::log(
+                    AuditLogger::log(
                             $actionName,
-                            'Billing Settings',
-                            'Success',
+                        'Billing Settings',
+                        'Success',
                             ['utility_type' => $utilityType, 'fields_changed' => $fields, 'changes' => array_filter($allChanges, function($change) use ($utilityType) {
                                 $setting = BillingSetting::find($change['billing_setting_id']);
                                 return $setting && $setting->utility_type === $utilityType;
                             }), 'effectivity_date' => $effectivityDate]
-                        );
+                    );
                     }
                 }
             });
