@@ -1000,10 +1000,10 @@ const MarketApp = {
                 } catch (error) {
                     console.error("Password change error:", error);
                     MarketApp.methods.showToast("An error occurred. Please try again.", "error");
-                    } finally {
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
-                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
                 });
             }
 
