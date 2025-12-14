@@ -85,8 +85,6 @@ class CheckPaymentStatus extends Command
         // Check bills that should be in outstanding balance
         $this->info("2. Bills That SHOULD Be in Outstanding Balance:");
         $this->line("-----------------------------------");
-        $this->info("Current Month Range: " . $currentMonthStart->format('Y-m-d') . " to " . $currentMonthEnd->format('Y-m-d'));
-        $this->line("");
         
         $outstandingBills = DB::table('billing')
             ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
@@ -105,7 +103,6 @@ class CheckPaymentStatus extends Command
                 $query->where('billing.status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
                         $q->where('billing.status', 'paid')
-                            ->whereNotNull('payments.payment_date')
                             ->whereBetween('payments.payment_date', [
                                 $currentMonthStart->toDateString(),
                                 $currentMonthEnd->toDateString()
@@ -205,6 +202,46 @@ class CheckPaymentStatus extends Command
         
         if ($octoberPayments->isNotEmpty() && $currentMonthStart->month > 10) {
             $this->warn("⚠️  October payments should NOT be in outstanding balance if current month is after October.");
+            $this->line("");
+            $this->info("Checking if any October payments are incorrectly in outstanding balance query...");
+            
+            // Get October payment IDs
+            $octoberPaymentIds = $octoberPayments->pluck('id')->toArray();
+            
+            // Check if any October payments match the outstanding balance criteria
+            $octoberInOutstanding = $outstandingBills->filter(function($bill) use ($octoberStart, $octoberEnd, $octoberPaymentIds) {
+                if (!$bill->payment_date) return false;
+                $paymentDate = Carbon::parse($bill->payment_date);
+                $isOctober = $paymentDate->between($octoberStart, $octoberEnd);
+                $isInOctoberList = in_array($bill->id, $octoberPaymentIds);
+                return $isOctober || $isInOctoberList;
+            });
+            
+            if ($octoberInOutstanding->isNotEmpty()) {
+                $this->error("❌ FOUND " . $octoberInOutstanding->count() . " October payment(s) incorrectly in outstanding balance!");
+                $this->table(
+                    ['ID', 'Stall', 'Type', 'Status', 'Payment Date', 'Current Month Start', 'Issue'],
+                    $octoberInOutstanding->map(function($bill) use ($currentMonthStart) {
+                        return [
+                            $bill->id,
+                            $bill->stall_id,
+                            $bill->utility_type,
+                            $bill->status,
+                            $bill->payment_date ? Carbon::parse($bill->payment_date)->format('M d, Y') : 'N/A',
+                            $currentMonthStart->format('M d, Y'),
+                            'Should NOT be in outstanding balance'
+                        ];
+                    })->toArray()
+                );
+                $this->line("");
+                $this->error("This indicates the query filter is NOT working correctly!");
+            } else {
+                $this->info("✓ Good: No October payments found in outstanding balance query.");
+                $this->info("The query filter is working correctly. If you still see October payments in the UI, it may be:");
+                $this->line("  1. Browser/application cache - try clearing cache");
+                $this->line("  2. Code not deployed yet - check if latest code is on server");
+                $this->line("  3. Different endpoint being used - check network tab in browser");
+            }
         }
 
         return 0;
