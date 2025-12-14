@@ -245,39 +245,46 @@ An bagong total: P{{new_total_due}}. Salamat!
 
 **Template Structure:**
 ```
-RATE CHANGE: {utility_type} rate updated.
-Old rate: ₱{old_rate}/{unit}
-Old rate: ₱{old_rate}/{unit} (Monthly: ₱{old_monthly_rate})
-New rate: ₱{new_rate}/{unit}
-New rate: ₱{new_rate}/{unit} (Monthly: ₱{new_monthly_rate})
-Effective: {current_date}
+RATE CHANGE: {utility_type} rate inupdate.
+Bagong rate: ₱{new_rate}/{unit}
+Epektibo sa: {current_date}
 
-Your current month bill: ₱{current_bill_amount}
+Bayadan sa bulan na ini: ₱{current_bill_amount}
 
 - Virac Public Market
 ```
 
 **Variables:**
 - `{utility_type}` - Water or Electricity
-- `{old_rate}` - Previous rate per unit
 - `{new_rate}` - New rate per unit
-- `{old_monthly_rate}` - Previous monthly rate (if applicable)
-- `{new_monthly_rate}` - New monthly rate (if applicable)
 - `{unit}` - "kWh" for Electricity, "day" for Water
 - `{current_date}` - Current date (e.g., "December 15, 2025")
-- `{current_bill_amount}` - Recalculated bill amount with new rate
+- `{current_bill_amount}` - Recalculated bill amount with new rate:
+  - **Water**: `days_in_current_month × new_rate`
+  - **Electricity**: `consumption × new_rate` (from current month bill if available, otherwise previous month)
 
 **Example:**
 ```
-RATE CHANGE: Electricity rate updated.
-Old rate: ₱31.00/kWh (Monthly: ₱0.00)
-New rate: ₱35.00/kWh (Monthly: ₱0.00)
-Effective: December 15, 2025
+RATE CHANGE: Electricity rate inupdate.
+Bagong rate: ₱35.00/kWh
+Epektibo sa: December 15, 2025
 
-Your current month bill: ₱1,750.00
+Bayadan sa bulan na ini: ₱1,750.00
 
 - Virac Public Market
 ```
+
+**Water Example:**
+```
+RATE CHANGE: Water rate inupdate.
+Bagong rate: ₱6.00/day
+Epektibo sa: December 15, 2025
+
+Bayadan sa bulan na ini: ₱186.00
+
+- Virac Public Market
+```
+(Calculation: 31 days × ₱6.00 = ₱186.00)
 
 ---
 
@@ -291,38 +298,28 @@ Your current month bill: ₱1,750.00
 
 **Template Structure:**
 ```
-RENTAL RATE CHANGE: Stall {stall_number} rate updated.
-Old rate: ₱{old_daily_rate}/day
-Old rate: ₱{old_daily_rate}/day (Monthly: ₱{old_monthly_rate})
-New rate: ₱{new_daily_rate}/day
-New rate: ₱{new_daily_rate}/day (Monthly: ₱{new_monthly_rate})
-Effective: {current_date}
+RENTAL RATE CHANGE: Stall {stall_number} rate inupdate.
+Bagong rate: ₱{new_daily_rate}/day
+Epektibo sa: {current_date}
 
-Your current month bill: ₱{current_bill_amount}
-Discounted amount: ₱{discounted_amount}
+Bayadan sa bulan na ini: ₱{current_bill_amount}
 
 - Virac Public Market
 ```
 
 **Variables:**
 - `{stall_number}` - Stall/table number (e.g., "MS-04")
-- `{old_daily_rate}` - Previous daily rate
 - `{new_daily_rate}` - New daily rate
-- `{old_monthly_rate}` - Previous monthly rate (if applicable)
-- `{new_monthly_rate}` - New monthly rate (if applicable)
 - `{current_date}` - Current date
-- `{current_bill_amount}` - Recalculated bill amount with new rate
-- `{discounted_amount}` - Discounted amount (if payment is on or before 15th and discount rate exists)
+- `{current_bill_amount}` - Recalculated bill amount with new monthly rate
 
 **Example:**
 ```
-RENTAL RATE CHANGE: Stall MS-04 rate updated.
-Old rate: ₱126.00/day (Monthly: ₱3,780.00)
-New rate: ₱130.00/day (Monthly: ₱3,900.00)
-Effective: December 15, 2025
+RENTAL RATE CHANGE: Stall MS-04 rate inupdate.
+Bagong rate: ₱130.00/day
+Epektibo sa: December 15, 2025
 
-Your current month bill: ₱3,900.00
-Discounted amount: ₱195.00
+Bayadan sa bulan na ini: ₱3,900.00
 
 - Virac Public Market
 ```
@@ -341,27 +338,27 @@ Discounted amount: ₱195.00
 
 **For Disconnection Date:**
 ```
-DISCONNECTION DATE CHANGE: {utility_type} disconnection date updated.
-New disconnection date: Day {new_day} of each month
-Effective: {current_date}
+BAGONG DISCONNECTION DATE ISKEDYUL: {utility_type} disconnection date inupdate.
+BAGONG DISCONNECTION DATE: Ika-{new_day} aldaw nin bulan
+EPEKTIBO: {current_date}
 
 - Virac Public Market
 ```
 
 **For Due Date:**
 ```
-DUE DATE CHANGE: {utility_type} due date updated.
-New due date: Day {new_day} of each month
-Effective: {current_date}
+BAGONG DUE DATE ISKEDYUL: {utility_type} due date inupdate.
+Bagong due date: Ika-{new_day} aldaw nin bulan
+EPEKTIBO: {current_date}
 
 - Virac Public Market
 ```
 
 **For Meter Reading Schedule:**
 ```
-METER READING SCHEDULE CHANGE: {utility_type} meter reading schedule updated.
-New schedule: Day {new_day} of each month
-Effective: {current_date}
+BAGONG METER READING ISKEDYL: {utility_type} meter reading schedule updated.
+BAGONG ISKEDYL: Ika-{new_day} aldaw nin bulan
+EPEKTIBO: {current_date}
 
 - Virac Public Market
 ```
@@ -392,10 +389,10 @@ Effective: December 15, 2025
 
 **Template Structure:**
 ```
-BILLING SETTING CHANGE: {setting_display} for {utility_type} updated.
-Old value: {old_value}%
-New value: {new_value}%
-Effective: {current_date}
+BAGONG BILLING SETTING : {setting_display} para sa {utility_type} inupdated.
+Lumang value: {old_value}%
+Bagong value: {new_value}%
+Epektibo: {current_date}
 
 - Virac Public Market
 ```
