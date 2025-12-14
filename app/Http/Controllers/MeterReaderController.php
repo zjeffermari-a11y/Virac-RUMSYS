@@ -152,26 +152,17 @@ class MeterReaderController extends Controller
 
         $billingMonthName = $billingPeriodMonth->format('F');
 
-        // Database-agnostic archive months query
-        $archiveMonths = UtilityReading::where('reading_date', '<', Carbon::today()->startOfMonth())
-            ->get()
-            ->groupBy(function ($reading) {
-                return Carbon::parse($reading->reading_date)->format('F Y');
-            })
-            ->map(function ($readings, $monthYear) {
-                $date = Carbon::parse($readings->first()->reading_date);
-                return [
-                    'month' => $date->format('F Y'),
-                    'month_value' => $date->format('m-Y'),
-                    'year' => $date->year,
-                    'month_num' => $date->month,
-                ];
-            })
-            ->values()
-            ->sortByDesc(function ($item) {
-                return $item['year'] * 100 + $item['month_num'];
-            })
-            ->values();
+        $archiveMonths = UtilityReading::select(
+            DB::raw("DATE_FORMAT(reading_date, '%M %Y') as month"),
+            DB::raw("DATE_FORMAT(reading_date, '%m-%Y') as month_value"),
+            DB::raw("EXTRACT(YEAR FROM reading_date) as year"),
+            DB::raw("EXTRACT(MONTH FROM reading_date) as month_num")
+        )
+        ->where('reading_date', '<', Carbon::today()->startOfMonth())
+        ->groupBy('month', 'month_value', 'year', 'month_num')
+        ->orderBy('year', 'desc')
+        ->orderBy('month_num', 'desc')
+        ->get();
 
         $unreadNotificationsCount = DB::table('notifications')
         ->where('recipient_id', Auth::id())
