@@ -530,12 +530,21 @@ class EffectivityDateController extends Controller
 
             // Send SMS notification about the change (only when effectivity date is adjusted)
             // SMS is sent IMMEDIATELY with the chosen effectivity date displayed
+            // This happens regardless of whether the effectivity date is today or in the future
+            $smsSent = false;
             try {
+                Log::info('Sending SMS notification immediately for effectivity date update', [
+                    'history_table' => $historyTable,
+                    'history_id' => $historyId,
+                    'effectivity_date' => $newEffectivityDate,
+                    'is_future_date' => Carbon::parse($newEffectivityDate)->gt(Carbon::today())
+                ]);
+                
                 if ($historyTable === 'rate_histories') {
                     // Get rate info
                     $rate = DB::table('rates')->where('id', $currentRecord->rate_id)->first();
                     if ($rate) {
-                        $notificationService->sendRateChangeNotification(
+                        $result = $notificationService->sendRateChangeNotification(
                             $rate->utility_type,
                             $currentRecord->old_rate,
                             $currentRecord->new_rate,
@@ -543,6 +552,8 @@ class EffectivityDateController extends Controller
                             null,
                             $newEffectivityDate // Pass the chosen effectivity date
                         );
+                        $smsSent = $result['success'] ?? false;
+                        Log::info('Rate change SMS notification sent', ['success' => $smsSent, 'result' => $result]);
                     }
                 } elseif ($historyTable === 'schedule_histories') {
                     // Get schedule info
@@ -550,13 +561,15 @@ class EffectivityDateController extends Controller
                     if ($schedule) {
                         // Handle Meter Reading schedule differently
                         if ($schedule->schedule_type === 'Meter Reading') {
-                            $notificationService->sendScheduleChangeNotification(
+                            $result = $notificationService->sendScheduleChangeNotification(
                                 'Meter Reading',
                                 'Electricity',
                                 $currentRecord->old_value,
                                 $currentRecord->new_value,
                                 $newEffectivityDate // Pass the chosen effectivity date
                             );
+                            $smsSent = $result['success'] ?? false;
+                            Log::info('Schedule change SMS notification sent', ['success' => $smsSent, 'result' => $result]);
                         } else {
                             $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $schedule->schedule_type);
                             $notificationService->sendScheduleChangeNotification(
@@ -572,13 +585,15 @@ class EffectivityDateController extends Controller
                     // Get billing setting info
                     $billingSetting = DB::table('billing_settings')->where('id', $currentRecord->billing_setting_id)->first();
                     if ($billingSetting) {
-                        $notificationService->sendBillingSettingChangeNotification(
+                        $result = $notificationService->sendBillingSettingChangeNotification(
                             $billingSetting->utility_type,
                             str_replace(' ', '_', strtolower($currentRecord->field_changed)),
                             $currentRecord->old_value / 100, // Convert from percentage
                             $currentRecord->new_value / 100,
                             $newEffectivityDate // Pass the chosen effectivity date
                         );
+                        $smsSent = $result['success'] ?? false;
+                        Log::info('Billing setting change SMS notification sent', ['success' => $smsSent, 'result' => $result]);
                     }
                 } elseif ($historyTable === 'audit_trails' && $currentRecord->module === 'Rental Rates') {
                     // Get rental rate info from details JSON
@@ -595,7 +610,7 @@ class EffectivityDateController extends Controller
                                         'table_number' => $stall->table_number,
                                         'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
                                     ];
-                                    $notificationService->sendRentalRateChangeNotification(
+                                    $result = $notificationService->sendRentalRateChangeNotification(
                                         $stallModel,
                                         $change['old_daily_rate'] ?? 0,
                                         $change['new_daily_rate'] ?? 0,
@@ -603,6 +618,10 @@ class EffectivityDateController extends Controller
                                         $change['new_monthly_rate'] ?? null,
                                         $newEffectivityDate // Pass the chosen effectivity date
                                     );
+                                    if ($result['success'] ?? false) {
+                                        $smsSent = true;
+                                    }
+                                    Log::info('Rental rate change SMS notification sent', ['stall' => $stallModel->table_number, 'success' => $result['success'] ?? false]);
                                 }
                             }
                         }
@@ -627,8 +646,28 @@ class EffectivityDateController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                Log::error("Error sending notification after effectivity date update: " . $e->getMessage());
-                // Don't fail the request if SMS fails
+                Log::error("Error sending notification after effectivity date update: " . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                    'history_table' => $historyTable,
+                    'history_id' => $historyId,
+                    'effectivity_date' => $newEffectivityDate
+                ]);
+                // Don't fail the request if SMS fails, but log it for debugging
+            }
+            
+            // Log SMS sending status
+            if ($smsSent) {
+                Log::info('SMS notification sent successfully for effectivity date update', [
+                    'history_table' => $historyTable,
+                    'history_id' => $historyId,
+                    'effectivity_date' => $newEffectivityDate
+                ]);
+            } else {
+                Log::warning('SMS notification may not have been sent for effectivity date update', [
+                    'history_table' => $historyTable,
+                    'history_id' => $historyId,
+                    'effectivity_date' => $newEffectivityDate
+                ]);
             }
 
             // Log the effectivity date update
@@ -645,9 +684,11 @@ class EffectivityDateController extends Controller
                 ]
             );
 
+            // SMS is sent IMMEDIATELY regardless of effectivity date (today or future)
+            // The message should reflect that notifications have already been sent
             $message = $shouldApplyChange 
                 ? 'Effectivity date updated, changes applied, and notifications sent.'
-                : 'Effectivity date updated successfully. Notifications will be sent when the effectivity date arrives.';
+                : 'Effectivity date updated successfully. SMS notifications have been sent immediately with the chosen effectivity date.';
 
             return response()->json([
                 'message' => $message,
