@@ -47,6 +47,7 @@ class ReadingEditRequestController extends Controller
 
         $readingEditRequest->status = $validated['status'];
         $readingEditRequest->approved_by = Auth::id(); // Set the approver ID
+        $readingEditRequest->date_of_approval_rejection = now(); // Set the date of approval/rejection
         $readingEditRequest->save();
 
         try {

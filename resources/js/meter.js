@@ -1268,6 +1268,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         const statusClass =
                             statusClasses[req.status] || "status-pending";
 
+                        const approvalRejectionDate = req.dateOfApprovalRejection 
+                            ? new Date(req.dateOfApprovalRejection).toLocaleDateString() 
+                            : '-';
+
                         row.innerHTML = `
                             <td data-label="Request Date" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(
                                 req.requestDate
@@ -1283,6 +1287,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             req.status || 'Pending'
                         }</span>
                             </td>
+                            <td data-label="Date of Approval/Rejection" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${approvalRejectionDate}</td>
                         `;
                         notificationTableBody.appendChild(row);
                     });

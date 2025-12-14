@@ -1380,6 +1380,9 @@
                                 <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">
                                     Status
                                 </th>
+                                <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">
+                                    Date of Approval/Rejection
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="readingEditRequestsTableBody">

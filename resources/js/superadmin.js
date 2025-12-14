@@ -55,7 +55,7 @@ class SuperAdminDashboard {
             request_date: req.created_at,
             request_reason: req.reason || '',
             status: req.status || 'pending',
-            processed_at: req.processed_at || null,
+            date_of_approval_rejection: req.date_of_approval_rejection || null,
         }));
 
         this.users = window.INITIAL_STATE?.systemUsers || [];
@@ -2837,11 +2837,12 @@ class SuperAdminDashboard {
 
             const data = await response.json();
 
-            const formattedData = requestsData.map((req) => ({
+            const formattedData = data.data.map((req) => ({
                 id: req.id,
                 request_date: req.created_at,
                 request_reason: req.reason || '',
                 status: req.status || 'pending',
+                date_of_approval_rejection: req.date_of_approval_rejection || null,
             }));
 
             this.readingEditRequests.push(...formattedData);
@@ -2873,7 +2874,7 @@ class SuperAdminDashboard {
         if (!tableBody) return; // Add a guard clause
 
         if (this.readingEditRequests.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">No edit requests found.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No edit requests found.</td></tr>`;
             return;
         }
 
@@ -2892,8 +2893,8 @@ class SuperAdminDashboard {
                     month: "long",
                     day: "numeric",
                 });
-                const processedDate = req.processed_at 
-                    ? new Date(req.processed_at).toLocaleDateString("en-US", {
+                const approvalRejectionDate = req.date_of_approval_rejection 
+                    ? new Date(req.date_of_approval_rejection).toLocaleDateString("en-US", {
                         year: "numeric",
                         month: "long",
                         day: "numeric",
@@ -2913,7 +2914,7 @@ class SuperAdminDashboard {
                     }
                     </span>
                 </td>
-                <td data-label="Processed Date" class="border p-3">${processedDate}</td>
+                <td data-label="Date of Approval/Rejection" class="border p-3">${approvalRejectionDate}</td>
                 <td data-label="Action" class="border p-3 text-center">
                     ${req.status === "pending"
                         ? `

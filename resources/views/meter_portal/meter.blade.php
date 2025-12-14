@@ -254,6 +254,7 @@
                             <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Stall Number</th>
                             <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Reason</th>
                             <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-4 text-left text-sm font-medium uppercase tracking-wider">Date of Approval/Rejection</th>
                         </tr>
                     </thead>
                     <tbody id="notificationTableBody">
