@@ -21,7 +21,7 @@ class ReadingEditRequestController extends Controller
             ->latest()
             ->paginate(20);
 
-        // Transform the data to include stall information
+        // Transform the data to include stall information and ensure processed_at is included
         $requests->getCollection()->transform(function ($request) {
             $request->stall_number = $request->utilityReading && $request->utilityReading->stall 
                 ? $request->utilityReading->stall->table_number 
@@ -88,7 +88,14 @@ class ReadingEditRequestController extends Controller
             ['request_id' => $readingEditRequest->id, 'status' => $validated['status'], 'stall_number' => $readingEditRequest->utilityReading->stall->table_number]
         );
 
-        return response()->json(['message' => 'Request status updated successfully.']);
+        return response()->json([
+            'message' => 'Request status updated successfully.',
+            'request' => [
+                'id' => $readingEditRequest->id,
+                'status' => $readingEditRequest->status,
+                'processed_at' => $readingEditRequest->processed_at,
+            ]
+        ]);
     }
     
 
