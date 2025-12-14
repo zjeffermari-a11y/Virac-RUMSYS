@@ -7304,8 +7304,24 @@ class SuperAdminDashboard {
             // Close modal first
             this.closeEffectivityDateModal();
 
-            // Reload pending changes from server to ensure updated effectivity date is shown
+            // Force reload pending changes from server to ensure updated effectivity date is shown
+            // Clear the current data first to force a fresh fetch
+            this.pendingChanges = [];
+            
+            // Small delay to ensure backend has processed the update
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Reload and wait for it to complete
             await this.loadPendingChanges();
+            
+            // Force re-render to ensure updated date is displayed
+            this.renderPendingChanges();
+            
+            // Ensure the table is visible after reload
+            const table = document.getElementById('pendingChangesTable');
+            const loader = document.getElementById('pendingChangesLoader');
+            if (table) table.classList.remove('hidden');
+            if (loader) loader.classList.add('hidden');
 
         } catch (error) {
             console.error('Error updating effectivity date:', error);

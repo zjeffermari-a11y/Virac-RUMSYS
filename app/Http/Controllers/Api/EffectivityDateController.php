@@ -438,6 +438,15 @@ class EffectivityDateController extends Controller
 
                 // Update the effectivity_date in the JSON details
                 $details['effectivity_date'] = $newEffectivityDate;
+                
+                // Also update effectivity_date in each change if it's a batch update
+                if (isset($details['changes']) && is_array($details['changes'])) {
+                    foreach ($details['changes'] as &$change) {
+                        $change['effectivity_date'] = $newEffectivityDate;
+                    }
+                    unset($change); // Unset reference to avoid issues
+                }
+                
                 DB::table($historyTable)
                     ->where('id', $historyId)
                     ->update(['details' => json_encode($details)]);
