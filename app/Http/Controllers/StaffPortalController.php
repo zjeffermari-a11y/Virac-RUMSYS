@@ -353,8 +353,36 @@ class StaffPortalController extends Controller
                 'stall_id' => $vendor->stall->id,
                 'october_payments_count' => $octoberPayments->count(),
                 'current_month' => $today->format('Y-m'),
-                'payment_ids' => $octoberPayments->pluck('id')->toArray()
+                'current_month_start' => $currentMonthStart->toDateString(),
+                'current_month_end' => $currentMonthEnd->toDateString(),
+                'billing_ids' => $octoberPayments->pluck('id')->toArray(),
+                'payment_dates' => $octoberPayments->map(function($bill) {
+                    return $bill->payment ? $bill->payment->payment_date->format('Y-m-d') : 'N/A';
+                })->toArray(),
+                'bill_statuses' => $octoberPayments->pluck('status')->toArray(),
+                'query_issue' => 'These bills should have been filtered out by whereExists subquery'
             ]);
+            
+            // Log the raw SQL query for debugging
+            $query = Billing::where('stall_id', $vendor->stall->id)
+                ->where(function($q) use ($currentMonthStart, $currentMonthEnd) {
+                    $q->where('status', 'unpaid')
+                        ->orWhere(function($subQ) use ($currentMonthStart, $currentMonthEnd) {
+                            $subQ->where('status', 'paid')
+                                ->whereExists(function($existsQuery) use ($currentMonthStart, $currentMonthEnd) {
+                                    $existsQuery->select(DB::raw(1))
+                                        ->from('payments')
+                                        ->whereColumn('payments.billing_id', 'billing.id')
+                                        ->whereNotNull('payments.payment_date')
+                                        ->whereBetween('payments.payment_date', [
+                                            $currentMonthStart->toDateString(),
+                                            $currentMonthEnd->toDateString()
+                                        ]);
+                                });
+                        });
+                });
+            \Log::warning('Outstanding balance query SQL: ' . $query->toSql());
+            \Log::warning('Outstanding balance query bindings: ' . json_encode($query->getBindings()));
         }
 
         $billingSettings = BillingSetting::all()->keyBy('utility_type');
