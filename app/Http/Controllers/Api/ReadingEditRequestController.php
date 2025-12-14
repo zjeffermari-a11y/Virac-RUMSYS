@@ -75,7 +75,12 @@ class ReadingEditRequestController extends Controller
                 if ($meterReaderContact) {
                     $smsMessage = "RUMSYS Update: Your edit request for stall {$stallNumber} has been {$status}.";
                     $smsService = new SmsService();
-                    $smsService->send($meterReaderContact, $smsMessage);
+                    $smsService->send($meterReaderContact, $smsMessage, false, [
+                        'store' => true,
+                        'title' => $notificationTitle,
+                        'recipient_id' => $meterReader->id,
+                        'type' => 'edit_request_status_update'
+                    ]);
                 }
             }
         } catch (\Exception $e) {
@@ -146,7 +151,12 @@ public function store(Request $request)
                 $smsMessage = "RUMSYS: New edit request from {$senderName} for stall {$stallNumber}. Reason: {$editRequest->reason}";
                 
                 $smsService = new SmsService();
-                $smsService->send($adminContact, $smsMessage);
+                $smsService->send($adminContact, $smsMessage, false, [
+                    'store' => true,
+                    'title' => 'New Meter Reading Edit Request',
+                    'recipient_id' => $admin->id,
+                    'type' => 'edit_request_submitted'
+                ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to send SMS for new edit request: ' . $e->getMessage());

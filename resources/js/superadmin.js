@@ -2972,6 +2972,10 @@ class SuperAdminDashboard {
             );
             if (requestIndex > -1) {
                 this.readingEditRequests[requestIndex].status = newStatus;
+                // Update the date of approval/rejection from the response
+                if (result.request && result.request.date_of_approval_rejection) {
+                    this.readingEditRequests[requestIndex].date_of_approval_rejection = result.request.date_of_approval_rejection;
+                }
                 this.renderReadingEditRequestsTable();
             }
         } catch (error) {
