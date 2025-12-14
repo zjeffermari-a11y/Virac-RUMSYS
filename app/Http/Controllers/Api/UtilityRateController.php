@@ -363,7 +363,8 @@ class UtilityRateController extends Controller
             }
 
             // Process based on effectiveToday
-            DB::transaction(function () use ($request, $effectiveToday, $notificationService) {
+            $pendingChangeId = null;
+            DB::transaction(function () use ($request, $effectiveToday, $notificationService, &$pendingChangeId) {
                 $rates = $request->input('rates');
                 $loggedInUserId = Auth::id() ?? 1;
 
@@ -409,12 +410,12 @@ class UtilityRateController extends Controller
                                 );
                             });
                         } else {
-                            // Not effective today - save to history with default future date
+                            // Not effective today - save to history with default future date, don't update main table
                             $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
                         }
 
                         // Add a new entry to the history table
-                        DB::table('rate_histories')->insert([
+                        $historyId = DB::table('rate_histories')->insertGetId([
                             'rate_id'    => $rateData['id'],
                             'old_rate'   => $oldRateValue,
                             'new_rate'   => $newRateValue,
@@ -422,6 +423,11 @@ class UtilityRateController extends Controller
                             'changed_at' => now(),
                             'effectivity_date' => $effectivityDate,
                         ]);
+                        
+                        // Store the first history ID for redirect (if not effective today)
+                        if (!$effectiveToday && !isset($pendingChangeId)) {
+                            $pendingChangeId = $historyId;
+                        }
                     }
                 }
 
@@ -470,6 +476,10 @@ class UtilityRateController extends Controller
                     'message' => 'Please adjust effectivity date in Effectivity Date Management',
                     'redirect' => true,
                     'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                    'pendingChange' => [
+                        'history_table' => 'rate_histories',
+                        'history_id' => $pendingChangeId,
+                    ],
                 ]);
             }
         } catch (\Exception $e) {

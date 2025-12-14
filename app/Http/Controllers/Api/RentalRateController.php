@@ -514,6 +514,10 @@ class RentalRateController extends Controller
                 'message' => 'Please adjust effectivity date in Effectivity Date Management',
                 'redirect' => true,
                 'redirectUrl' => '/superadmin#effectivityDateManagementSection',
+                'pendingChange' => [
+                    'history_table' => 'audit_trails',
+                    'history_id' => $auditId,
+                ],
             ]);
         }
     }
