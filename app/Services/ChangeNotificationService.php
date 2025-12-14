@@ -174,7 +174,22 @@ class ChangeNotificationService
             // Use provided effectivity date or default to today
             $effectiveDate = $effectivityDate ? Carbon::parse($effectivityDate) : Carbon::now();
             
+            // Log the effectivity date being used
+            Log::info('Building rental rate change message', [
+                'stall' => $stall->table_number ?? 'unknown',
+                'effectivity_date_param' => $effectivityDate,
+                'effective_date_parsed' => $effectiveDate->format('Y-m-d'),
+                'effective_date_formatted' => $effectiveDate->format('F d, Y')
+            ]);
+            
             $message = $this->buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate, $effectiveDate);
+            
+            // Log the built message to verify the date is correct
+            Log::info('Rental rate change message built', [
+                'stall' => $stall->table_number ?? 'unknown',
+                'message_preview' => substr($message, 0, 200),
+                'contains_effectivity' => strpos($message, 'Epektibo sa:') !== false
+            ]);
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Rental Rate Change: Stall {$stall->table_number}", $message);
@@ -549,8 +564,26 @@ class ChangeNotificationService
         $message .= "Bagong rate: ₱" . number_format($newDailyRate, 2) . "/day";
         
         // Use provided effectivity date or default to today
-        $effectiveDate = $effectivityDate ?: Carbon::now();
+        // $effectivityDate should already be a Carbon instance from sendRentalRateChangeNotification
+        if ($effectivityDate instanceof Carbon) {
+            $effectiveDate = $effectivityDate;
+        } elseif ($effectivityDate) {
+            // If it's a string, parse it
+            $effectiveDate = Carbon::parse($effectivityDate);
+        } else {
+            // Default to today
+            $effectiveDate = Carbon::now();
+        }
+        
         $message .= "\nEpektibo sa: " . $effectiveDate->format('F d, Y');
+        
+        // Log to verify correct date is used
+        Log::info('buildRentalRateChangeMessage - effectivity date used', [
+            'stall' => $stall->table_number ?? 'unknown',
+            'effectivityDate_param_type' => gettype($effectivityDate),
+            'effectivityDate_param_value' => $effectivityDate instanceof Carbon ? $effectivityDate->format('Y-m-d') : $effectivityDate,
+            'effectiveDate_final' => $effectiveDate->format('F d, Y')
+        ]);
         
         return $message;
     }

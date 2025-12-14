@@ -610,6 +610,12 @@ class EffectivityDateController extends Controller
                                         'table_number' => $stall->table_number,
                                         'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
                                     ];
+                                    Log::info('Sending rental rate change SMS from EffectivityDateController', [
+                                        'stall' => $stallModel->table_number,
+                                        'new_effectivity_date' => $newEffectivityDate,
+                                        'old_daily_rate' => $change['old_daily_rate'] ?? 0,
+                                        'new_daily_rate' => $change['new_daily_rate'] ?? 0
+                                    ]);
                                     $result = $notificationService->sendRentalRateChangeNotification(
                                         $stallModel,
                                         $change['old_daily_rate'] ?? 0,
@@ -621,7 +627,11 @@ class EffectivityDateController extends Controller
                                     if ($result['success'] ?? false) {
                                         $smsSent = true;
                                     }
-                                    Log::info('Rental rate change SMS notification sent', ['stall' => $stallModel->table_number, 'success' => $result['success'] ?? false]);
+                                    Log::info('Rental rate change SMS notification sent', [
+                                        'stall' => $stallModel->table_number,
+                                        'success' => $result['success'] ?? false,
+                                        'effectivity_date_passed' => $newEffectivityDate
+                                    ]);
                                 }
                             }
                         }
@@ -634,7 +644,13 @@ class EffectivityDateController extends Controller
                                 'table_number' => $stall->table_number,
                                 'section' => DB::table('sections')->where('id', $stall->section_id)->value('name') ?? 'N/A'
                             ];
-                            $notificationService->sendRentalRateChangeNotification(
+                            Log::info('Sending rental rate change SMS from EffectivityDateController (single stall)', [
+                                'stall' => $stallModel->table_number,
+                                'new_effectivity_date' => $newEffectivityDate,
+                                'old_daily_rate' => $details['old_daily_rate'] ?? 0,
+                                'new_daily_rate' => $details['new_daily_rate'] ?? 0
+                            ]);
+                            $result = $notificationService->sendRentalRateChangeNotification(
                                 $stallModel,
                                 $details['old_daily_rate'] ?? 0,
                                 $details['new_daily_rate'] ?? 0,
@@ -642,6 +658,12 @@ class EffectivityDateController extends Controller
                                 $details['new_monthly_rate'] ?? null,
                                 $newEffectivityDate // Pass the chosen effectivity date
                             );
+                            $smsSent = $result['success'] ?? false;
+                            Log::info('Rental rate change SMS notification sent (single stall)', [
+                                'stall' => $stallModel->table_number,
+                                'success' => $smsSent,
+                                'effectivity_date_passed' => $newEffectivityDate
+                            ]);
                         }
                     }
                 }
