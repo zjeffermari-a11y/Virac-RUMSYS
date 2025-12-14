@@ -22,8 +22,14 @@ class ChangeNotificationService
 
     /**
      * Send rate change notification
+     * @param string $utilityType Water or Electricity
+     * @param float $oldRate Old rate value
+     * @param float $newRate New rate value
+     * @param float|null $oldMonthlyRate Old monthly rate (optional)
+     * @param float|null $newMonthlyRate New monthly rate (optional)
+     * @param string|null $effectivityDate Effectivity date in Y-m-d format (optional, defaults to today)
      */
-    public function sendRateChangeNotification($utilityType, $oldRate, $newRate, $oldMonthlyRate = null, $newMonthlyRate = null)
+    public function sendRateChangeNotification($utilityType, $oldRate, $newRate, $oldMonthlyRate = null, $newMonthlyRate = null, $effectivityDate = null)
     {
         try {
             $recipients = $this->getRecipientsForUtilityRate($utilityType);
@@ -32,7 +38,10 @@ class ChangeNotificationService
             $currentMonth = Carbon::now()->format('Y-m');
             $currentMonthStart = Carbon::now()->startOfMonth();
             
-            $message = $this->buildRateChangeMessage($utilityType, $oldRate, $newRate, $oldMonthlyRate, $newMonthlyRate);
+            // Use provided effectivity date or default to today
+            $effectiveDate = $effectivityDate ? Carbon::parse($effectivityDate) : Carbon::now();
+            
+            $message = $this->buildRateChangeMessage($utilityType, $oldRate, $newRate, $oldMonthlyRate, $newMonthlyRate, $effectiveDate);
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Rate Change: {$utilityType}", $message);
@@ -150,13 +159,22 @@ class ChangeNotificationService
 
     /**
      * Send rental rate change notification
+     * @param object $stall Stall object with id and table_number
+     * @param float $oldDailyRate Old daily rate
+     * @param float $newDailyRate New daily rate
+     * @param float|null $oldMonthlyRate Old monthly rate (optional)
+     * @param float|null $newMonthlyRate New monthly rate (optional)
+     * @param string|null $effectivityDate Effectivity date in Y-m-d format (optional, defaults to today)
      */
-    public function sendRentalRateChangeNotification($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate = null, $newMonthlyRate = null)
+    public function sendRentalRateChangeNotification($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate = null, $newMonthlyRate = null, $effectivityDate = null)
     {
         try {
             $recipients = $this->getRecipientsForRentalRate($stall);
             
-            $message = $this->buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate);
+            // Use provided effectivity date or default to today
+            $effectiveDate = $effectivityDate ? Carbon::parse($effectivityDate) : Carbon::now();
+            
+            $message = $this->buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate, $effectiveDate);
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Rental Rate Change: Stall {$stall->table_number}", $message);
@@ -278,13 +296,21 @@ class ChangeNotificationService
 
     /**
      * Send schedule change notification
+     * @param string $scheduleType Type of schedule (Due Date, Disconnection, Meter Reading)
+     * @param string $utilityType Water, Electricity, or Rent
+     * @param int|string $oldDay Old day value
+     * @param int|string $newDay New day value
+     * @param string|null $effectivityDate Effectivity date in Y-m-d format (optional, defaults to today)
      */
-    public function sendScheduleChangeNotification($scheduleType, $utilityType, $oldDay, $newDay)
+    public function sendScheduleChangeNotification($scheduleType, $utilityType, $oldDay, $newDay, $effectivityDate = null)
     {
         try {
             $recipients = $this->getRecipientsForSchedule($scheduleType, $utilityType);
             
-            $message = $this->buildScheduleChangeMessage($scheduleType, $utilityType, $oldDay, $newDay);
+            // Use provided effectivity date or default to today
+            $effectiveDate = $effectivityDate ? Carbon::parse($effectivityDate) : Carbon::now();
+            
+            $message = $this->buildScheduleChangeMessage($scheduleType, $utilityType, $oldDay, $newDay, $effectiveDate);
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Schedule Change: {$scheduleType}", $message);
@@ -307,13 +333,21 @@ class ChangeNotificationService
 
     /**
      * Send billing setting change notification
+     * @param string $utilityType Water, Electricity, or Rent
+     * @param string $settingName Setting name (surcharge_rate, penalty_rate, etc.)
+     * @param float $oldValue Old value (as decimal, e.g., 0.05 for 5%)
+     * @param float $newValue New value (as decimal, e.g., 0.07 for 7%)
+     * @param string|null $effectivityDate Effectivity date in Y-m-d format (optional, defaults to today)
      */
-    public function sendBillingSettingChangeNotification($utilityType, $settingName, $oldValue, $newValue)
+    public function sendBillingSettingChangeNotification($utilityType, $settingName, $oldValue, $newValue, $effectivityDate = null)
     {
         try {
             $recipients = $this->getRecipientsForBillingSetting($utilityType);
             
-            $message = $this->buildBillingSettingChangeMessage($utilityType, $settingName, $oldValue, $newValue);
+            // Use provided effectivity date or default to today
+            $effectiveDate = $effectivityDate ? Carbon::parse($effectivityDate) : Carbon::now();
+            
+            $message = $this->buildBillingSettingChangeMessage($utilityType, $settingName, $oldValue, $newValue, $effectiveDate);
             
             // Create in-app notifications (runs in background)
             $this->createInAppNotifications($recipients, "Billing Setting Change: {$utilityType}", $message);
@@ -493,12 +527,15 @@ class ChangeNotificationService
     /**
      * Build rate change message
      */
-    private function buildRateChangeMessage($utilityType, $oldRate, $newRate, $oldMonthlyRate = null, $newMonthlyRate = null)
+    private function buildRateChangeMessage($utilityType, $oldRate, $newRate, $oldMonthlyRate = null, $newMonthlyRate = null, $effectivityDate = null)
     {
         $unit = $utilityType === 'Electricity' ? 'kWh' : 'day';
         $message = "RATE CHANGE: {$utilityType} rate inupdate.\n";
         $message .= "Bagong rate: ₱" . number_format($newRate, 2) . "/{$unit}";
-        $message .= "\nEpektibo sa: " . Carbon::now()->format('F d, Y');
+        
+        // Use provided effectivity date or default to today
+        $effectiveDate = $effectivityDate ?: Carbon::now();
+        $message .= "\nEpektibo sa: " . $effectiveDate->format('F d, Y');
         
         return $message;
     }
@@ -506,11 +543,14 @@ class ChangeNotificationService
     /**
      * Build rental rate change message
      */
-    private function buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate = null, $newMonthlyRate = null)
+    private function buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate = null, $newMonthlyRate = null, $effectivityDate = null)
     {
         $message = "RENTAL RATE CHANGE: Stall {$stall->table_number} rate inupdate.\n";
         $message .= "Bagong rate: ₱" . number_format($newDailyRate, 2) . "/day";
-        $message .= "\nEpektibo sa: " . Carbon::now()->format('F d, Y');
+        
+        // Use provided effectivity date or default to today
+        $effectiveDate = $effectivityDate ?: Carbon::now();
+        $message .= "\nEpektibo sa: " . $effectiveDate->format('F d, Y');
         
         return $message;
     }
@@ -518,7 +558,7 @@ class ChangeNotificationService
     /**
      * Build schedule change message
      */
-    private function buildScheduleChangeMessage($scheduleType, $utilityType, $oldDay, $newDay)
+    private function buildScheduleChangeMessage($scheduleType, $utilityType, $oldDay, $newDay, $effectivityDate = null)
     {
         // Determine the type of schedule change
         if (str_contains($scheduleType, 'Disconnection')) {
@@ -537,7 +577,9 @@ class ChangeNotificationService
             $message .= "New schedule: Day {$newDay} of each month";
         }
         
-        $message .= "\nEPEKTIBO: " . Carbon::now()->format('F d, Y');
+        // Use provided effectivity date or default to today
+        $effectiveDate = $effectivityDate ?: Carbon::now();
+        $message .= "\nEPEKTIBO: " . $effectiveDate->format('F d, Y');
         
         return $message;
     }
@@ -545,7 +587,7 @@ class ChangeNotificationService
     /**
      * Build billing setting change message
      */
-    private function buildBillingSettingChangeMessage($utilityType, $settingName, $oldValue, $newValue)
+    private function buildBillingSettingChangeMessage($utilityType, $settingName, $oldValue, $newValue, $effectivityDate = null)
     {
         // Map setting names to user-friendly labels
         $settingLabels = [
@@ -559,7 +601,10 @@ class ChangeNotificationService
         $message = "BAGONG BILLING SETTING : {$settingDisplay} para sa {$utilityType} inupdate.\n";
         $message .= "Lumang value: " . number_format($oldValue * 100, 2) . "%\n";
         $message .= "Bagong value: " . number_format($newValue * 100, 2) . "%";
-        $message .= "\nEpektibo: " . Carbon::now()->format('F d, Y');
+        
+        // Use provided effectivity date or default to today
+        $effectiveDate = $effectivityDate ?: Carbon::now();
+        $message .= "\nEpektibo: " . $effectiveDate->format('F d, Y');
         
         return $message;
     }

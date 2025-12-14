@@ -529,6 +529,7 @@ class EffectivityDateController extends Controller
             DB::commit();
 
             // Send SMS notification about the change (only when effectivity date is adjusted)
+            // SMS is sent IMMEDIATELY with the chosen effectivity date displayed
             try {
                 if ($historyTable === 'rate_histories') {
                     // Get rate info
@@ -539,7 +540,8 @@ class EffectivityDateController extends Controller
                             $currentRecord->old_rate,
                             $currentRecord->new_rate,
                             null, // monthly rates not stored in rate_histories
-                            null
+                            null,
+                            $newEffectivityDate // Pass the chosen effectivity date
                         );
                     }
                 } elseif ($historyTable === 'schedule_histories') {
@@ -552,7 +554,8 @@ class EffectivityDateController extends Controller
                                 'Meter Reading',
                                 'Electricity',
                                 $currentRecord->old_value,
-                                $currentRecord->new_value
+                                $currentRecord->new_value,
+                                $newEffectivityDate // Pass the chosen effectivity date
                             );
                         } else {
                             $utilityType = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $schedule->schedule_type);
@@ -560,7 +563,8 @@ class EffectivityDateController extends Controller
                                 $schedule->schedule_type,
                                 $utilityType,
                                 $currentRecord->old_value,
-                                $currentRecord->new_value
+                                $currentRecord->new_value,
+                                $newEffectivityDate // Pass the chosen effectivity date
                             );
                         }
                     }
@@ -572,7 +576,8 @@ class EffectivityDateController extends Controller
                             $billingSetting->utility_type,
                             str_replace(' ', '_', strtolower($currentRecord->field_changed)),
                             $currentRecord->old_value / 100, // Convert from percentage
-                            $currentRecord->new_value / 100
+                            $currentRecord->new_value / 100,
+                            $newEffectivityDate // Pass the chosen effectivity date
                         );
                     }
                 } elseif ($historyTable === 'audit_trails' && $currentRecord->module === 'Rental Rates') {
@@ -595,7 +600,8 @@ class EffectivityDateController extends Controller
                                         $change['old_daily_rate'] ?? 0,
                                         $change['new_daily_rate'] ?? 0,
                                         $change['old_monthly_rate'] ?? null,
-                                        $change['new_monthly_rate'] ?? null
+                                        $change['new_monthly_rate'] ?? null,
+                                        $newEffectivityDate // Pass the chosen effectivity date
                                     );
                                 }
                             }
@@ -614,7 +620,8 @@ class EffectivityDateController extends Controller
                                 $details['old_daily_rate'] ?? 0,
                                 $details['new_daily_rate'] ?? 0,
                                 $details['old_monthly_rate'] ?? null,
-                                $details['new_monthly_rate'] ?? null
+                                $details['new_monthly_rate'] ?? null,
+                                $newEffectivityDate // Pass the chosen effectivity date
                             );
                         }
                     }
