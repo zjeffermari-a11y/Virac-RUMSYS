@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state: {
             scheduleDay: window.scheduleDay || null,
             meterReadings: window.meterReadings || [],
-            editRequests: window.editRequestsData || [],
+            editRequests: Array.isArray(window.editRequestsData) ? window.editRequestsData : [],
             notifications: [],
             allNotifications: [], // For notifications page
             unreadCount: window.unreadNotificationsCount || 0,
@@ -1242,9 +1242,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     noNotificationsMessage,
                     notificationTableHeader,
                 } = MeterApp.elements;
-                if (!notificationTableBody) return;
+                if (!notificationTableBody) {
+                    console.warn("notificationTableBody element not found");
+                    return;
+                }
 
                 const requests = MeterApp.computed.sortedEditRequests();
+                console.log("Rendering edit requests table. Total requests:", requests.length, requests);
                 notificationTableBody.innerHTML = "";
 
                 if (requests.length === 0) {
@@ -1269,14 +1273,14 @@ document.addEventListener("DOMContentLoaded", () => {
                                 req.requestDate
                             ).toLocaleDateString()}</td>
                             <td data-label="Stall Number" class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${
-                                req.stallNumber
+                                req.stallNumber || 'N/A'
                             }</td>
                             <td data-label="Reason" class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${
-                                req.reason
-                            }">${req.reason}</td>
+                                req.reason || ''
+                            }">${req.reason || ''}</td>
                             <td data-label="Status" class="px-6 py-4 whitespace-nowrap text-sm">
                                 <span class="status-badge ${statusClass}">${
-                            req.status
+                            req.status || 'Pending'
                         }</span>
                             </td>
                         `;

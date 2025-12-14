@@ -14,7 +14,7 @@ use App\Services\AuditLogger;
 
 class ReadingEditRequestController extends Controller
 {
-    public function index(Request $request = null)
+    public function index(?Request $request = null)
     {
         // Fetch all requests with relationships, ordered by the newest first, and paginate them.
         $requests = ReadingEditRequest::with(['utilityReading.stall', 'requestedBy', 'approvedBy'])

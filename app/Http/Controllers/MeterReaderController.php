@@ -128,16 +128,27 @@ class MeterReaderController extends Controller
             ->latest()
             ->get()
             ->map(function ($request) {
-                if (!$request->utilityReading || !$request->utilityReading->stall) return null;
+                // Handle cases where relationships might be missing
+                if (!$request->utilityReading) {
+                    \Log::warning("Edit request {$request->id} has no utilityReading relationship");
+                    return null;
+                }
+                
+                if (!$request->utilityReading->stall) {
+                    \Log::warning("Edit request {$request->id} has utilityReading but no stall relationship");
+                    return null;
+                }
+                
                 return [
                     'requestId' => $request->id,
                     'stallNumber' => $request->utilityReading->stall->table_number,
                     'requestDate' => Carbon::parse($request->created_at)->toDateString(),
-                    'reason' => $request->reason,
-                    'status' => ucfirst($request->status),
+                    'reason' => $request->reason ?? '',
+                    'status' => ucfirst($request->status ?? 'pending'),
                 ];
             })
-            ->filter();
+            ->filter()
+            ->values(); // Re-index array to ensure proper JSON encoding
 
         $billingMonthName = $billingPeriodMonth->format('F');
 
