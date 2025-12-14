@@ -6253,8 +6253,8 @@ class SuperAdminDashboard {
         
         const title = this.elements.announcementTitle?.value || '';
         let content = this.elements.announcementContent?.value || '';
-        // Publish Immediately feature removed - always create as inactive
-        const isActive = false;
+        // Always send immediately - no drafts
+        const isActive = true;
         const btn = this.elements.saveAnnouncementBtn;
         
         if (!btn) {
@@ -6364,12 +6364,8 @@ class SuperAdminDashboard {
 
             const result = await response.json();
             
-            // Show appropriate success message
-            if (isActive) {
-                this.showToast(editId ? "Announcement sent successfully! Notifications and SMS have been sent." : "Announcement sent successfully! Notifications and SMS have been sent.", "success");
-            } else {
-                this.showToast(editId ? "Announcement saved as draft successfully!" : "Announcement saved as draft successfully!", "success");
-            }
+            // Always show sent message since announcements are sent immediately
+            this.showToast(editId ? "Announcement sent successfully! Notifications and SMS have been sent." : "Announcement sent successfully! Notifications and SMS have been sent.", "success");
             
             // Reset button if in edit mode
             if (editId) {
@@ -6435,7 +6431,7 @@ class SuperAdminDashboard {
         const btn = this.elements.saveAnnouncementBtn;
         if (!btn) return;
         
-        // Publish Immediately feature removed - always show "Send" or "Update and Send"
+        // Always show "Send" since announcements are sent immediately
         if (isEditMode) {
             btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Update and Send Announcement</span>';
         } else {

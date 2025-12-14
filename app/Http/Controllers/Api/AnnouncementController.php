@@ -237,8 +237,8 @@ class AnnouncementController extends Controller
             'recipients.vendor_ids.*' => 'integer|exists:users,id',
         ]);
 
-        // Publish Immediately feature removed - always create as inactive (draft)
-        $validated['is_active'] = false;
+        // Always send immediately - no drafts
+        $validated['is_active'] = true;
 
         $announcement = Announcement::create($validated);
 
@@ -249,8 +249,8 @@ class AnnouncementController extends Controller
             ['announcement_id' => $announcement->id, 'title' => $announcement->title, 'is_active' => $announcement->is_active]
         );
 
-        // Announcements are always created as drafts - no automatic sending
-        // Admin must manually activate them later
+        // Send notifications and SMS immediately
+        $this->sendAnnouncementNotifications($announcement, $validated['recipients'] ?? [], $smsService);
 
         return response()->json($announcement, 201);
     }
@@ -296,24 +296,32 @@ class AnnouncementController extends Controller
             ['announcement_id' => $announcement->id, 'changes' => $changes, 'was_activated' => ($announcement->is_active && !$wasActive)]
         );
 
-        // Send SMS and create in-app notifications if announcement was just activated
-        // When is_active changes from false to true, send notifications and SMS
-        // This allows manual activation via the "Send" button
-        if ($announcement->is_active && !$wasActive) {
-            // Log announcement activation/sending separately
-            AuditLogger::log(
-                'Activated and Sent Announcement',
-                'Announcements',
-                'Success',
-                [
-                    'announcement_id' => $announcement->id,
-                    'title' => $announcement->title,
-                    'recipients' => $announcement->recipients ?? []
-                ]
-            );
-            
-            $this->sendAnnouncementSms($announcement, $smsService);
-            $this->createAnnouncementNotifications($announcement);
+        // Send SMS and create in-app notifications if announcement is active
+        // Since announcements are always sent immediately, check if it's active
+        if ($announcement->is_active) {
+            // If it was just activated (was inactive, now active), send notifications
+            if (!$wasActive) {
+                // Log announcement activation/sending separately
+                AuditLogger::log(
+                    'Activated and Sent Announcement',
+                    'Announcements',
+                    'Success',
+                    [
+                        'announcement_id' => $announcement->id,
+                        'title' => $announcement->title,
+                        'recipients' => $announcement->recipients ?? []
+                    ]
+                );
+                
+                $this->sendAnnouncementSms($announcement, $smsService);
+                $this->createAnnouncementNotifications($announcement);
+            }
+            // If updating an already active announcement, also send notifications
+            // This ensures recipients get updated content
+            else if ($wasActive && (isset($validated['content']) || isset($validated['recipients']))) {
+                $this->sendAnnouncementSms($announcement, $smsService);
+                $this->createAnnouncementNotifications($announcement);
+            }
         }
 
         return response()->json($announcement);
