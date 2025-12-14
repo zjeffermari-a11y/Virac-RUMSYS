@@ -2842,7 +2842,6 @@ class SuperAdminDashboard {
                 request_date: req.created_at,
                 request_reason: req.reason || '',
                 status: req.status || 'pending',
-                processed_at: req.processed_at || null,
             }));
 
             this.readingEditRequests.push(...formattedData);
@@ -2874,7 +2873,7 @@ class SuperAdminDashboard {
         if (!tableBody) return; // Add a guard clause
 
         if (this.readingEditRequests.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No edit requests found.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">No edit requests found.</td></tr>`;
             return;
         }
 
@@ -2972,9 +2971,6 @@ class SuperAdminDashboard {
             );
             if (requestIndex > -1) {
                 this.readingEditRequests[requestIndex].status = newStatus;
-                if (result.request && result.request.processed_at) {
-                    this.readingEditRequests[requestIndex].processed_at = result.request.processed_at;
-                }
                 this.renderReadingEditRequestsTable();
             }
         } catch (error) {

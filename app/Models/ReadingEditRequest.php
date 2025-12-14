@@ -16,7 +16,6 @@ class ReadingEditRequest extends Model
         'status',
         'requested_by',
         'approved_by',
-        'processed_at',
     ];
 
     /**

@@ -21,7 +21,7 @@ class ReadingEditRequestController extends Controller
             ->latest()
             ->paginate(20);
 
-        // Transform the data to include stall information and ensure processed_at is included
+        // Transform the data to include stall information
         $requests->getCollection()->transform(function ($request) {
             $request->stall_number = $request->utilityReading && $request->utilityReading->stall 
                 ? $request->utilityReading->stall->table_number 
@@ -47,7 +47,6 @@ class ReadingEditRequestController extends Controller
 
         $readingEditRequest->status = $validated['status'];
         $readingEditRequest->approved_by = Auth::id(); // Set the approver ID
-        $readingEditRequest->processed_at = now(); // Set the processed date
         $readingEditRequest->save();
 
         try {

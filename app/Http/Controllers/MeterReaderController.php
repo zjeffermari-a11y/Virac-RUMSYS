@@ -145,7 +145,6 @@ class MeterReaderController extends Controller
                     'requestDate' => Carbon::parse($request->created_at)->toDateString(),
                     'reason' => $request->reason ?? '',
                     'status' => ucfirst($request->status ?? 'pending'),
-                    'processed_at' => $request->processed_at ? Carbon::parse($request->processed_at)->toDateString() : null,
                 ];
             })
             ->filter()

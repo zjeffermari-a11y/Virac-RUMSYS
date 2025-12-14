@@ -593,9 +593,11 @@ class VendorController extends Controller
         $stallId = $vendor->stall->id;
 
         // Get electricity consumption data (last 12 months)
-        $electricityReadings = UtilityReading::where('stall_id', $stallId)
+        // Use billing data instead of utility readings to include all months with bills
+        $electricityBillings = Billing::where('stall_id', $stallId)
             ->where('utility_type', 'Electricity')
-            ->orderBy('reading_date', 'desc')
+            ->whereNotNull('consumption')
+            ->orderBy('period_start', 'desc')
             ->limit(12)
             ->get()
             ->reverse();
@@ -603,13 +605,10 @@ class VendorController extends Controller
         $consumptionData = [];
         $consumptionLabels = [];
         
-        foreach ($electricityReadings as $index => $reading) {
-            if ($index > 0) {
-                $previousReading = $electricityReadings[$index - 1];
-                $consumption = $reading->current_reading - $previousReading->current_reading;
-                $consumptionData[] = max(0, $consumption); // Ensure non-negative
-                $consumptionLabels[] = Carbon::parse($reading->reading_date)->format('M Y');
-            }
+        foreach ($electricityBillings as $billing) {
+            $consumption = $billing->consumption ?? 0;
+            $consumptionData[] = max(0, $consumption); // Ensure non-negative
+            $consumptionLabels[] = Carbon::parse($billing->period_start)->format('M Y');
         }
 
         // Get payment tracking data (on-time vs late payments)
