@@ -250,7 +250,8 @@ class AnnouncementController extends Controller
         );
 
         // Send notifications and SMS immediately
-        $this->sendAnnouncementNotifications($announcement, $validated['recipients'] ?? [], $smsService);
+        $this->sendAnnouncementSms($announcement, $smsService);
+        $this->createAnnouncementNotifications($announcement);
 
         return response()->json($announcement, 201);
     }
