@@ -318,22 +318,23 @@ class StaffPortalController extends Controller
         
         // Include unpaid bills OR paid bills from current month only
         // This ensures payments from previous months (like October) are excluded
-        $outstandingBills = Billing::where('stall_id', $vendor->stall->id)
+        // Use leftJoin for more explicit control over the payment_date filter
+        $outstandingBills = Billing::where('billing.stall_id', $vendor->stall->id)
+            ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
             ->where(function($query) use ($currentMonthStart, $currentMonthEnd) {
-                $query->where('status', 'unpaid')
+                $query->where('billing.status', 'unpaid')
                     ->orWhere(function($q) use ($currentMonthStart, $currentMonthEnd) {
-                        $q->where('status', 'paid')
-                            ->whereHas('payment', function($paymentQuery) use ($currentMonthStart, $currentMonthEnd) {
-                                $paymentQuery->whereNotNull('payment_date')
-                                    ->whereBetween('payment_date', [
-                                        $currentMonthStart->toDateString(),
-                                        $currentMonthEnd->toDateString()
-                                    ]);
-                            });
+                        $q->where('billing.status', 'paid')
+                            ->whereNotNull('payments.payment_date')
+                            ->whereBetween('payments.payment_date', [
+                                $currentMonthStart->toDateString(),
+                                $currentMonthEnd->toDateString()
+                            ]);
                     });
             })
+            ->select('billing.*')
             ->with('payment')
-            ->orderBy('due_date', 'desc')
+            ->orderBy('billing.due_date', 'desc')
             ->get();
         
         // Debug: Log if October payments are found (should be 0)
