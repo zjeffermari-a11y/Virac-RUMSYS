@@ -223,17 +223,37 @@ class RentalRateController extends Controller
                     }
                     
                     if ($dailyRateChanged || $monthlyRateChanged) {
-                        // Send SMS if effective today (run in background)
+                        // Send SMS if effective today
+                        // Call directly - the notification service handles background sending internally
                         if ($effectiveToday) {
-                            register_shutdown_function(function() use ($notificationService, $stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate, $newMonthlyRate) {
-                                $notificationService->sendRentalRateChangeNotification(
-                                $stall,
-                                $oldDailyRate,
-                                $newDailyRate,
-                                $oldMonthlyRate,
-                                $newMonthlyRate
-                            );
-                            });
+                            try {
+                                $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
+                                \Illuminate\Support\Facades\Log::info('Sending rental rate change SMS for effective today', [
+                                    'stall_id' => $stall->id,
+                                    'table_number' => $stall->table_number,
+                                    'old_daily_rate' => $oldDailyRate,
+                                    'new_daily_rate' => $newDailyRate,
+                                    'effectivity_date' => $effectivityDate
+                                ]);
+                                $result = $notificationService->sendRentalRateChangeNotification(
+                                    $stall,
+                                    $oldDailyRate,
+                                    $newDailyRate,
+                                    $oldMonthlyRate,
+                                    $newMonthlyRate,
+                                    $effectivityDate // Pass today's date as effectivity date
+                                );
+                                \Illuminate\Support\Facades\Log::info('Rental rate change notification result', [
+                                    'stall_id' => $stall->id,
+                                    'result' => $result
+                                ]);
+                            } catch (\Exception $e) {
+                                \Illuminate\Support\Facades\Log::error("Error sending rental rate change notification: " . $e->getMessage(), [
+                                    'stall_id' => $stall->id,
+                                    'trace' => $e->getTraceAsString()
+                                ]);
+                                // Don't fail the request if SMS fails
+                            }
                         }
                     } else {
                         \Illuminate\Support\Facades\Log::debug('No rate change detected for stall', [
@@ -417,16 +437,36 @@ class RentalRateController extends Controller
                     // Get the actual updated monthly rate from database (may be calculated by DB)
                     $newMonthlyRateValue = (float) $stallModel->monthly_rate;
                 
-                // Send SMS notification and regenerate bills in background
-                register_shutdown_function(function() use ($notificationService, $stallModel, $oldDailyRate, $newDailyRateValue, $oldMonthlyRate, $newMonthlyRateValue) {
-                    $notificationService->sendRentalRateChangeNotification(
+                // Send SMS notification immediately
+                // Call directly - the notification service handles background sending internally
+                try {
+                    $effectivityDate = \Carbon\Carbon::now()->format('Y-m-d');
+                    \Illuminate\Support\Facades\Log::info('Sending rental rate change SMS for effective today (single stall)', [
+                        'stall_id' => $stallModel->id,
+                        'table_number' => $stallModel->table_number,
+                        'old_daily_rate' => $oldDailyRate,
+                        'new_daily_rate' => $newDailyRateValue,
+                        'effectivity_date' => $effectivityDate
+                    ]);
+                    $result = $notificationService->sendRentalRateChangeNotification(
                         $stallModel,
                         $oldDailyRate,
                         $newDailyRateValue,
                         $oldMonthlyRate,
-                        $newMonthlyRateValue
+                        $newMonthlyRateValue,
+                        $effectivityDate // Pass today's date as effectivity date
                     );
-                });
+                    \Illuminate\Support\Facades\Log::info('Rental rate change notification result (single stall)', [
+                        'stall_id' => $stallModel->id,
+                        'result' => $result
+                    ]);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Error sending rental rate change notification: " . $e->getMessage(), [
+                        'stall_id' => $stallModel->id,
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    // Don't fail the request if SMS fails
+                }
             } else {
                 // Not effective today - DON'T update the stall yet, just save to audit with future date
                 $effectivityDate = \Carbon\Carbon::now()->addMonth()->startOfMonth()->format('Y-m-d');
