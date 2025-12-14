@@ -635,6 +635,7 @@ class EffectivityDateController extends Controller
 
             return response()->json([
                 'message' => $message,
+                'updated' => true
             ]);
 
         } catch (\Exception $e) {

@@ -1779,6 +1779,15 @@
                     <input type="date" id="newEffectivityDate" required
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-market-primary focus:border-transparent">
                     <p class="text-sm text-gray-500 mt-1">If set to current month, bills will be regenerated and SMS notifications will be sent.</p>
+                    <div id="effectivityDateWarning" class="hidden mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div class="flex items-start">
+                            <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5 mr-2"></i>
+                            <div class="text-sm text-yellow-800">
+                                <p class="font-semibold mb-1">Warning: Effectivity date is after bill generation date</p>
+                                <p id="effectivityDateWarningText">This change will not take effect in the current monthly bill generation. It will only apply in the next monthly bill generation cycle.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="flex gap-3 mt-6">

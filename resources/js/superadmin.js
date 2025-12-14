@@ -7157,7 +7157,7 @@ class SuperAdminDashboard {
         }
     }
 
-    openEffectivityDateModal(button) {
+    async openEffectivityDateModal(button) {
         const modal = document.getElementById('effectivityDateModal');
         const historyTable = document.getElementById('effectivityHistoryTable');
         const historyId = document.getElementById('effectivityHistoryId');
@@ -7165,6 +7165,7 @@ class SuperAdminDashboard {
         const itemName = document.getElementById('effectivityItemName');
         const description = document.getElementById('effectivityDescription');
         const newDate = document.getElementById('newEffectivityDate');
+        const warningDiv = document.getElementById('effectivityDateWarning');
 
         if (!modal || !historyTable || !historyId || !category || !itemName || !description || !newDate) return;
 
@@ -7175,7 +7176,78 @@ class SuperAdminDashboard {
         description.value = button.dataset.description;
         newDate.value = button.dataset.currentDate;
 
+        // Load bill generation schedule and set up date validation
+        try {
+            const response = await fetch('/api/admin/effectivity-dates/schedules', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
+                credentials: 'same-origin'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const billGenSchedule = data.billGeneration || { day: 1, time: '07:00' };
+                
+                // Store schedule for validation
+                newDate.dataset.billGenDay = billGenSchedule.day || 1;
+                newDate.dataset.billGenTime = billGenSchedule.time || '07:00';
+                
+                // Set up date change listener
+                newDate.removeEventListener('change', this.checkEffectivityDateWarning);
+                this.checkEffectivityDateWarning = () => {
+                    this.validateEffectivityDateAgainstBillGeneration(newDate, warningDiv, billGenSchedule);
+                };
+                newDate.addEventListener('change', this.checkEffectivityDateWarning);
+                
+                // Check initial date
+                this.validateEffectivityDateAgainstBillGeneration(newDate, warningDiv, billGenSchedule);
+            }
+        } catch (error) {
+            console.error('Error loading bill generation schedule:', error);
+        }
+
         modal.classList.remove('hidden');
+    }
+
+    validateEffectivityDateAgainstBillGeneration(dateInput, warningDiv, billGenSchedule) {
+        if (!dateInput || !warningDiv || !billGenSchedule) return;
+
+        const selectedDate = new Date(dateInput.value);
+        if (!dateInput.value || isNaN(selectedDate.getTime())) {
+            warningDiv.classList.add('hidden');
+            return;
+        }
+
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // Calculate next bill generation date
+        const billGenDay = parseInt(billGenSchedule.day) || 1;
+        let nextBillGenDate = new Date(currentYear, currentMonth, billGenDay);
+        
+        // If the bill generation day has passed this month, move to next month
+        if (nextBillGenDate < today) {
+            nextBillGenDate = new Date(currentYear, currentMonth + 1, billGenDay);
+        }
+
+        // Check if selected date is after the next bill generation date
+        if (selectedDate > nextBillGenDate) {
+            const formattedBillGenDate = nextBillGenDate.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const warningText = document.getElementById('effectivityDateWarningText');
+            if (warningText) {
+                warningText.textContent = `This change will not take effect in the current monthly bill generation (${formattedBillGenDate}). It will only apply in the next monthly bill generation cycle.`;
+            }
+            warningDiv.classList.remove('hidden');
+        } else {
+            warningDiv.classList.add('hidden');
+        }
     }
 
     closeEffectivityDateModal() {
@@ -7229,9 +7301,11 @@ class SuperAdminDashboard {
             // Show success message
             this.showToast(result.message, 'success');
 
-            // Close modal and refresh list
+            // Close modal first
             this.closeEffectivityDateModal();
-            this.loadPendingChanges();
+
+            // Reload pending changes from server to ensure updated effectivity date is shown
+            await this.loadPendingChanges();
 
         } catch (error) {
             console.error('Error updating effectivity date:', error);
