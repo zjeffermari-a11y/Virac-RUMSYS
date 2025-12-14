@@ -170,14 +170,6 @@
         Route::get('/{section?}', [SuperAdminController::class, 'index'])
             ->name('superadmin')
             ->where('section', '[a-zA-Z0-9_]+');
-
-        Route::get('/rental-rates', [SuperAdminViewsController::class, 'rentalRates'])->name('superadmin.rental-rates');
-        Route::get('/utility-rates', [SuperAdminViewsController::class, 'utilityRates'])->name('superadmin.utility-rates');
-        Route::get('/schedules', [SuperAdminViewsController::class, 'schedules'])->name('superadmin.schedules');
-        Route::get('/billing-settings', [SuperAdminViewsController::class, 'billingSettings'])->name('superadmin.billing-settings');
-        Route::get('/sms-templates', [SuperAdminViewsController::class, 'smsTemplates'])->name('superadmin.sms-templates');
-        Route::get('/edit-requests', [SuperAdminViewsController::class, 'editRequests'])->name('superadmin.edit-requests');
-        Route::get('/system-users', [SuperAdminViewsController::class, 'systemUsers'])->name('superadmin.system-users');
     });
 
 
