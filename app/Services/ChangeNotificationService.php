@@ -201,13 +201,14 @@ class ChangeNotificationService
                         $originalBillAmount = $this->getCurrentMonthBill($user, 'Rent', null, $newMonthlyRate);
                         
                         if ($originalBillAmount) {
-                            $personalizedMessage .= "\n\nYour current month bill: ₱" . number_format($originalBillAmount, 2);
+                            $personalizedMessage .= "\n\nBayadan sa bulan na ini: ₱" . number_format($originalBillAmount, 2);
                             
                             // Calculate and add discounted amount if eligible (on or before 15th) and discount rate exists
                             if ($isEligibleForDiscount && $discountRate > 0) {
                                 // Discount is calculated on the original amount: originalAmount * discount_rate
                                 $discountedAmount = $originalBillAmount * $discountRate;
-                                $personalizedMessage .= "\nDiscounted amount: ₱" . number_format($discountedAmount, 2);
+                                $finalAmount = $originalBillAmount - $discountedAmount;
+                                $personalizedMessage .= "\nDiscounted na bayadan: " . number_format($originalBillAmount, 2) . " - ₱" . number_format($discountedAmount, 2) . " = ₱" . number_format($finalAmount, 2) . " (the difference)";
                             }
                         }
                         $personalizedMessage .= "\n\n- Virac Public Market";
@@ -516,16 +517,16 @@ class ChangeNotificationService
      */
     private function buildRentalRateChangeMessage($stall, $oldDailyRate, $newDailyRate, $oldMonthlyRate = null, $newMonthlyRate = null)
     {
-        $message = "RENTAL RATE CHANGE: Stall {$stall->table_number} rate updated.\n";
-        $message .= "Old rate: ₱" . number_format($oldDailyRate, 2) . "/day";
+        $message = "RENTAL RATE CHANGE: Stall {$stall->table_number} rate inupdate.\n";
+        $message .= "Lumang rate: ₱" . number_format($oldDailyRate, 2) . "/day";
         if ($oldMonthlyRate) {
             $message .= " (Monthly: ₱" . number_format($oldMonthlyRate, 2) . ")";
         }
-        $message .= "\nNew rate: ₱" . number_format($newDailyRate, 2) . "/day";
+        $message .= "\nBagong rate: ₱" . number_format($newDailyRate, 2) . "/day";
         if ($newMonthlyRate) {
             $message .= " (Monthly: ₱" . number_format($newMonthlyRate, 2) . ")";
         }
-        $message .= "\nEffective: " . Carbon::now()->format('F d, Y');
+        $message .= "\nEpektibo sa: " . Carbon::now()->format('F d, Y');
         
         return $message;
     }
@@ -537,14 +538,14 @@ class ChangeNotificationService
     {
         // Determine the type of schedule change
         if (str_contains($scheduleType, 'Disconnection')) {
-            $message = "DISCONNECTION DATE CHANGE: {$utilityType} disconnection date updated.\n";
-            $message .= "New disconnection date: Day {$newDay} of each month";
+            $message = "BAGONG DISCONNECTION DATE ISKEDYUL: {$utilityType} disconnection date inupdate.\n";
+            $message .= "BAGONG DISCONNECTION DATE: Ika-{$newDay} aldaw nin bulan";
         } elseif (str_contains($scheduleType, 'Due Date')) {
-            $message = "DUE DATE CHANGE: {$utilityType} due date updated.\n";
-            $message .= "New due date: Day {$newDay} of each month";
+            $message = "BAGONG DUE DATE ISKEDYUL: {$utilityType} due date inupdate.\n";
+            $message .= "Bagong due date: Ika-{$newDay} aldaw nin bulan";
         } elseif (str_contains($scheduleType, 'Meter Reading')) {
-            $message = "METER READING SCHEDULE CHANGE: {$utilityType} meter reading schedule updated.\n";
-            $message .= "New schedule: Day {$newDay} of each month";
+            $message = "BAGONG METER READING ISKEDYL: {$utilityType} meter reading schedule updated.\n";
+            $message .= "BAGONG ISKEDYL: Ika-{$newDay} aldaw nin bulan";
         } else {
             // Fallback for unknown schedule types
             $scheduleName = str_replace(['Due Date - ', 'Disconnection - ', 'Meter Reading - '], '', $scheduleType);
@@ -552,7 +553,7 @@ class ChangeNotificationService
             $message .= "New schedule: Day {$newDay} of each month";
         }
         
-        $message .= "\nEffective: " . Carbon::now()->format('F d, Y');
+        $message .= "\nEPEKTIBO: " . Carbon::now()->format('F d, Y');
         
         return $message;
     }
@@ -571,10 +572,10 @@ class ChangeNotificationService
         ];
         
         $settingDisplay = $settingLabels[$settingName] ?? ucwords(str_replace('_', ' ', $settingName));
-        $message = "BILLING SETTING CHANGE: {$settingDisplay} for {$utilityType} updated.\n";
-        $message .= "Old value: " . number_format($oldValue * 100, 2) . "%\n";
-        $message .= "New value: " . number_format($newValue * 100, 2) . "%";
-        $message .= "\nEffective: " . Carbon::now()->format('F d, Y');
+        $message = "BAGONG BILLING SETTING : {$settingDisplay} para sa {$utilityType} inupdated.\n";
+        $message .= "Lumang value: " . number_format($oldValue * 100, 2) . "%\n";
+        $message .= "Bagong value: " . number_format($newValue * 100, 2) . "%";
+        $message .= "\nEpektibo: " . Carbon::now()->format('F d, Y');
         
         return $message;
     }
