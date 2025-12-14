@@ -500,9 +500,6 @@ class ChangeNotificationService
         $unit = $utilityType === 'Electricity' ? 'kWh' : 'day';
         $message = "RATE CHANGE: {$utilityType} rate inupdate.\n";
         $message .= "Bagong rate: ₱" . number_format($newRate, 2) . "/{$unit}";
-        if ($newMonthlyRate) {
-            $message .= " (Monthly: ₱" . number_format($newMonthlyRate, 2) . ")";
-        }
         $message .= "\nEpektibo sa: " . Carbon::now()->format('F d, Y');
         
         return $message;
@@ -515,9 +512,6 @@ class ChangeNotificationService
     {
         $message = "RENTAL RATE CHANGE: Stall {$stall->table_number} rate inupdate.\n";
         $message .= "Bagong rate: ₱" . number_format($newDailyRate, 2) . "/day";
-        if ($newMonthlyRate) {
-            $message .= " (Monthly: ₱" . number_format($newMonthlyRate, 2) . ")";
-        }
         $message .= "\nEpektibo sa: " . Carbon::now()->format('F d, Y');
         
         return $message;
