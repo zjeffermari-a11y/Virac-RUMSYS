@@ -4482,12 +4482,20 @@ class SuperAdminDashboard {
         this.toggleRentalRatesEditMode(false);
 
         try {
+            // Safely get CSRF token with fallback
+            const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfTokenMeta ? csrfTokenMeta.getAttribute("content") : null;
+            
+            if (!csrfToken) {
+                console.error("CSRF token not found. Please refresh the page.");
+                this.showToast("CSRF token not found. Please refresh the page.", "error");
+                return;
+            }
+            
             const headers = {
                     "Content-Type": "application/json",
                     Accept: "application/json",
-                    "X-CSRF-TOKEN": document
-                        .querySelector('meta[name="csrf-token"]')
-                        .getAttribute("content"),
+                    "X-CSRF-TOKEN": csrfToken,
             };
             const body = JSON.stringify({ stalls: updatedStallsPayload });
 

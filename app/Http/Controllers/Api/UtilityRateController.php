@@ -17,7 +17,7 @@ class UtilityRateController extends Controller
      * Fetch Electricity and Water rates from the database.
      * This method corresponds to the GET /api/utility-rates endpoint.
      */
-    public function index(Request $request = null)
+    public function index(?Request $request = null)
     {
         try {
             // Clear cache if it exists and might be stale
