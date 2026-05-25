@@ -1,0 +1,316 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Models\User;
+use App\Models\Billing;
+use App\Models\Payment;
+use App\Models\Section;
+use Carbon\Carbon;
+
+class DashboardController extends Controller
+{
+
+    public function getAllDashboardData(Request $request)
+    {
+        // --- Fetch Data for Filters ---
+        $years = Billing::select(DB::raw('EXTRACT(YEAR FROM period_start) as year'))
+            ->distinct()->pluck('year')->map(fn($y) => (int)$y);
+        $years->push(Carbon::now()->year);
+        $years = $years->unique()->sortDesc()->values();
+        $sections = Section::all();
+
+        // --- Prepare Data Structures ---
+        $allData = [
+            'kpis' => null,
+            'vendorDistribution' => null,
+            'collectionTrends' => [],
+            'utilityConsumption' => [],
+            'vendorPulse' => [
+                'topPerformers' => [],
+                'needsSupport' => [],
+            ],
+        ];
+
+        // --- Populate Data ---
+        $allData['kpis'] = $this->getKpis()->getData(true);
+        $allData['vendorDistribution'] = $this->getVendorDistribution()->getData(true);
+
+        foreach ($years as $year) {
+            $yearRequest = new Request(['year' => $year]);
+
+            // Collection & Utility Trends (by year)
+            $allData['collectionTrends'][$year] = $this->getCollectionTrends($yearRequest)->getData(true);
+            $allData['utilityConsumption'][$year] = $this->getUtilityConsumption($yearRequest)->getData(true);
+            
+            // Vendor Pulse Data (by year and section)
+            $allData['vendorPulse']['topPerformers'][$year]['All'] = $this->getTopPerformingVendors($yearRequest)->getData(true);
+            $allData['vendorPulse']['needsSupport'][$year]['All'] = $this->getVendorsNeedingSupport($yearRequest)->getData(true);
+
+            foreach ($sections as $section) {
+                $sectionRequest = new Request(['year' => $year, 'section' => $section->name]);
+                $allData['vendorPulse']['topPerformers'][$year][$section->name] = $this->getTopPerformingVendors($sectionRequest)->getData(true);
+                $allData['vendorPulse']['needsSupport'][$year][$section->name] = $this->getVendorsNeedingSupport($sectionRequest)->getData(true);
+            }
+        }
+        
+        return response()->json($allData);
+    }
+    /**
+     * Fetch key performance indicators for the dashboard.
+     */
+    public function getKpis()
+    {
+        $today = Carbon::today();
+        $startOfMonth = $today->copy()->startOfMonth();
+
+        $totalVendors = User::whereHas('role', fn ($q) => $q->where('name', 'Vendor'))->count();
+
+        $totalCollected = Payment::whereMonth('payment_date', $today->month)
+            ->whereYear('payment_date', $today->year)
+            ->sum('amount_paid');
+
+        $totalOverdue = Billing::where('status', 'unpaid')
+            ->where('due_date', '<', $today)
+            ->sum('amount');
+
+        $newSignups = User::whereHas('role', fn ($q) => $q->where('name', 'Vendor'))
+            ->where('application_date', '>=', $startOfMonth)
+            ->count();
+
+        return response()->json([
+            'totalVendors' => $totalVendors,
+            'totalCollected' => (float) $totalCollected,
+            'totalOverdue' => (float) $totalOverdue,
+            'newSignups' => $newSignups,
+        ]);
+    }
+
+    /**
+     * Fetch vendor distribution by market section.
+     */
+    public function getVendorDistribution()
+    {
+        $distribution = Section::withCount(['stalls as vendor_count' => function ($query) {
+                $query->whereHas('vendor');
+            }])
+            ->get(['name', 'vendor_count']);
+
+        return response()->json($distribution);
+    }
+
+    /**
+     * Fetch rent and utility collection trends for a given year.
+     */
+public function getCollectionTrends(Request $request)
+{
+    $year = $request->input('year', Carbon::now()->year);
+
+    $collections = Billing::select(
+            DB::raw('EXTRACT(MONTH FROM period_start) as month'),
+            'utility_type',
+            DB::raw("SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as paid"),
+            DB::raw("SUM(CASE WHEN status = 'unpaid' THEN amount ELSE 0 END) as unpaid")
+        )
+        ->whereYear('period_start', $year)
+        ->groupBy('month', 'utility_type')
+        ->orderBy('month')
+        ->get();
+
+        $trends = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $trends[$i] = [
+                'month' => $i,
+                'paid' => [],
+                'unpaid' => [],
+            ];
+        }
+
+        foreach ($collections as $collection) {
+            if (isset($trends[$collection->month])) {
+                if ($collection->paid > 0) {
+                    $trends[$collection->month]['paid'][$collection->utility_type] = (float) $collection->paid;
+                }
+                if ($collection->unpaid > 0) {
+                    $trends[$collection->month]['unpaid'][$collection->utility_type] = (float) $collection->unpaid;
+                }
+            }
+        }
+
+        return response()->json(array_values($trends));
+    }
+
+    /**
+     * Fetch utility consumption data for a given year.
+     */
+    public function getUtilityConsumption(Request $request)
+    {
+        $year = $request->input('year', Carbon::now()->year);
+
+        $consumption = Billing::select(
+                DB::raw('EXTRACT(MONTH FROM period_start) as month'),
+                'utility_type',
+                DB::raw('SUM(consumption) as total_consumption')
+            )
+            ->where('utility_type', 'Electricity')
+            ->whereYear('period_start', $year)
+            ->groupBy('month', 'utility_type')
+            ->orderBy('month')
+            ->get();
+
+        return response()->json($consumption);
+    }
+
+    /**
+     * Get available years for filters from billing data.
+     */
+    public function getFilterYears()
+    {
+        $years = Billing::select(DB::raw('EXTRACT(YEAR FROM period_start) as year'))
+            ->distinct()->pluck('year')->map(fn($y) => (int)$y);
+        $years->push(Carbon::now()->year);
+        $years = $years->unique()->sortDesc()->values();
+
+        return response()->json($years);
+    }
+
+    public function getTopPerformingVendors(Request $request)
+    {
+        $year = $request->input('year', Carbon::now()->year);
+
+        // Get vendor IDs that need support (have overdue bills) to exclude them
+        // Apply section filter if provided
+        $vendorsNeedingSupportQuery = User::whereHas('role', fn ($q) => $q->where('name', 'Vendor'))
+            ->whereHas('billings', function ($query) use ($year) {
+                $query->whereYear('period_start', $year)
+                    ->where('status', 'unpaid')
+                    ->where('due_date', '<', now());
+            });
+
+        // Apply section filter to exclusion query if provided
+        if ($request->filled('section') && $request->section !== 'All') {
+            $sectionName = $request->section;
+            $vendorsNeedingSupportQuery->whereHas('stall.section', fn($q) => $q->where('name', $sectionName));
+        }
+
+        $vendorsNeedingSupportIds = $vendorsNeedingSupportQuery->pluck('id')->toArray();
+
+        // Start building the query
+        $query = DB::table('users')
+            ->join('stalls', 'users.id', '=', 'stalls.vendor_id')
+            ->join('sections', 'stalls.section_id', '=', 'sections.id') // Join sections table
+            ->join('billing', 'stalls.id', '=', 'billing.stall_id')
+            ->leftJoin('payments', 'billing.id', '=', 'payments.billing_id')
+            ->where('billing.status', 'paid')
+            ->whereYear('billing.period_start', $year);
+
+        // Exclude vendors that need support
+        if (!empty($vendorsNeedingSupportIds)) {
+            $query->whereNotIn('users.id', $vendorsNeedingSupportIds);
+        }
+
+        // ✅ **FIX APPLIED HERE**
+        // This block checks if a section filter was provided in the request.
+        // If it exists and isn't "All", it adds a 'where' clause to the query
+        // to filter the results by the selected section name.
+        if ($request->filled('section') && $request->section !== 'All') {
+            $query->where('sections.name', $request->section);
+        }
+
+        $vendorStats = $query->select(
+                'users.id',
+                'users.name',
+                'stalls.table_number',
+                'sections.name as section_name', // Select the section name
+                DB::raw('COUNT(billing.id) as paid_bills_count'),
+                DB::raw('SUM(CASE WHEN payments.payment_date <= billing.due_date THEN 1 ELSE 0 END) as on_time_bills_count')
+            )
+            ->groupBy('users.id', 'users.name', 'stalls.table_number', 'sections.name')
+            ->having(DB::raw('COUNT(billing.id)'), '>', 0) 
+            ->orderByRaw('(SUM(CASE WHEN payments.payment_date <= billing.due_date THEN 1 ELSE 0 END)) / (COUNT(billing.id)) DESC')
+            ->orderByDesc(DB::raw('SUM(CASE WHEN payments.payment_date <= billing.due_date THEN 1 ELSE 0 END)'))
+            ->limit(5)
+            ->get();
+
+        $formattedVendors = $vendorStats->map(function ($vendor) {
+            $onTimePercentage = round(($vendor->on_time_bills_count / $vendor->paid_bills_count) * 100);
+            return [
+                'name' => $vendor->name,
+                'stall_number' => $vendor->table_number,
+                'metric' => "{$onTimePercentage}% On-Time",
+                'section_name' => $vendor->section_name, // Add to output
+            ];
+        });
+
+        return response()->json($formattedVendors);
+    }
+
+
+    /**
+     * ✅ OPTIMIZED VERSION: Fetch top 5 vendors with the most overdue bills, with section filtering.
+     * Note: No need to exclude top performers here since top performers already exclude vendors with overdue bills.
+     */
+    public function getVendorsNeedingSupport(Request $request)
+{
+    // Add year variable
+    $year = $request->input('year', Carbon::now()->year);
+
+    // Use direct DB query to avoid hasManyThrough relationship issues
+    $query = DB::table('users')
+        ->join('roles', 'users.role_id', '=', 'roles.id')
+        ->join('stalls', 'users.id', '=', 'stalls.vendor_id')
+        ->join('billing', 'stalls.id', '=', 'billing.stall_id')
+        ->where('roles.name', 'Vendor')
+        ->whereYear('billing.period_start', $year)
+        ->where('billing.status', 'unpaid')
+        ->where('billing.due_date', '<', now());
+
+    // Apply section filter if provided
+    if ($request->filled('section') && $request->section !== 'All') {
+        $query->join('sections', 'stalls.section_id', '=', 'sections.id')
+              ->where('sections.name', $request->section);
+    }
+
+    // Get vendors with overdue bills count
+    $vendorStats = $query->select(
+            'users.id',
+            'users.name',
+            'stalls.table_number',
+            DB::raw('COUNT(billing.id) as overdue_bills_count')
+        )
+        ->groupBy('users.id', 'users.name', 'stalls.table_number')
+        ->orderByDesc('overdue_bills_count')
+        ->limit(10)
+        ->get();
+
+    // Get detailed overdue bills for each vendor
+    $formattedVendors = $vendorStats->map(function ($vendor) use ($year) {
+        $overdueBills = DB::table('billing')
+            ->join('stalls', 'billing.stall_id', '=', 'stalls.id')
+            ->where('stalls.vendor_id', $vendor->id)
+            ->whereYear('billing.period_start', $year)
+            ->where('billing.status', 'unpaid')
+            ->where('billing.due_date', '<', now())
+            ->select('billing.utility_type', 'billing.period_start')
+            ->get();
+
+        $overdueDetails = $overdueBills->map(function ($bill) {
+            return $bill->utility_type . ' - ' . \Carbon\Carbon::parse($bill->period_start)->format('F Y');
+        });
+
+        return [
+            'id' => $vendor->id,
+            'name' => $vendor->name,
+            'stall_number' => $vendor->table_number ?? 'N/A',
+            'metric' => $vendor->overdue_bills_count . ' Overdue Bill(s)',
+            'overdue_bills_details' => $overdueDetails->toArray(),
+        ];
+    });
+
+    return response()->json($formattedVendors);
+    }
+    
+}

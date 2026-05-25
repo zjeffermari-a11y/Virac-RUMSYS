@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: virac-rumsys
+    env: php
+    plan: free
+    buildCommand: "./render-build.sh"
+    startCommand: "php artisan serve --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: APP_URL
+        value: https://virac-rumsys.onrender.com
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromService:
+          type: psql
+          name: capstone-project-db
+          property: host
+      - key: DB_PORT
+        fromService:
+          type: psql
+          name: capstone-project-db
+          property: port
+      - key: DB_DATABASE
+        fromService:
+          type: psql
+          name: capstone-project-db
+          property: database
+      - key: DB_USERNAME
+        fromService:
+          type: psql
+          name: capstone-project-db
+          property: user
+      - key: DB_PASSWORD
+        fromService:
+          type: psql
+          name: capstone-project-db
+          property: password
+      - key: APP_KEY
+        generateValue: true
+
+  - type: psql
+    name: capstone-project-db
+    plan: free
+    databaseName: capstone_project
+    user: capstone_user
